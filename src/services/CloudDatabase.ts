@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import type { QuestionData } from '../rules/types'; // 統一從這裡引入
+import type { DiagnosticCode, DiagnosticSignal, QuestionData, SSTCategory } from '../rules/types';
 
 // 學習軌跡型別
 export interface LearningLog {
@@ -7,7 +7,59 @@ export interface LearningLog {
   student_name: string;
   question_id: string;
   error_code: string;
+  sst?: DiagnosticSignal['sst'];
   created_at?: string;
+}
+
+export interface GrammarAssistantChunk {
+  text: string;
+  can_morph?: boolean;
+  morph_options?: string[];
+  draggable?: boolean;
+}
+
+export interface GrammarDiagnosisCacheEntry {
+  answer: string;
+  diagnosis: Omit<DiagnosticSignal, 'index'>;
+}
+
+type GrammarAssistantAction = 'decompose' | 'prepare_question' | 'diagnose';
+
+const normalizeAnswer = (answer: string[]) =>
+  answer.join(' ').replace(/[\[\]]/g, '').trim().toLowerCase().replace(/[.,!?;:]+/g, '').replace(/\s+/g, ' ');
+
+const validDiagnosticCodes: ReadonlySet<string> = new Set<DiagnosticCode>([
+  'DUPLICATE_PRONOUN', 'SV_AGREEMENT', 'WRONG_RELATIVE', 'NOT_REDUCED', 'INCOMPLETE_REDUCTION',
+  'M:VERB', 'M:AUX', 'M:DET', 'M:PREP', 'R:VERB:TENSE', 'R:VERB:SVA', 'R:PREP', 'R:DET',
+  'R:NOUN:NUM', 'R:RELATIVE', 'U:PRON', 'U:VERB', 'U:RELATIVE',
+  'O:WRONG_ORDER', 'O:INVERSION', 'UNKNOWN_ERROR',
+]);
+const validSstCategories: ReadonlySet<string> = new Set<SSTCategory>([
+  'Omission', 'Addition', 'Misformation', 'Misordering',
+]);
+
+const isDiagnosticSignal = (value: unknown): value is DiagnosticSignal => {
+  if (!value || typeof value !== 'object') return false;
+  const signal = value as Record<string, unknown>;
+  return typeof signal.code === 'string'
+    && validDiagnosticCodes.has(signal.code)
+    && typeof signal.sst === 'string'
+    && validSstCategories.has(signal.sst)
+    && Number.isInteger(signal.index)
+    && typeof signal.message === 'string'
+    && (signal.hint === undefined || typeof signal.hint === 'string');
+};
+
+async function callGrammarAssistant<T>(
+  action: GrammarAssistantAction,
+  payload: Record<string, unknown>
+): Promise<T> {
+  const { data, error } = await supabase.functions.invoke('grammar-assistant', {
+    body: { action, ...payload },
+  });
+  if (error) throw error;
+  if (!data) throw new Error('文法診斷服務未回傳資料。');
+  return data as T;
 }
 
 export const CloudDatabase = {
@@ -117,5 +169,71 @@ export const CloudDatabase = {
       console.error('清空軌跡失敗:', error);
       return false;
     }
+  },
+
+  async lookupDiagnosis(questionId: string, answer: string[]): Promise<DiagnosticSignal | null> {
+    const { data, error } = await supabase
+      .from('diagnosis_cache')
+      .select('diagnosis')
+      .eq('question_id', questionId)
+      .eq('answer_normalized', normalizeAnswer(answer))
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+    if (!isDiagnosticSignal(data.diagnosis)) {
+      throw new Error('診斷快取資料格式無效。');
+    }
+    return data.diagnosis;
+  },
+
+  async decomposeGrammarSentence(
+    sentence: string,
+    uiMode: string,
+    correctAnswer: string[]
+  ): Promise<GrammarAssistantChunk[]> {
+    const result = await callGrammarAssistant<{ chunks: GrammarAssistantChunk[] }>('decompose', {
+      sentence,
+      ui_mode: uiMode,
+      correct_answer: correctAnswer,
+    });
+    if (!Array.isArray(result.chunks) || result.chunks.length === 0) {
+      throw new Error('AI 沒有產生有效的字塊，請檢查句子後重試。');
+    }
+    return result.chunks;
+  },
+
+  async prepareDiagnosisCache(question: QuestionData): Promise<number> {
+    const result = await callGrammarAssistant<{ cached: number }>('prepare_question', {
+      question: {
+        id: question.id,
+        ui_mode: question.ui_mode,
+        targetNoun: question.targetNoun,
+        antecedent: question.antecedent,
+        correctAnswer: question.correctAnswer,
+        chunks: question.chunks?.map(({ text, can_morph, morph_options }) => ({
+          text,
+          can_morph,
+          morph_options,
+        })),
+      },
+    });
+    return result.cached;
+  },
+
+  async diagnoseWithAI(
+    studentAnswer: string[],
+    correctAnswer: string[],
+    question: QuestionData
+  ): Promise<DiagnosticSignal> {
+    const result = await callGrammarAssistant<{ diagnosis: DiagnosticSignal }>('diagnose', {
+      student_answer: studentAnswer,
+      correct_answer: correctAnswer,
+      question,
+    });
+    if (!isDiagnosticSignal(result.diagnosis)) {
+      throw new Error('AI 回傳的診斷格式不符合規範。');
+    }
+    return result.diagnosis;
   }
 };
