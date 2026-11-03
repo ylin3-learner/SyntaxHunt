@@ -95,7 +95,7 @@ graph TD
             Action_Proxy["🛡️ teacher-action<br>(安全驗證與設定)"]
             TTS_Proxy["🔊 deepgram-tts<br>(Deepgram TTS)"]
             STT_Proxy["🎤 edge-stt<br>(Deepgram STT)"]
-            Grammar_Proxy["🧩 grammar-assistant<br>(AI 出題與診斷)"]
+            Grammar_Proxy["🧩 grammar-assistant<br>(AI 錯誤矩陣與診斷)"]
         end
     end
 
@@ -197,7 +197,7 @@ sequenceDiagram
 
 ## 🔬 文法規則引擎與診斷
 
-`src/rules/grammarRules.ts` 以確定性本地規則檢查關係代名詞後的重複代名詞、依先行詞判斷主謂一致、*who / which* 選擇、`REDUCE` 題的殘留字、常見主謂一致、`a/an` 選擇及 `MORPH` 字形。若本地規則無法給出明確診斷，則以 LCS 字詞序列對齊學生答案與正解，分類遺漏、多餘、替換或語序錯誤。這些是規則式啟發判斷，不是通用英文解析器；主謂一致判斷範圍受本地動詞表限制。
+`src/rules/grammarRules.ts` 透過註冊表執行規則，檢查關係代名詞後的重複代名詞、依先行詞判斷主謂一致、*who / which* 選擇、`REDUCE` 題的殘留字、常見主謂一致、`a/an` 選擇及 `MORPH` 字形。概念專屬規則放在 `src/rules/validators/`，由註冊表自動載入。若規則無法給出明確診斷，則以 LCS 字詞序列對齊學生答案與正解，分類遺漏、多餘、替換或語序錯誤。這些是規則式啟發判斷，不是通用英文解析器；主謂一致判斷範圍受本地動詞表限制。
 
 | 診斷碼類別 | 範例 | 本地診斷情境 |
 | :--- | :--- | :--- |
@@ -207,7 +207,9 @@ sequenceDiagram
 | `O:WRONG_ORDER` | — | 字詞相同，但排列順序不同。 |
 | `UNKNOWN_ERROR` | — | 本地規則無法判定特定錯誤，接續查詢預建診斷或 AI 兜底。 |
 
-每筆診斷也會標記 SST 類別：`Omission`（遺漏）、`Addition`（多加）、`Misformation`（形式錯誤）或 `Misordering`（語序錯誤）。系統優先使用明確的本地診斷；否則依序查詢 `diagnosis_cache`，再透過 `grammar-assistant` Edge Function 呼叫 Gemini。遠端診斷最多等待 3 秒，若失敗會提示學生自行對照答案。教師可用 AI 產生字塊、編輯變形選項及預建常見錯誤診斷；學情看板依四種 SST 類別統計。
+每筆診斷也會標記 SST 類別：`Omission`（遺漏）、`Addition`（多加）、`Misformation`（形式錯誤）或 `Misordering`（語序錯誤）。明確的本地診斷優先使用；若本地結果為 `UNKNOWN_ERROR`，學生會先立即過關，系統同時建立 `PENDING` 紀錄並在背景呼叫 `grammar-assistant` Edge Function。函式先查 `diagnosis_cache`，再視需要呼叫 Gemini，並將同一筆紀錄更新為 `SUCCESS` 或 `FAILED`；教師看板透過 Supabase Realtime 顯示批改狀態與更新結果。
+
+教師建立通用文法題時可選擇概念與互動模式。`autoChunk(sentence, concept)` 優先保留中括號片語，再以確定性切詞及小型片語/動詞字典拆解，不呼叫 LLM。MORPH 選項以字串陣列儲存，`current_index` 表示初始選取形式，並保留 `morph_options` 舊欄位相容。新概念會路由至時間軸、情態語氣計、碎紙機或磁吸卡槽；未設定概念的舊題仍使用既有畫布。
 
 啟用雲端 AI 與診斷快取前，先套用資料庫遷移、部署函式並設定 Gemini 金鑰：
 
@@ -217,7 +219,7 @@ npx supabase functions deploy grammar-assistant
 npx supabase secrets set GEMINI_API_KEY=your_gemini_api_key
 ```
 
-Gemini 金鑰只設定在 Supabase Edge Function Secrets，不要放入 `.env.local` 或前端程式碼。未部署函式或未設定金鑰時，AI 拆解/兜底診斷會顯示明確錯誤；本地診斷仍可使用。
+Gemini 金鑰只設定在 Supabase Edge Function Secrets，不要放入 `.env.local` 或前端程式碼。未部署函式或未設定金鑰時，AI 錯誤矩陣及背景診斷無法使用；確定性切詞與本地診斷仍可使用。
 
 ---
 

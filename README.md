@@ -95,7 +95,7 @@ graph TD
             Action_Proxy["teacher-action<br>(Validate & Update)"]
             TTS_Proxy["deepgram-tts<br>(Deepgram TTS)"]
             STT_Proxy["edge-stt<br>(Deepgram STT)"]
-            Grammar_Proxy["grammar-assistant<br>(AI authoring & diagnosis)"]
+            Grammar_Proxy["grammar-assistant<br>(AI error matrix & diagnosis)"]
         end
     end
 
@@ -201,7 +201,7 @@ sequenceDiagram
 
 ## 🔬 Grammar Rule Engine & Diagnosis
 
-`src/rules/grammarRules.ts` runs deterministic local validators for duplicate pronouns after a relative pronoun, antecedent-based subject-verb agreement, *who / which* choice, `REDUCE` leftovers, common subject-verb agreement, `a/an` choice, and `MORPH` forms. If those rules do not provide a definite diagnosis, an LCS token alignment compares the student answer with the key to classify omissions, additions, substitutions, or reordering. These checks are rule-based heuristics, not a general-purpose English parser; verb agreement coverage depends on the local verb table.
+`src/rules/grammarRules.ts` runs registered validators for duplicate pronouns after a relative pronoun, antecedent-based subject-verb agreement, *who / which* choice, `REDUCE` leftovers, common subject-verb agreement, `a/an` choice, and `MORPH` forms. Concept-specific validators live in `src/rules/validators/` and are discovered by the registry. If those rules do not provide a definite diagnosis, an LCS token alignment compares the student answer with the key to classify omissions, additions, substitutions, or reordering. These checks are rule-based heuristics, not a general-purpose English parser; verb agreement coverage depends on the local verb table.
 
 | Code family | Examples | Local diagnosis |
 | :--- | :--- | :--- |
@@ -211,7 +211,9 @@ sequenceDiagram
 | `O:WRONG_ORDER` | — | The same words appear in a different order. |
 | `UNKNOWN_ERROR` | — | Local rules cannot assign a specific error; try a prepared diagnosis or AI fallback. |
 
-Each diagnosis also has an SST category: `Omission`, `Addition`, `Misformation`, or `Misordering`. Definite local diagnoses are used first. Otherwise, the app checks `diagnosis_cache` and then calls Gemini through the `grammar-assistant` Edge Function; that remote attempt times out after three seconds and prompts the student to review the answer if it fails. Teachers can generate chunks, edit morph options, and prebuild likely-error diagnoses. Analytics groups recorded errors by the four SST categories.
+Each diagnosis also has an SST category: `Omission`, `Addition`, `Misformation`, or `Misordering`. Definite local diagnoses are used first. When local diagnosis returns `UNKNOWN_ERROR`, the student is allowed to continue immediately while the app records a `PENDING` log and requests an asynchronous diagnosis through the `grammar-assistant` Edge Function. The function checks `diagnosis_cache`, calls Gemini if needed, and updates the same log to `SUCCESS` (or `FAILED`); Teacher Analytics reflects status and completed results through Supabase Realtime.
+
+Teacher-authored general grammar questions choose a concept and interaction mode. `autoChunk(sentence, concept)` uses bracketed phrases first, then deterministic tokenization and a small phrase/verb dictionary; it does not call an LLM. MORPH options are stored as strings with `current_index` identifying the initial selected form, while legacy `morph_options` remains supported. The canvas routes new concepts to a timeline, modal-strength gauge, shredder, or magnetic-slot interaction. Questions without a concept keep the legacy canvas.
 
 Apply the database migration, deploy the function, and configure the Gemini key:
 
@@ -221,7 +223,7 @@ npx supabase functions deploy grammar-assistant
 npx supabase secrets set GEMINI_API_KEY=your_gemini_api_key
 ```
 
-Keep the Gemini key in Supabase Edge Function Secrets; never put it in `.env.local` or frontend code. Without the deployed function/key, AI chunk generation and fallback diagnosis report an explicit error while local diagnosis remains available.
+Keep the Gemini key in Supabase Edge Function Secrets; never put it in `.env.local` or frontend code. Without the deployed function/key, AI error-matrix generation and asynchronous diagnosis are unavailable; deterministic chunking and local diagnosis remain available.
 
 ---
 
