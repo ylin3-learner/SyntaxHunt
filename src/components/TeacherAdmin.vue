@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import type { QuestionData } from '../rules/types';
+import type { Chunk, QuestionData, UIMode } from '../rules/types';
+import { CloudDatabase } from '../services/CloudDatabase';
 import { VueDraggable } from 'vue-draggable-plus';
 import { useClassroomSync } from '../composables/useClassroomSync';
 
@@ -8,6 +9,14 @@ const props = defineProps<{ currentQuestions: QuestionData[]; }>();
 
 const enabledStages = ref<('input' | 'macro' | 'micro' | 'pronunciation' | 'noticing')[]>(['input', 'macro', 'micro', 'pronunciation', 'noticing']);
 const questionMode = ref<'build' | 'reduce'>('build');
+const uiMode = ref<UIMode>('BUILD');
+const grammarSentence = ref('');
+const grammarAnswer = ref('');
+const grammarChunks = ref<Chunk[]>([]);
+const isDecomposing = ref(false);
+const isPreparingCache = ref(false);
+const grammarError = ref('');
+const cacheStatus = ref('');
 const isQuestionsExpanded = ref(true);
 
 // 👈 新增：控制班級控制面板的收合狀態
@@ -41,7 +50,7 @@ const emit = defineEmits<{
 const localQuestions = ref<QuestionData[]>(JSON.parse(JSON.stringify(props.currentQuestions)));
 
 const editingId = ref<string | null>(null);
-const questionType = ref<'standard' | 'contrast' | 'chunk'>('standard');
+const questionType = ref<'standard' | 'contrast' | 'chunk' | 'grammar'>('standard');
 const imageUrl = ref('');
 const distractorImageUrl = ref('');
 const targetNoun = ref('');
@@ -80,6 +89,8 @@ const handleModeChange = () => {
 };
 
 const resetForm = () => {
+  grammarSentence.value = ''; grammarAnswer.value = ''; grammarChunks.value = [];
+  uiMode.value = 'BUILD'; grammarError.value = ''; cacheStatus.value = '';
   chunkZhInput.value = ''; chunkQuizInput.value = ''; distractorImageUrl.value = '';
   correctLabel.value = ''; distractorLabel.value = '';
   antecedentNumber.value = 'singular'; speechRate.value = 0.8;
@@ -94,6 +105,27 @@ const resetForm = () => {
 };
 
 const editQuestion = (q: QuestionData) => {
+  if (q.type === 'grammar') {
+    editingId.value = q.id;
+    questionType.value = 'grammar';
+    uiMode.value = q.ui_mode || 'BUILD';
+    targetNoun.value = q.targetNoun;
+    antecedentNumber.value = q.antecedent.number || 'singular';
+    imageUrl.value = q.imageUrl || '';
+    speechRate.value = q.speechRate || 0.8;
+    isTimedForm.value = !!q.isTimed;
+    timeLimitForm.value = q.timeLimit || 60;
+    tagsInput.value = q.tags?.join(', ') || '';
+    grammarAnswer.value = (q.correctAnswer || []).join(' ');
+    grammarChunks.value = JSON.parse(JSON.stringify(q.chunks || []));
+    grammarSentence.value = grammarChunks.value.map(chunk => chunk.text).join(' ');
+    enabledStages.value = q.enabledStages || ['micro'];
+    grammarError.value = '';
+    cacheStatus.value = '';
+    activeUploadTarget.value = null;
+    return;
+  }
+
   chunkZhInput.value = q.previewData?.chunkZh || '';
   chunkQuizInput.value = q.previewData?.quizOptions ? q.previewData.quizOptions.filter(o => !o.isCorrect).map(o => o.text).join(', ') : '';
   distractorImageUrl.value = q.inputData?.options.find(o => !o.isCorrect)?.image || '';
@@ -110,8 +142,10 @@ const editQuestion = (q: QuestionData) => {
   isTimedForm.value = !!q.isTimed;
   timeLimitForm.value = q.timeLimit || 60;
 
-  relativeSentence.value = q.grammarFeature.relative.label; prepositionSentence.value = q.grammarFeature.preposition.label;
-  tagsInput.value = q.tags?.join(', ') || ''; distractorsInput.value = q.grammarFeature.relative.distractors?.join(', ') || '';
+  relativeSentence.value = q.grammarFeature?.relative.label || '';
+  prepositionSentence.value = q.grammarFeature?.preposition.label || '';
+  tagsInput.value = q.tags?.join(', ') || '';
+  distractorsInput.value = q.grammarFeature?.relative.distractors?.join(', ') || '';
   explanationTitle.value = q.explanation?.title || ''; explanationDesc.value = q.explanation?.desc || '';
 
   if (q.contextCloze) { clozePrefix.value = q.contextCloze.prefix; clozeSuffix.value = q.contextCloze.suffix; }
@@ -120,6 +154,68 @@ const editQuestion = (q: QuestionData) => {
     modifierImageUrl.value = q.contrastData.modifierImage; puzzleLayout.value = q.contrastData.layout || 'modifier-left';
   }
   activeUploadTarget.value = null;
+};
+
+const decomposeGrammarSentence = async () => {
+  const sentence = grammarSentence.value.trim();
+  if (!sentence) {
+    grammarError.value = '請先輸入英文句子。';
+    return;
+  }
+
+  isDecomposing.value = true;
+  grammarError.value = '';
+  try {
+    const correctAnswer = (grammarAnswer.value || sentence).trim().split(/\s+/);
+    const chunks = await CloudDatabase.decomposeGrammarSentence(sentence, uiMode.value, correctAnswer);
+    grammarChunks.value = chunks.map((chunk, index) => ({
+      id: `${editingId.value || 'new'}-chunk-${index}-${Date.now()}`,
+      text: chunk.text,
+      draggable: chunk.draggable ?? true,
+      can_morph: chunk.can_morph ?? false,
+      morph_options: chunk.morph_options || [],
+    }));
+    cacheStatus.value = '';
+  } catch (error) {
+    grammarError.value = error instanceof Error ? error.message : '字塊拆解失敗，請稍後再試。';
+  } finally {
+    isDecomposing.value = false;
+  }
+};
+
+const splitGrammarSentenceManually = () => {
+  const words = grammarSentence.value.trim().split(/\s+/).filter(Boolean);
+  grammarChunks.value = words.map((text, index) => ({
+    id: `${editingId.value || 'new'}-manual-${index}`,
+    text,
+    draggable: true,
+    can_morph: false,
+    morph_options: [],
+  }));
+  grammarError.value = '';
+  cacheStatus.value = '';
+};
+
+const prepareQuestionDiagnosis = async (id: string) => {
+  const question = localQuestions.value.find(item => item.id === id);
+  if (!question) return;
+  isPreparingCache.value = true;
+  cacheStatus.value = '';
+  grammarError.value = '';
+  try {
+    const count = await CloudDatabase.prepareDiagnosisCache(question);
+    cacheStatus.value = `已建立 ${count} 組常見錯誤診斷快取。`;
+  } catch (error) {
+    grammarError.value = error instanceof Error ? error.message : '錯誤矩陣建立失敗。';
+  } finally {
+    isPreparingCache.value = false;
+  }
+};
+
+const updateMorphOptions = (chunk: Chunk, event: Event) => {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) return;
+  chunk.morph_options = input.value.split(',').map(value => value.trim()).filter(Boolean);
 };
 
 const deleteQuestion = (id: string) => {
@@ -211,6 +307,53 @@ const isDistractorActive = (word: string) => {
 };
 
 const saveQuestion = () => {
+  if (questionType.value === 'grammar') {
+    const source = grammarSentence.value.trim();
+    const answer = (grammarAnswer.value || source).trim();
+    if (!source || !answer) {
+      grammarError.value = '請填寫題目句子與正確答案。';
+      return;
+    }
+
+    const question: QuestionData = {
+      id: editingId.value || `q_${Date.now()}`,
+      type: 'grammar',
+      ui_mode: uiMode.value,
+      targetNoun: targetNoun.value.trim() || source.split(/\s+/)[0],
+      antecedent: {
+        noun: targetNoun.value.trim() || source.split(/\s+/)[0],
+        number: antecedentNumber.value,
+        person: 'person',
+      },
+      chunks: grammarChunks.value.length > 0
+        ? grammarChunks.value
+        : source.split(/\s+/).filter(Boolean).map((text, index) => ({
+          id: `${editingId.value || 'new'}-chunk-${index}`,
+          text,
+          draggable: true,
+        })),
+      correctAnswer: answer.split(/\s+/).filter(Boolean),
+      enabledStages: ['micro'],
+      imageUrl: imageUrl.value || undefined,
+      tags: tagsInput.value.split(/[,，\s]+/).filter(Boolean),
+      speechRate: speechRate.value,
+      isTimed: isTimedForm.value,
+      timeLimit: isTimedForm.value ? timeLimitForm.value : undefined,
+      explanation: explanationTitle.value || explanationDesc.value
+        ? { title: explanationTitle.value, desc: explanationDesc.value }
+        : undefined,
+    };
+
+    if (isEditing.value) {
+      const index = localQuestions.value.findIndex(item => item.id === editingId.value);
+      if (index !== -1) localQuestions.value[index] = question;
+    } else {
+      localQuestions.value.push(question);
+    }
+    resetForm();
+    return;
+  }
+
   if (!targetNoun.value) { alert('請填寫目標名詞！'); return; }
   if (questionType.value !== 'chunk' && !relativeSentence.value) { alert('請填寫關係子句！'); return; }
   if (!imageUrl.value || imageUrl.value.includes('dicebear.com')) { alert('請務必上傳真實的「主要圖片」！'); return; }
@@ -401,10 +544,14 @@ const saveAllAndClose = () => {
                     </div>
                     <div class="q-content">
                       <span class="q-noun">{{ q.targetNoun }}</span>
-                      <span class="q-desc">{{ q.grammarFeature?.relative?.label || '未設定句型' }}</span>
+                      <span class="q-desc">{{ q.type === 'grammar' ? (q.correctAnswer || []).join(' ') : q.grammarFeature?.relative?.label || '未設定句型' }}</span>
                     </div>
 
                     <div class="q-actions">
+                      <button v-if="q.type === 'grammar'" class="btn-push" :disabled="isPreparingCache"
+                        @click.stop="prepareQuestionDiagnosis(q.id)">
+                        {{ isPreparingCache ? '建立中...' : '🧠 建錯誤矩陣' }}
+                      </button>
                       <button class="btn-push" @click.stop="handleSaveAndPush(q.id)">🚀 發送給全班</button>
                       <button class="btn-delete" @click.stop="deleteQuestion(q.id)" title="刪除">✕</button>
                     </div>
@@ -429,11 +576,70 @@ const saveAllAndClose = () => {
               <button :class="{ active: questionType === 'standard' }" @click="questionType = 'standard'">標準題</button>
               <button :class="{ active: questionType === 'contrast' }" @click="questionType = 'contrast'">對比題</button>
               <button :class="{ active: questionType === 'chunk' }" @click="questionType = 'chunk'">片語題</button>
+              <button :class="{ active: questionType === 'grammar' }" @click="questionType = 'grammar'">通用文法題</button>
             </div>
           </div>
 
           <div class="editor-body">
-            <!-- 中間表單內容保持不變 -->
+            <template v-if="questionType === 'grammar'">
+              <div class="form-group">
+                <label>題目 UI 模式</label>
+                <div class="type-switcher">
+                  <button :class="{ active: uiMode === 'BUILD' }" @click="uiMode = 'BUILD'">BUILD 組句</button>
+                  <button :class="{ active: uiMode === 'REDUCE' }" @click="uiMode = 'REDUCE'">REDUCE 刪除</button>
+                  <button :class="{ active: uiMode === 'MORPH' }" @click="uiMode = 'MORPH'">MORPH 變形</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label><input v-model="isTimedForm" type="checkbox" /> 限時挑戰</label>
+                <input v-if="isTimedForm" v-model.number="timeLimitForm" type="number" min="10" step="10"
+                  placeholder="60 秒" />
+              </div>
+              <div class="form-group">
+                <label>{{ uiMode === 'REDUCE' ? '原始完整句子（字塊起始內容）' : '英文句子（字塊來源）' }}</label>
+                <input v-model="grammarSentence" type="text" placeholder="例如：The boy went to school yesterday." />
+              </div>
+              <div class="form-group">
+                <label>學生完成時的正確答案</label>
+                <input v-model="grammarAnswer" type="text"
+                  :placeholder="uiMode === 'REDUCE' ? '例如：The boy to school yesterday.' : '留空則與英文句子相同'" />
+              </div>
+              <div class="form-group">
+                <label>目標名詞與單複數（供診斷規則使用）</label>
+                <div class="form-row">
+                  <input v-model="targetNoun" type="text" placeholder="例如：The boy" />
+                  <select v-model="antecedentNumber" class="grammar-select">
+                    <option value="singular">單數</option>
+                    <option value="plural">複數</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>標籤（逗號分隔）</label>
+                <input v-model="tagsInput" type="text" placeholder="例如：過去式, 動詞時態" />
+              </div>
+              <div class="form-group">
+                <button class="btn-save" :disabled="isDecomposing" @click="decomposeGrammarSentence">
+                  {{ isDecomposing ? 'AI 拆解中...' : '✨ 自動拆解字塊' }}
+                </button>
+                <button class="btn-push" style="margin-top: 10px;" @click="splitGrammarSentenceManually">
+                  以空白拆解（手動設定變形）
+                </button>
+                <p v-if="grammarError" class="grammar-error" role="alert">{{ grammarError }}</p>
+                <p v-if="cacheStatus" class="grammar-status" role="status">{{ cacheStatus }}</p>
+              </div>
+              <div v-if="grammarChunks.length" class="form-group">
+                <label>字塊檢視（可編輯；勾選字塊可設定 MORPH 選項）</label>
+                <div v-for="chunk in grammarChunks" :key="chunk.id" class="grammar-chunk-row">
+                  <input v-model="chunk.text" type="text" aria-label="字塊文字" />
+                  <label><input v-model="chunk.can_morph" type="checkbox" /> 可變形</label>
+                  <input v-if="chunk.can_morph" :value="chunk.morph_options?.join(', ')" type="text"
+                    placeholder="go, goes, went" aria-label="變形選項"
+                    @input="updateMorphOptions(chunk, $event)" />
+                </div>
+              </div>
+            </template>
+            <template v-else>
             <div class="form-group" v-if="questionType !== 'chunk'">
               <label>題目節奏</label>
               <div class="segmented-control">
@@ -667,6 +873,7 @@ const saveAllAndClose = () => {
                 <input v-model="explanationDesc" type="text" placeholder="Ex: 修飾語要放在名詞的後面喔！"
                   @focus="activeUploadTarget = null" />
               </div>
+            </template>
             </template>
           </div>
 
@@ -991,7 +1198,8 @@ const saveAllAndClose = () => {
 }
 
 .form-group input[type="text"],
-.form-group input[type="number"] {
+.form-group input[type="number"],
+.grammar-select {
   padding: 14px;
   border: 2px solid #e5e5e5;
   border-radius: 12px;
@@ -1004,7 +1212,8 @@ const saveAllAndClose = () => {
 }
 
 .form-group input[type="text"]:focus,
-.form-group input[type="number"]:focus {
+.form-group input[type="number"]:focus,
+.grammar-select:focus {
   border-color: #1cb0f6;
   background: #ffffff;
   box-shadow: 0 0 0 4px rgba(28, 176, 246, 0.1);
@@ -1336,6 +1545,36 @@ const saveAllAndClose = () => {
   transform: translateY(4px);
 }
 
+.btn-save:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.grammar-chunk-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto minmax(100px, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.grammar-chunk-row label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.grammar-error,
+.grammar-status {
+  margin: 10px 0 0;
+  font-weight: 600;
+}
+
+.grammar-error { color: #d32f2f; }
+.grammar-status { color: #388e3c; }
+
 .ghost {
   opacity: 0.5;
   background: #c8ebfb;
@@ -1481,6 +1720,88 @@ const saveAllAndClose = () => {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-layout {
+    width: 96vw;
+    height: 94vh;
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 36vh;
+    border-right: 0;
+    border-bottom: 2px solid #e5e5e5;
+  }
+
+  .sidebar-header {
+    padding: 12px 16px;
+  }
+
+  .sidebar-section {
+    min-height: 0;
+  }
+
+  .question-list {
+    padding: 8px 12px;
+  }
+
+  .question-item {
+    padding: 10px;
+  }
+
+  .editor {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .editor-header,
+  .editor-body {
+    padding: 14px 18px;
+  }
+
+  .grammar-chunk-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .grammar-chunk-row input[aria-label="變形選項"] {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 500px) {
+  .admin-layout {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+  }
+
+  .sidebar {
+    max-height: 32vh;
+  }
+
+  .editor-header,
+  .editor-body {
+    padding: 10px 12px;
+  }
+
+  .type-switcher {
+    flex-wrap: wrap;
+  }
+
+  .type-switcher button {
+    min-width: 42%;
+    font-size: 0.8rem;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 8px;
   }
 }
 </style>

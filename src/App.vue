@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import MacroDragCanvas from './components/MacroDragCanvas.vue';
-import MicroTileUnscramble from './components/MicroTileUnscramble.vue';
+import GrammarCanvas from './components/GrammarCanvas.vue';
 import TeacherAdmin from './components/TeacherAdmin.vue';
 import TeacherAnalytics from './components/TeacherAnalytics.vue';
 import ContrastPuzzle from './components/ContrastPuzzle.vue';
@@ -13,7 +13,8 @@ import ChunkPreview from './components/ChunkPreview.vue';
 import DebugConsole from './components/DebugConsole.vue';
 
 import { defaultQuestions } from './data/questions';
-import type { QuestionData } from './rules/types';
+import { getQuestionAnswer, getQuestionChunks, getQuestionUiMode } from './rules/types';
+import type { GrammarQuestionData, QuestionData, SSTCategory } from './rules/types';
 import { useSound, unlockAudioContext } from './utils/useSound';
 import { unlockTTS } from './utils/useSpeech';
 import { CloudDatabase } from './services/CloudDatabase';
@@ -51,6 +52,7 @@ const targetCount = ref(0);
 const isClassMode = ref(false);
 
 const showFocusWarning = ref(false);
+const realtimeNotice = ref('');
 
 const handleDistracted = () => {
   playWarningBeep();
@@ -89,6 +91,17 @@ onMounted(async () => {
   checkAndSetInitialStage();
 
   joinRoom((event, payload) => {
+    if (event === 'REALTIME_STATUS') {
+      realtimeNotice.value = payload.status === 'SUBSCRIBED'
+        ? ''
+        : '班級同步連線中斷；目前題目仍可繼續作答，連線恢復後會自動同步。';
+    }
+
+    if (event === 'SYNC_ERROR') {
+      realtimeNotice.value = '班級同步暫時無法使用；本機作答仍可繼續。';
+      console.error('班級同步錯誤:', payload.message);
+    }
+
     if (event === 'SYNC_STATE') {
       if (payload.isClassMode !== undefined) isClassMode.value = payload.isClassMode;
       if (payload.targetCount !== undefined) targetCount.value = payload.targetCount;
@@ -143,7 +156,23 @@ const fixAntecedentNumbers = () => {
 };
 
 const currentQuestion = computed(() => questionBank.value[currentIndex.value] || (defaultQuestions[0] as unknown as QuestionData));
-const getEnabledStages = computed(() => currentQuestion.value.enabledStages || ['input', 'macro', 'micro', 'pronunciation', 'noticing']);
+const getEnabledStages = computed<NonNullable<QuestionData['enabledStages']>>(() =>
+  currentQuestion.value.enabledStages || (currentQuestion.value.type === 'grammar'
+    ? ['micro']
+    : ['input', 'macro', 'micro', 'pronunciation', 'noticing'])
+);
+const microQuestion = computed<GrammarQuestionData>(() => {
+  const question = currentQuestion.value;
+  const mode = getQuestionUiMode(question);
+  const legacyFeature = question.mode === 'reduce' ? 'relative' : currentMode.value;
+  return {
+    ...question,
+    type: 'grammar',
+    ui_mode: mode,
+    chunks: getQuestionChunks(question, legacyFeature),
+    correctAnswer: getQuestionAnswer(question, currentMode.value),
+  };
+});
 
 const instructionText = computed(() => {
   if (currentStage.value === 'success' || currentStage.value === 'noticing') return '';
@@ -152,9 +181,11 @@ const instructionText = computed(() => {
   if (currentStage.value === 'input') return '請點擊喇叭聽發音，並選出符合描述的角色圖片。';
   if (currentStage.value === 'macro') return '請將角色圖塊拖曳到名詞的「後方」。';
   if (currentStage.value === 'micro') {
-    return currentQuestion.value.mode === 'reduce'
+    return getQuestionUiMode(currentQuestion.value) === 'REDUCE'
       ? '請點擊上方多餘的字磚，將它們丟進垃圾桶，只保留正確的簡化片語。'
-      : '請點擊下方的字磚，將它們排列成正確的英文句子。';
+      : getQuestionUiMode(currentQuestion.value) === 'MORPH'
+        ? '請排列字磚，並點擊紫色字磚切換成正確的單字形式。'
+        : '請點擊下方的字磚，將它們排列成正確的英文句子。';
   }
   return '';
 });
@@ -177,6 +208,7 @@ watch(
 );
 
 const checkAndSetInitialStage = () => {
+  if (currentQuestion.value.type === 'grammar') { currentStage.value = 'micro'; return; }
   if (currentQuestion.value.type === 'contrast') { currentStage.value = 'macro'; return; }
   if (currentQuestion.value.type === 'chunk') { currentStage.value = 'preview'; return; }
   if (currentQuestion.value.previewData && getEnabledStages.value.includes('input')) currentStage.value = 'preview';
@@ -194,13 +226,33 @@ const handlePreviewSuccess = () => { currentQuestion.value.type === 'chunk' ? ha
 
 const fullSentenceData = computed(() => {
   const noun = currentQuestion.value.targetNoun;
-  const modifier = currentQuestion.value.type === 'contrast' ? currentQuestion.value.grammarFeature.relative.label : currentQuestion.value.grammarFeature[currentMode.value].label;
+  const modifier = currentQuestion.value.grammarFeature
+    ? currentQuestion.value.type === 'contrast'
+      ? currentQuestion.value.grammarFeature.relative.label
+      : currentQuestion.value.grammarFeature[currentMode.value].label
+    : getQuestionAnswer(currentQuestion.value).join(' ');
   return { target: `${noun} ${modifier} is my favorite.`, display: `${noun} | ${modifier} | is my favorite.`, modifier };
 });
 
 const handleMisconception = (code: string) => {
   if (!sessionLog.value.includes(code)) sessionLog.value.push(code);
-  CloudDatabase.logEvent({ student_name: '匿名學生', question_id: currentQuestion.value.id, error_code: code });
+  const sst: SSTCategory = code.startsWith('M:')
+    ? 'Omission'
+    : code.startsWith('U:')
+      ? 'Addition'
+      : code.startsWith('O:')
+        ? 'Misordering'
+        : code === 'DUPLICATE_PRONOUN' || code === 'NOT_REDUCED' || code === 'INCOMPLETE_REDUCTION'
+          ? 'Addition'
+          : code === 'WRONG_ORDER' || code === 'PUZZLE_ERROR'
+            ? 'Misordering'
+            : 'Misformation';
+  CloudDatabase.logEvent({
+    student_name: '匿名學生',
+    question_id: currentQuestion.value.id,
+    error_code: code,
+    sst,
+  });
 };
 
 const handleInputSuccess = () => {
@@ -378,6 +430,9 @@ const logoutAdmin = () => {
         💡 {{ instructionText }}
       </div>
     </Transition>
+    <div v-if="realtimeNotice" class="realtime-warning" role="status">
+      {{ realtimeNotice }}
+    </div>
 
     <main class="game-card" :key="currentQuestion.id + currentMode">
       <div v-if="currentStage === 'noticing' && currentQuestion.noticingData" class="stage-content"
@@ -401,7 +456,7 @@ const logoutAdmin = () => {
             </p>
       </div>
 
-      <div v-else-if="currentQuestion.type === 'contrast' && currentQuestion.contrastData" class="stage-content">
+      <div v-else-if="currentQuestion.type === 'contrast' && currentQuestion.contrastData && currentQuestion.grammarFeature" class="stage-content">
         <ContrastPuzzle :chineseSentence="currentQuestion.contrastData.chineseSentence"
           :chineseHighlight="currentQuestion.contrastData.chineseHighlight"
           :nounImage="currentQuestion.contrastData.nounImage"
@@ -424,19 +479,17 @@ const logoutAdmin = () => {
           :speechRate="currentQuestion.speechRate || 0.8" @success="handleInputSuccess" />
       </div>
 
-      <div v-else-if="currentStage === 'macro'" class="stage-content">
+      <div v-else-if="currentStage === 'macro' && currentQuestion.grammarFeature" class="stage-content">
         <div class="target-noun"><span class="highlight">{{ currentQuestion.targetNoun }}</span></div>
         <MacroDragCanvas :targetNoun="currentQuestion.targetNoun" :grammarFeature="currentQuestion.grammarFeature"
-          :imageUrl="currentQuestion.imageUrl" :mode="currentQuestion.mode || 'build'" @unpack="handleUnpack" />
+          :imageUrl="currentQuestion.imageUrl || ''" :mode="currentQuestion.mode || 'build'" @unpack="handleUnpack" />
       </div>
 
       <div v-else-if="currentStage === 'micro'" class="stage-content">
         <div class="target-noun"><span class="highlight">{{ currentQuestion.targetNoun }}</span></div>
-        <MicroTileUnscramble
-          :initialTiles="currentQuestion.mode === 'reduce' ? currentQuestion.grammarFeature.relative.tiles : currentQuestion.grammarFeature[currentMode].tiles"
-          :antecedent="currentQuestion.antecedent"
-          :correctAnswer="currentQuestion.mode === 'reduce' ? currentQuestion.grammarFeature.preposition.correctAnswer : currentQuestion.grammarFeature[currentMode].correctAnswer"
-          :mode="currentQuestion.mode || 'build'" :contextCloze="currentQuestion.contextCloze"
+        <GrammarCanvas
+          :question="microQuestion"
+          :initialChunks="microQuestion.chunks"
           :speechRate="currentQuestion.speechRate || 0.8" @success="handleSuccess"
           @misconception="handleMisconception" />
       </div>
@@ -636,6 +689,17 @@ header h1 {
   border: 2px dashed #fcd34d;
   box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1);
   animation: slideDown 0.3s ease-out;
+}
+
+.realtime-warning {
+  margin: -8px 0 18px;
+  padding: 10px 14px;
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+  text-align: center;
+  font-size: 0.9rem;
 }
 
 .game-card {
