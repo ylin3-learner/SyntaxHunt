@@ -1,6 +1,10 @@
 import type { Antecedent, DiagnosticCode, DiagnosticSignal, QuestionData } from './types';
 import { distance } from 'fastest-levenshtein';
 import { findVerbPair, expectedForm } from './verbTable';
+import { getGrammarRules, registerGrammarRule } from './registry';
+
+const pluginModules = import.meta.glob('./validators/*.ts', { eager: true });
+void pluginModules;
 
 // ==========================================
 // 核心驗證器介面
@@ -325,7 +329,8 @@ export const checkVerbForm: RuleValidator = (ctx) => {
       const correctT = cleanToken(correctTokens[i]);
       const morphableChunk = question.chunks?.find(chunk =>
         chunk.can_morph
-        && [chunk.text, ...(chunk.morph_options ?? [])].some(option => cleanToken(option) === studentT)
+        && [chunk.text, ...(chunk.options ?? chunk.morph_options ?? [])]
+          .some(option => cleanToken(option) === studentT)
       );
 
       if (morphableChunk && studentT !== correctT) {
@@ -368,18 +373,12 @@ export const checkVerbForm: RuleValidator = (ctx) => {
 // };
 
 
-// ==========================================
-// 規則註冊表與主執行函數
-// ==========================================
-const activeRules: RuleValidator[] = [
-  checkDuplicatePronoun,
-  checkSVAgreement,
-  checkCommonPatterns,
-  checkRelativeChoice,
-  checkReduced,
-  checkVerbForm, // 加入這行
-  // checkTense, // 未來啟用
-];
+registerGrammarRule({ id: 'duplicate-pronoun', validate: checkDuplicatePronoun });
+registerGrammarRule({ id: 'subject-verb-agreement', validate: checkSVAgreement });
+registerGrammarRule({ id: 'common-patterns', validate: checkCommonPatterns });
+registerGrammarRule({ id: 'relative-choice', validate: checkRelativeChoice });
+registerGrammarRule({ id: 'reduced-form', validate: checkReduced });
+registerGrammarRule({ id: 'verb-form', validate: checkVerbForm });
 
 export function diagnoseGrammar(
   studentTokens: string[],
@@ -389,7 +388,7 @@ export function diagnoseGrammar(
   const ctx: RuleContext = { studentTokens, correctTokens, question };
   let allSignals: DiagnosticSignal[] = [];
 
-  for (const rule of activeRules) {
+  for (const rule of getGrammarRules(question.concept)) {
     allSignals = allSignals.concat(rule(ctx));
   }
 

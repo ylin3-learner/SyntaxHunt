@@ -14,15 +14,31 @@ export type ErrOperation = 'M' | 'R' | 'U' | 'O';
  */
 export type SSTCategory = 'Omission' | 'Addition' | 'Misformation' | 'Misordering';
 
+export type GrammarConcept =
+  | 'SENTENCE_PATTERN'
+  | 'SUBJECT_VERB_AGREEMENT'
+  | 'QUESTION_FORM'
+  | 'TENSE_ASPECT'
+  | 'CLAUSES_CONNECTORS'
+  | 'NOUN_CLAUSE'
+  | 'ADJECTIVE_CLAUSE'
+  | 'ADVERB_CLAUSE'
+  | 'INVERSION'
+  | 'SUBJUNCTIVE'
+  | 'CONDITIONALS'
+  | 'MODAL_VERB';
+
 /** 統一的錯誤代碼定義 (結合 ERRANT 標準與自訂擴充) */
 export type DiagnosticCode =
   // --- 原有後位修飾相關 (保留或替換) ---
   | 'DUPLICATE_PRONOUN' | 'SV_AGREEMENT' | 'WRONG_RELATIVE' | 'NOT_REDUCED' | 'INCOMPLETE_REDUCTION'
   // --- 新增通用文法 (採用 ERRANT 格式) ---
   | 'M:VERB' | 'M:AUX' | 'M:DET' | 'M:PREP'
-  | 'R:VERB:TENSE' | 'R:VERB:SVA' | 'R:PREP' | 'R:DET' | 'R:NOUN:NUM'
+  | 'M:CONJ'
+  | 'R:VERB:TENSE' | 'R:VERB:FORM' | 'R:VERB:SVA' | 'R:VERB:MOOD'
+  | 'R:PREP' | 'R:DET' | 'R:NOUN:NUM' | 'R:CONJ'
   | 'R:RELATIVE' // 加入這個，解決 TS 報錯
-  | 'U:PRON' | 'U:VERB' | 'U:RELATIVE'
+  | 'U:PRON' | 'U:VERB' | 'U:RELATIVE' | 'U:CONJ'
   | 'O:WRONG_ORDER' | 'O:INVERSION'
   | 'UNKNOWN_ERROR';                     // 未知錯誤 (Fallback 給 AI 處理)
 
@@ -46,6 +62,8 @@ export interface Chunk {
   // --- MORPH (字形變形) 專屬屬性 ---
   can_morph?: boolean;  // 是否允許點擊變形 (例如動詞、名詞單複數)
   morph_options?: string[]; // 變形選項池 (例如：['go', 'goes', 'went', 'gone'])
+  options?: string[];   // 新版變形選項；保留 morph_options 以相容既有題庫
+  current_index?: number; // 初始選項索引；作答中的選取狀態由畫布持有
 }
 
 // ==========================================
@@ -78,6 +96,9 @@ export interface QuestionData {
 
   /** 核心：決定 UI 渲染邏輯 */
   ui_mode?: UIMode;
+
+  /** 文法概念決定情境式教學畫布與對應診斷規則 */
+  concept?: GrammarConcept;
 
   /** 教學流程控制 */
   enabledStages?: ('input' | 'macro' | 'micro' | 'pronunciation' | 'noticing')[];

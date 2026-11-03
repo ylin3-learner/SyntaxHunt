@@ -167,4 +167,35 @@ describe('Grammar Engine - diagnoseGrammar', () => {
     expect(signals[0].sst).toBe('Misformation');
   });
 
+  it('依概念註冊規則辨識情態動詞後的非原形動詞', () => {
+    const signals = diagnoseGrammar(
+      ['They', 'could', 'goes'],
+      ['They', 'could', 'go'],
+      { ...mockQuestion, concept: 'MODAL_VERB' }
+    );
+
+    expect(signals[0].code).toBe('R:VERB:FORM');
+    expect(signals[0].index).toBe(2);
+  });
+
+  it('依概念註冊規則辨識問句倒裝錯誤', () => {
+    const signals = diagnoseGrammar(
+      ['Where', 'you', 'are'],
+      ['Where', 'are', 'you'],
+      { ...mockQuestion, concept: 'QUESTION_FORM' }
+    );
+
+    expect(signals[0].code).toBe('O:INVERSION');
+  });
+
+  it('依概念註冊規則辨識遺漏的子句連接詞', () => {
+    const signals = diagnoseGrammar(
+      ['I', 'stayed', 'home'],
+      ['I', 'stayed', 'home', 'because', 'it', 'rained'],
+      { ...mockQuestion, concept: 'CLAUSES_CONNECTORS' }
+    );
+
+    expect(signals[0].code).toBe('M:CONJ');
+  });
+
 });

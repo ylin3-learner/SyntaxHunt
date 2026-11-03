@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import type { Chunk, QuestionData, UIMode } from '../rules/types';
+import type { Chunk, GrammarConcept, QuestionData, UIMode } from '../rules/types';
+import { autoChunk, defaultUiModeForConcept } from '../rules/autoChunk';
 import { CloudDatabase } from '../services/CloudDatabase';
 import { VueDraggable } from 'vue-draggable-plus';
 import { useClassroomSync } from '../composables/useClassroomSync';
@@ -10,10 +11,10 @@ const props = defineProps<{ currentQuestions: QuestionData[]; }>();
 const enabledStages = ref<('input' | 'macro' | 'micro' | 'pronunciation' | 'noticing')[]>(['input', 'macro', 'micro', 'pronunciation', 'noticing']);
 const questionMode = ref<'build' | 'reduce'>('build');
 const uiMode = ref<UIMode>('BUILD');
+const grammarConcept = ref<GrammarConcept>('SENTENCE_PATTERN');
 const grammarSentence = ref('');
 const grammarAnswer = ref('');
 const grammarChunks = ref<Chunk[]>([]);
-const isDecomposing = ref(false);
 const isPreparingCache = ref(false);
 const grammarError = ref('');
 const cacheStatus = ref('');
@@ -88,9 +89,14 @@ const handleModeChange = () => {
   updateClassMode(isClassModeToggle.value, targetCountInput.value, pwd);
 };
 
+const handleGrammarConceptChange = () => {
+  uiMode.value = defaultUiModeForConcept(grammarConcept.value);
+  grammarChunks.value = [];
+};
+
 const resetForm = () => {
   grammarSentence.value = ''; grammarAnswer.value = ''; grammarChunks.value = [];
-  uiMode.value = 'BUILD'; grammarError.value = ''; cacheStatus.value = '';
+  uiMode.value = 'BUILD'; grammarConcept.value = 'SENTENCE_PATTERN'; grammarError.value = ''; cacheStatus.value = '';
   chunkZhInput.value = ''; chunkQuizInput.value = ''; distractorImageUrl.value = '';
   correctLabel.value = ''; distractorLabel.value = '';
   antecedentNumber.value = 'singular'; speechRate.value = 0.8;
@@ -108,6 +114,7 @@ const editQuestion = (q: QuestionData) => {
   if (q.type === 'grammar') {
     editingId.value = q.id;
     questionType.value = 'grammar';
+    grammarConcept.value = q.concept || 'SENTENCE_PATTERN';
     uiMode.value = q.ui_mode || 'BUILD';
     targetNoun.value = q.targetNoun;
     antecedentNumber.value = q.antecedent.number || 'singular';
@@ -156,31 +163,19 @@ const editQuestion = (q: QuestionData) => {
   activeUploadTarget.value = null;
 };
 
-const decomposeGrammarSentence = async () => {
+const autoChunkGrammarSentence = () => {
   const sentence = grammarSentence.value.trim();
   if (!sentence) {
     grammarError.value = '請先輸入英文句子。';
     return;
   }
 
-  isDecomposing.value = true;
   grammarError.value = '';
-  try {
-    const correctAnswer = (grammarAnswer.value || sentence).trim().split(/\s+/);
-    const chunks = await CloudDatabase.decomposeGrammarSentence(sentence, uiMode.value, correctAnswer);
-    grammarChunks.value = chunks.map((chunk, index) => ({
-      id: `${editingId.value || 'new'}-chunk-${index}-${Date.now()}`,
-      text: chunk.text,
-      draggable: chunk.draggable ?? true,
-      can_morph: chunk.can_morph ?? false,
-      morph_options: chunk.morph_options || [],
-    }));
-    cacheStatus.value = '';
-  } catch (error) {
-    grammarError.value = error instanceof Error ? error.message : '字塊拆解失敗，請稍後再試。';
-  } finally {
-    isDecomposing.value = false;
-  }
+  grammarChunks.value = autoChunk(sentence, grammarConcept.value).map((chunk, index) => ({
+    ...chunk,
+    id: `${editingId.value || 'new'}-auto-${index}`,
+  }));
+  cacheStatus.value = '';
 };
 
 const splitGrammarSentenceManually = () => {
@@ -215,7 +210,10 @@ const prepareQuestionDiagnosis = async (id: string) => {
 const updateMorphOptions = (chunk: Chunk, event: Event) => {
   const input = event.target;
   if (!(input instanceof HTMLInputElement)) return;
-  chunk.morph_options = input.value.split(',').map(value => value.trim()).filter(Boolean);
+  const options = input.value.split(',').map(value => value.trim()).filter(Boolean);
+  chunk.options = options;
+  chunk.morph_options = options;
+  chunk.current_index = Math.max(0, options.indexOf(chunk.text));
 };
 
 const deleteQuestion = (id: string) => {
@@ -319,6 +317,7 @@ const saveQuestion = () => {
       id: editingId.value || `q_${Date.now()}`,
       type: 'grammar',
       ui_mode: uiMode.value,
+      concept: grammarConcept.value,
       targetNoun: targetNoun.value.trim() || source.split(/\s+/)[0],
       antecedent: {
         noun: targetNoun.value.trim() || source.split(/\s+/)[0],
@@ -327,10 +326,9 @@ const saveQuestion = () => {
       },
       chunks: grammarChunks.value.length > 0
         ? grammarChunks.value
-        : source.split(/\s+/).filter(Boolean).map((text, index) => ({
+        : autoChunk(source, grammarConcept.value).map((chunk, index) => ({
+          ...chunk,
           id: `${editingId.value || 'new'}-chunk-${index}`,
-          text,
-          draggable: true,
         })),
       correctAnswer: answer.split(/\s+/).filter(Boolean),
       enabledStages: ['micro'],
@@ -583,6 +581,24 @@ const saveAllAndClose = () => {
           <div class="editor-body">
             <template v-if="questionType === 'grammar'">
               <div class="form-group">
+                <label for="grammar-concept">文法概念</label>
+                <select id="grammar-concept" v-model="grammarConcept" class="grammar-select"
+                  @change="handleGrammarConceptChange">
+                  <option value="SENTENCE_PATTERN">句子成分與五大句型</option>
+                  <option value="SUBJECT_VERB_AGREEMENT">主詞動詞一致</option>
+                  <option value="QUESTION_FORM">問句</option>
+                  <option value="TENSE_ASPECT">時態與狀態</option>
+                  <option value="CLAUSES_CONNECTORS">子句與連接詞</option>
+                  <option value="NOUN_CLAUSE">名詞子句</option>
+                  <option value="ADJECTIVE_CLAUSE">形容詞子句／關係子句</option>
+                  <option value="ADVERB_CLAUSE">副詞子句</option>
+                  <option value="INVERSION">倒裝句</option>
+                  <option value="SUBJUNCTIVE">假設語氣</option>
+                  <option value="CONDITIONALS">條件句</option>
+                  <option value="MODAL_VERB">情態動詞</option>
+                </select>
+              </div>
+              <div class="form-group">
                 <label>題目 UI 模式</label>
                 <div class="type-switcher">
                   <button :class="{ active: uiMode === 'BUILD' }" @click="uiMode = 'BUILD'">BUILD 組句</button>
@@ -619,9 +635,7 @@ const saveAllAndClose = () => {
                 <input v-model="tagsInput" type="text" placeholder="例如：過去式, 動詞時態" />
               </div>
               <div class="form-group">
-                <button class="btn-save" :disabled="isDecomposing" @click="decomposeGrammarSentence">
-                  {{ isDecomposing ? 'AI 拆解中...' : '✨ 自動拆解字塊' }}
-                </button>
+                <button class="btn-save" @click="autoChunkGrammarSentence">✨ 確定性自動拆解</button>
                 <button class="btn-push" style="margin-top: 10px;" @click="splitGrammarSentenceManually">
                   以空白拆解（手動設定變形）
                 </button>
@@ -633,7 +647,7 @@ const saveAllAndClose = () => {
                 <div v-for="chunk in grammarChunks" :key="chunk.id" class="grammar-chunk-row">
                   <input v-model="chunk.text" type="text" aria-label="字塊文字" />
                   <label><input v-model="chunk.can_morph" type="checkbox" /> 可變形</label>
-                  <input v-if="chunk.can_morph" :value="chunk.morph_options?.join(', ')" type="text"
+                  <input v-if="chunk.can_morph" :value="(chunk.options ?? chunk.morph_options)?.join(', ')" type="text"
                     placeholder="go, goes, went" aria-label="變形選項"
                     @input="updateMorphOptions(chunk, $event)" />
                 </div>

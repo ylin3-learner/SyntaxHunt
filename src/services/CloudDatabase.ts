@@ -8,6 +8,8 @@ export interface LearningLog {
   question_id: string;
   error_code: string;
   sst?: DiagnosticSignal['sst'];
+  status?: 'PENDING' | 'SUCCESS' | 'FAILED' | null;
+  diagnosis?: DiagnosticSignal | null;
   created_at?: string;
 }
 
@@ -30,7 +32,8 @@ const normalizeAnswer = (answer: string[]) =>
 
 const validDiagnosticCodes: ReadonlySet<string> = new Set<DiagnosticCode>([
   'DUPLICATE_PRONOUN', 'SV_AGREEMENT', 'WRONG_RELATIVE', 'NOT_REDUCED', 'INCOMPLETE_REDUCTION',
-  'M:VERB', 'M:AUX', 'M:DET', 'M:PREP', 'R:VERB:TENSE', 'R:VERB:SVA', 'R:PREP', 'R:DET',
+  'M:VERB', 'M:AUX', 'M:DET', 'M:PREP', 'M:CONJ', 'R:VERB:TENSE', 'R:VERB:FORM', 'R:VERB:SVA',
+  'R:VERB:MOOD', 'R:CONJ', 'U:CONJ', 'R:PREP', 'R:DET',
   'R:NOUN:NUM', 'R:RELATIVE', 'U:PRON', 'U:VERB', 'U:RELATIVE',
   'O:WRONG_ORDER', 'O:INVERSION', 'UNKNOWN_ERROR',
 ]);
@@ -139,6 +142,26 @@ export const CloudDatabase = {
     }
   },
 
+  async createPendingDiagnosisLog(questionId: string): Promise<number> {
+    const { data, error } = await supabase
+      .from('learning_logs')
+      .insert([{
+        student_name: '匿名學生',
+        question_id: questionId,
+        error_code: 'UNKNOWN_ERROR',
+        sst: 'Misformation',
+        status: 'PENDING',
+      }])
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    if (!data || !Number.isInteger(data.id)) {
+      throw new Error('建立待批改紀錄時未取得有效的紀錄 ID。');
+    }
+    return data.id;
+  },
+
   // 讀取所有學習軌跡
   async fetchLogs(): Promise<LearningLog[]> {
     try {
@@ -224,12 +247,14 @@ export const CloudDatabase = {
   async diagnoseWithAI(
     studentAnswer: string[],
     correctAnswer: string[],
-    question: QuestionData
+    question: QuestionData,
+    pendingLogId?: number
   ): Promise<DiagnosticSignal> {
     const result = await callGrammarAssistant<{ diagnosis: DiagnosticSignal }>('diagnose', {
       student_answer: studentAnswer,
       correct_answer: correctAnswer,
       question,
+      log_id: pendingLogId,
     });
     if (!isDiagnosticSignal(result.diagnosis)) {
       throw new Error('AI 回傳的診斷格式不符合規範。');

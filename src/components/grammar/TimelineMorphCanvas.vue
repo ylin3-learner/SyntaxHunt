@@ -1,0 +1,20 @@
+<script setup lang="ts">
+import type { Chunk, GrammarQuestionData } from '../../rules/types';
+import MorphChoiceCanvas from './MorphChoiceCanvas.vue';
+
+defineProps<{
+  question: GrammarQuestionData;
+  initialChunks: Chunk[];
+  speechRate?: number;
+}>();
+
+const emit = defineEmits<{
+  (e: 'success'): void;
+  (e: 'misconception', code: string): void;
+}>();
+</script>
+
+<template>
+  <MorphChoiceCanvas :question="question" :initial-chunks="initialChunks" :speech-rate="speechRate"
+    strategy="timeline" @success="emit('success')" @misconception="emit('misconception', $event)" />
+</template>

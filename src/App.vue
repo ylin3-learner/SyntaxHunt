@@ -13,8 +13,9 @@ import ChunkPreview from './components/ChunkPreview.vue';
 import DebugConsole from './components/DebugConsole.vue';
 
 import { defaultQuestions } from './data/questions';
-import { getQuestionAnswer, getQuestionChunks, getQuestionUiMode } from './rules/types';
 import type { GrammarQuestionData, QuestionData, SSTCategory } from './rules/types';
+import { convertLegacyQuestion } from './rules/adapter';
+import { getQuestionUiMode } from './rules/types';
 import { useSound, unlockAudioContext } from './utils/useSound';
 import { unlockTTS } from './utils/useSpeech';
 import { CloudDatabase } from './services/CloudDatabase';
@@ -163,15 +164,8 @@ const getEnabledStages = computed<NonNullable<QuestionData['enabledStages']>>(()
 );
 const microQuestion = computed<GrammarQuestionData>(() => {
   const question = currentQuestion.value;
-  const mode = getQuestionUiMode(question);
   const legacyFeature = question.mode === 'reduce' ? 'relative' : currentMode.value;
-  return {
-    ...question,
-    type: 'grammar',
-    ui_mode: mode,
-    chunks: getQuestionChunks(question, legacyFeature),
-    correctAnswer: getQuestionAnswer(question, currentMode.value),
-  };
+  return convertLegacyQuestion(question, legacyFeature);
 });
 
 const instructionText = computed(() => {

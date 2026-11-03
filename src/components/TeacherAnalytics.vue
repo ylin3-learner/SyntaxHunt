@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { CloudDatabase, type LearningLog } from '../services/CloudDatabase';
 import type { QuestionData, SSTCategory } from '../rules/types';
+import { supabase } from '../services/supabaseClient';
 
 const props = defineProps<{
     questionBank: QuestionData[];
@@ -13,15 +14,64 @@ const logs = ref<LearningLog[]>([]);
 const isLoading = ref(true);
 const isClearing = ref(false);
 const expandedCode = ref<string | null>(null);
+const pendingDiagnosisCount = computed(() =>
+    logs.value.filter(log => log.status === 'PENDING').length
+);
+let learningLogsChannel: ReturnType<typeof supabase.channel> | undefined;
 
-const loadData = async () => {
+const loadData = async (preserveRealtimeUpdates = true) => {
     isLoading.value = true;
-    logs.value = await CloudDatabase.fetchLogs();
+    const fetched = await CloudDatabase.fetchLogs();
+    const latestById = new Map<number, LearningLog>();
+    fetched.forEach(log => {
+        if (typeof log.id === 'number') latestById.set(log.id, log);
+    });
+    if (preserveRealtimeUpdates) {
+        logs.value.filter(log => typeof log.id === 'number')
+            .forEach(log => latestById.set(log.id!, log));
+    }
+    logs.value = [...latestById.values()].sort((left, right) =>
+        (right.created_at ?? '').localeCompare(left.created_at ?? '')
+    );
     isLoading.value = false;
 };
 
-onMounted(() => {
-    loadData();
+const applyRealtimeLog = (payload: {
+    eventType: string;
+    new: Record<string, unknown>;
+    old: Record<string, unknown>;
+}) => {
+    if (payload.eventType === 'DELETE') {
+        const deletedId = payload.old.id;
+        logs.value = logs.value.filter(log => log.id !== deletedId);
+        return;
+    }
+
+    const incoming = payload.new as unknown as LearningLog;
+    if (typeof incoming.id !== 'number') return;
+    const index = logs.value.findIndex(log => log.id === incoming.id);
+    if (index === -1) logs.value.unshift(incoming);
+    else logs.value[index] = incoming;
+};
+
+onMounted(async () => {
+    learningLogsChannel = supabase
+        .channel('teacher-analytics-learning-logs')
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'learning_logs',
+        }, applyRealtimeLog)
+        .subscribe(status => {
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                console.error('教師看板 Realtime 訂閱失敗:', status);
+            }
+        });
+    await loadData();
+});
+
+onUnmounted(() => {
+    if (learningLogsChannel) void supabase.removeChannel(learningLogsChannel);
 });
 
 const handleClearLogs = async () => {
@@ -33,7 +83,7 @@ const handleClearLogs = async () => {
 
     if (success) {
         alert('✅ 已成功清空所有紀錄！');
-        await loadData();
+        await loadData(false);
     } else {
         alert('❌ 清空失敗，請確認網路連線。');
     }
@@ -57,7 +107,12 @@ const adviceDictionary: Record<string, string> = {
     'M:DET': '學生漏掉冠詞。請確認可數名詞前是否需要 a、an 或 the。',
     'M:PREP': '學生漏掉介系詞。可用位置、時間或動詞搭配線索補上必要介系詞。',
     'R:VERB:TENSE': '學生選錯動詞形式。請利用時間線索和句子中的助動詞檢查時態。',
+    'R:VERB:FORM': '情態助動詞或其他結構後的動詞形式有誤，請檢查動詞是否應使用原形。',
+    'R:VERB:MOOD': '學生使用的語氣形式不符合假設情境，請檢查句子表達的是事實還是假設。',
     'R:VERB:SVA': '學生尚未掌握主詞與動詞一致。請先找主詞，再判斷動詞單複數。',
+    'R:CONJ': '學生選錯子句連接詞，請依句意判斷兩個子句的邏輯關係。',
+    'M:CONJ': '學生漏掉子句連接詞，請檢查子句之間的關係。',
+    'U:CONJ': '學生加入了不需要的連接詞，請檢查句子結構。',
     'R:PREP': '學生混淆介系詞。可用位置、時間或搭配詞線索重新辨認。',
     'R:DET': '學生混淆 a/an。提醒依後面單字的起始發音選擇。',
     'R:NOUN:NUM': '學生混淆名詞單複數。請檢查數量詞和名詞詞尾。',
@@ -82,7 +137,12 @@ const titleDictionary: Record<string, string> = {
     'M:DET': '遺漏冠詞',
     'M:PREP': '遺漏介系詞',
     'R:VERB:TENSE': '動詞時態錯誤',
+    'R:VERB:FORM': '動詞形式錯誤',
+    'R:VERB:MOOD': '語氣形式錯誤',
     'R:VERB:SVA': '主詞與動詞單複數不一致',
+    'R:CONJ': '連接詞使用錯誤',
+    'M:CONJ': '遺漏連接詞',
+    'U:CONJ': '多餘連接詞',
     'R:PREP': '介系詞使用錯誤',
     'R:DET': '冠詞使用錯誤',
     'R:NOUN:NUM': '名詞單複數錯誤',
@@ -115,7 +175,11 @@ const sstDistribution = computed(() => {
     const counts = categories.map(category => ({
         category,
         label: sstLabels[category],
-        count: logs.value.filter(log => log.error_code !== 'SUCCESS' && inferSst(log) === category).length,
+        count: logs.value.filter(log =>
+            log.error_code !== 'SUCCESS'
+            && log.status !== 'PENDING'
+            && inferSst(log) === category
+        ).length,
     }));
     const total = counts.reduce((sum, item) => sum + item.count, 0);
     return counts.map(item => ({
@@ -160,7 +224,9 @@ interface ErrorNode {
 
 // 👇 核心邏輯：將資料分群成雙層結構，並加入克漏字上下文
 const errorTree = computed<ErrorNode[]>(() => {
-    const errorLogs = logs.value.filter(log => log.error_code !== 'SUCCESS');
+    const errorLogs = logs.value.filter(log =>
+        log.error_code !== 'SUCCESS' && log.status !== 'PENDING'
+    );
     const counts: Record<string, { total: number; questions: Record<string, number> }> = {};
 
     errorLogs.forEach(log => {
@@ -233,6 +299,9 @@ const errorTree = computed<ErrorNode[]>(() => {
 
             <div v-else class="stats-container">
                 <p class="subtitle">總計收集 {{ logs.length }} 筆學習紀錄（點擊展開錯誤題目）</p>
+                <p v-if="pendingDiagnosisCount > 0" class="ai-pending" role="status">
+                    ✨ AI 批改中... {{ pendingDiagnosisCount }} 筆答案處理中
+                </p>
 
                 <section class="sst-chart" aria-label="SST 錯誤比例">
                     <h3>SST 四類錯誤策略</h3>
@@ -387,6 +456,15 @@ const errorTree = computed<ErrorNode[]>(() => {
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+.ai-pending {
+    margin: 0 0 16px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: #fff7e6;
+    color: #8a5700;
+    font-weight: 700;
 }
 
 .subtitle {
