@@ -205,17 +205,21 @@ sequenceDiagram
 
 | Code family | Examples | Local diagnosis |
 | :--- | :--- | :--- |
-| `M:*` | `M:VERB`, `M:AUX`, `M:DET`, `M:PREP` | A required verb, auxiliary, determiner, or preposition is missing. |
-| `R:*` | `R:VERB:SVA`, `R:VERB:TENSE`, `R:RELATIVE`, `R:PREP`, `R:DET`, `R:NOUN:NUM` | A verb form, relative pronoun, preposition, determiner, or noun number is misformed. |
-| `U:*` | `U:PRON`, `U:VERB`, `U:RELATIVE` | An unnecessary pronoun, verb, or relative pronoun remains. |
-| `O:WRONG_ORDER` | — | The same words appear in a different order. |
+| `M:*` | `M:VERB`, `M:AUX`, `M:DET`, `M:PREP`, `M:CONJ` | A required word or conjunction is missing. |
+| `R:*` | `R:VERB:SVA`, `R:VERB:TENSE`, `R:VERB:FORM`, `R:VERB:MOOD`, `R:RELATIVE`, `R:PREP`, `R:DET`, `R:NOUN:NUM`, `R:CONJ` | A verb form, relative pronoun, preposition, determiner, noun number, or conjunction is incorrect. |
+| `U:*` | `U:PRON`, `U:VERB`, `U:RELATIVE`, `U:CONJ` | An unnecessary pronoun, verb, relative pronoun, or conjunction remains. |
+| `O:*` | `O:WRONG_ORDER`, `O:INVERSION` | Words are out of order, including incorrect auxiliary placement in inversion. |
 | `UNKNOWN_ERROR` | — | Local rules cannot assign a specific error; try a prepared diagnosis or AI fallback. |
 
 Each diagnosis also has an SST category: `Omission`, `Addition`, `Misformation`, or `Misordering`. Definite local diagnoses are used first. When local diagnosis returns `UNKNOWN_ERROR`, the student is allowed to continue immediately while the app records a `PENDING` log and requests an asynchronous diagnosis through the `grammar-assistant` Edge Function. The function checks `diagnosis_cache`, calls Gemini if needed, and updates the same log to `SUCCESS` (or `FAILED`); Teacher Analytics reflects status and completed results through Supabase Realtime.
 
 Teacher-authored general grammar questions choose a concept and interaction mode. `autoChunk(sentence, concept)` uses bracketed phrases first, then deterministic tokenization and a small phrase/verb dictionary; it does not call an LLM. MORPH options are stored as strings with `current_index` identifying the initial selected form, while legacy `morph_options` remains supported. The canvas routes new concepts to a timeline, modal-strength gauge, shredder, or magnetic-slot interaction. Questions without a concept keep the legacy canvas.
 
-Apply the database migration, deploy the function, and configure the Gemini key:
+### Implementation and rollout status (2026-11-03)
+
+The adaptive canvas, legacy adapter, local chunker and rule registry, asynchronous diagnosis flow, and teacher Realtime status display are implemented and pushed to `main`. The 20 legacy questions remain in their existing format; they are adapted when loaded into the canvas rather than rewritten in the `questions` table. Automated checks passed: 37 tests, TypeScript type-check, Vite production build, and Deno Edge Function type-check. The production build still reports a large main-bundle size warning.
+
+**Supabase rollout is still pending.** The migration `supabase/migrations/20261103215800_async_diagnosis_status.sql` has not been applied, and the updated `grammar-assistant` Edge Function has not been deployed or verified against a live Supabase project. Apply the migration, deploy the function, and configure the Gemini key before enabling cloud diagnosis:
 
 ```bash
 npx supabase db push
@@ -223,7 +227,7 @@ npx supabase functions deploy grammar-assistant
 npx supabase secrets set GEMINI_API_KEY=your_gemini_api_key
 ```
 
-Keep the Gemini key in Supabase Edge Function Secrets; never put it in `.env.local` or frontend code. Without the deployed function/key, AI error-matrix generation and asynchronous diagnosis are unavailable; deterministic chunking and local diagnosis remain available.
+The migration adds `status` and `diagnosis` to `learning_logs` and enables Realtime updates for that table. Keep the Gemini key in Supabase Edge Function Secrets; never put it in `.env.local` or frontend code. Until the migration and function are deployed, AI error-matrix generation and asynchronous diagnosis are unavailable; deterministic chunking and local diagnosis remain available.
 
 ---
 

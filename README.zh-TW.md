@@ -201,17 +201,21 @@ sequenceDiagram
 
 | 診斷碼類別 | 範例 | 本地診斷情境 |
 | :--- | :--- | :--- |
-| `M:*` | `M:VERB`、`M:AUX`、`M:DET`、`M:PREP` | 遺漏必要動詞、助動詞、限定詞或介系詞。 |
-| `R:*` | `R:VERB:SVA`、`R:VERB:TENSE`、`R:RELATIVE`、`R:PREP`、`R:DET`、`R:NOUN:NUM` | 動詞形式、關係代名詞、介系詞、限定詞或名詞單複數有誤。 |
-| `U:*` | `U:PRON`、`U:VERB`、`U:RELATIVE` | 多出不必要的代名詞、動詞或關係代名詞。 |
-| `O:WRONG_ORDER` | — | 字詞相同，但排列順序不同。 |
+| `M:*` | `M:VERB`、`M:AUX`、`M:DET`、`M:PREP`、`M:CONJ` | 遺漏必要字詞或連接詞。 |
+| `R:*` | `R:VERB:SVA`、`R:VERB:TENSE`、`R:VERB:FORM`、`R:VERB:MOOD`、`R:RELATIVE`、`R:PREP`、`R:DET`、`R:NOUN:NUM`、`R:CONJ` | 動詞形式、關係代名詞、介系詞、限定詞、名詞單複數或連接詞有誤。 |
+| `U:*` | `U:PRON`、`U:VERB`、`U:RELATIVE`、`U:CONJ` | 多出不必要的代名詞、動詞、關係代名詞或連接詞。 |
+| `O:*` | `O:WRONG_ORDER`、`O:INVERSION` | 字詞順序錯誤，包含倒裝句助動詞位置不正確。 |
 | `UNKNOWN_ERROR` | — | 本地規則無法判定特定錯誤，接續查詢預建診斷或 AI 兜底。 |
 
 每筆診斷也會標記 SST 類別：`Omission`（遺漏）、`Addition`（多加）、`Misformation`（形式錯誤）或 `Misordering`（語序錯誤）。明確的本地診斷優先使用；若本地結果為 `UNKNOWN_ERROR`，學生會先立即過關，系統同時建立 `PENDING` 紀錄並在背景呼叫 `grammar-assistant` Edge Function。函式先查 `diagnosis_cache`，再視需要呼叫 Gemini，並將同一筆紀錄更新為 `SUCCESS` 或 `FAILED`；教師看板透過 Supabase Realtime 顯示批改狀態與更新結果。
 
 教師建立通用文法題時可選擇概念與互動模式。`autoChunk(sentence, concept)` 優先保留中括號片語，再以確定性切詞及小型片語/動詞字典拆解，不呼叫 LLM。MORPH 選項以字串陣列儲存，`current_index` 表示初始選取形式，並保留 `morph_options` 舊欄位相容。新概念會路由至時間軸、情態語氣計、碎紙機或磁吸卡槽；未設定概念的舊題仍使用既有畫布。
 
-啟用雲端 AI 與診斷快取前，先套用資料庫遷移、部署函式並設定 Gemini 金鑰：
+### 實作與部署進度（2026-11-03）
+
+自適應畫布、舊題轉接器、本地切詞與規則註冊表、非同步診斷流程及教師看板 Realtime 狀態已完成並推送至 `main`。既有 20 題維持原格式；題目載入畫布時才轉接，不會改寫 `questions` 資料表。自動化驗證已通過：37 項測試、TypeScript 型別檢查、Vite production build 與 Deno Edge Function 型別檢查。Production build 目前仍有主 bundle 體積偏大的警告。
+
+**Supabase 部署尚未完成。** 尚未套用 `supabase/migrations/20261103215800_async_diagnosis_status.sql`，也尚未部署新版 `grammar-assistant` Edge Function 或連線驗證正式 Supabase 專案。啟用雲端診斷前，請先套用遷移、部署函式並設定 Gemini 金鑰：
 
 ```bash
 npx supabase db push
@@ -219,7 +223,7 @@ npx supabase functions deploy grammar-assistant
 npx supabase secrets set GEMINI_API_KEY=your_gemini_api_key
 ```
 
-Gemini 金鑰只設定在 Supabase Edge Function Secrets，不要放入 `.env.local` 或前端程式碼。未部署函式或未設定金鑰時，AI 錯誤矩陣及背景診斷無法使用；確定性切詞與本地診斷仍可使用。
+此遷移會在 `learning_logs` 新增 `status`、`diagnosis` 欄位，並啟用該資料表的 Realtime 更新。Gemini 金鑰只設定在 Supabase Edge Function Secrets，不要放入 `.env.local` 或前端程式碼。遷移與函式部署完成前，AI 錯誤矩陣及背景診斷尚不可用；確定性切詞與本地診斷仍可使用。
 
 ---
 
