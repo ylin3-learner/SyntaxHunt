@@ -211,6 +211,28 @@ sequenceDiagram
 
 教師建立通用文法題時可選擇概念與互動模式。`autoChunk(sentence, concept)` 優先保留中括號片語，再以確定性切詞及小型片語/動詞字典拆解，不呼叫 LLM。MORPH 選項以字串陣列儲存，`current_index` 表示初始選取形式，並保留 `morph_options` 舊欄位相容。新概念會路由至時間軸、情態語氣計、碎紙機或磁吸卡槽；未設定概念的舊題仍使用既有畫布。
 
+### RuleRegistry 如何串起出題、遊戲介面與診斷
+
+RuleRegistry 是**本地診斷規則的插件註冊點**，不是出題表單或遊戲介面的路由器：
+
+1. **教師出題：**在 Teacher Admin 選擇文法概念與 `BUILD`、`REDUCE` 或 `MORPH`，輸入句子和答案，再用確定性 `autoChunk` 切詞（也可手動編輯字塊及變形選項）。題目會儲存所選概念與模式。`autoChunk` 不會查詢 RuleRegistry。
+2. **遊戲介面：**`GrammarCanvas.vue` 依題目儲存的 `concept` 與 `ui_mode` 選擇畫布，並不查詢已註冊規則。`defaultUiModeForConcept` 提供概念預設模式，教師仍可覆寫。現行路由如下：
+
+   | 題目設定 | 學生互動介面 |
+   | :--- | :--- |
+   | `MODAL_VERB` | 情態語氣壓力計 |
+   | `REDUCE` | 碎紙機式刪減 |
+   | `MORPH` + 時態、主謂一致、假設語氣或條件句 | 時態時間軸 |
+   | `BUILD` | 磁吸式句子卡槽 |
+   | 沒有概念或未符合以上組合 | 舊版畫布 |
+
+   ![時態 MORPH 題型的學生遊戲介面示意圖](docs/images/adaptive-grammar-game-ui.svg)
+
+   *此為介面示意圖，並非即時應用程式截圖；實際畫布、提示與字塊會依題目設定變動。*
+3. **作答診斷：**學生送出答案後，`diagnoseGrammar` 執行通用規則，以及符合該題概念的專屬規則。`grammarRules.ts` 會 eager-load `src/rules/validators/*.ts`；每個插件以唯一 ID、驗證函式及可選的概念清單呼叫 `registerGrammarRule`。例如連接詞規則套用於子句概念、倒裝規則套用於問句／倒裝概念、情態動詞形式規則套用於 `MODAL_VERB`。明確的本地診斷訊號會沿用既有迷思回饋與紀錄流程；若規則未能診斷，則以字詞對齊分類差異，`UNKNOWN_ERROR` 可再進入非同步 AI 兜底。
+
+因此，新增 validator 只會擴充本地診斷，不會自動新增教師表單選項或視覺互動；如需新概念或新畫布，還需視需求更新型別／概念選項及介面路由。新增規則時，將檔案放在 `src/rules/validators/` 並註冊唯一 ID。
+
 ### 實作與部署進度（2026-11-03）
 
 自適應畫布、舊題轉接器、本地切詞與規則註冊表、非同步診斷流程及教師看板 Realtime 狀態已完成並推送至 `main`。既有 20 題維持原格式；題目載入畫布時才轉接，不會改寫 `questions` 資料表。自動化驗證已通過：37 項測試、TypeScript 型別檢查、Vite production build 與 Deno Edge Function 型別檢查。Production build 目前仍有主 bundle 體積偏大的警告。

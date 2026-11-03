@@ -215,6 +215,28 @@ Each diagnosis also has an SST category: `Omission`, `Addition`, `Misformation`,
 
 Teacher-authored general grammar questions choose a concept and interaction mode. `autoChunk(sentence, concept)` uses bracketed phrases first, then deterministic tokenization and a small phrase/verb dictionary; it does not call an LLM. MORPH options are stored as strings with `current_index` identifying the initial selected form, while legacy `morph_options` remains supported. The canvas routes new concepts to a timeline, modal-strength gauge, shredder, or magnetic-slot interaction. Questions without a concept keep the legacy canvas.
 
+### How the Rule Registry connects authoring, gameplay, and diagnosis
+
+The registry is the **local diagnosis plugin point**, not the question authoring UI router:
+
+1. **Authoring:** In Teacher Admin, the teacher selects a grammar concept and `BUILD`, `REDUCE`, or `MORPH`, enters a sentence and answer, then uses deterministic `autoChunk` (or edits the chunks and morphology options). The chosen concept and mode are saved with the question. `autoChunk` does not consult the Rule Registry.
+2. **Gameplay UI:** `GrammarCanvas.vue` selects a canvas from the saved `concept` and `ui_mode`; it does not look up registered rules. Concept defaults are provided by `defaultUiModeForConcept`, and the teacher may override the mode. The current routing is:
+
+   | Question setting | Student interaction |
+   | :--- | :--- |
+   | `MODAL_VERB` | Modal-strength gauge |
+   | `REDUCE` | Shredder-style reduction |
+   | `MORPH` + tense, agreement, subjunctive, or conditional concept | Tense timeline |
+   | `BUILD` | Magnetic sentence slots |
+   | No concept or an unmatched combination | Legacy canvas |
+
+   ![Illustrative student game UI for a tense MORPH question](docs/images/adaptive-grammar-game-ui.svg)
+
+   *Illustrative UI, not a live application screenshot. The actual canvas, prompt, and chunks depend on the selected question.*
+3. **Diagnosis:** After submission, `diagnoseGrammar` runs general validators plus validators registered for that question's concept. `grammarRules.ts` eagerly loads `src/rules/validators/*.ts`; each plugin calls `registerGrammarRule` with an ID, validator, and optional concept list. For example, conjunction rules target clause concepts, inversion targets question/inversion concepts, and modal-form checks target `MODAL_VERB`. A definite local signal drives the existing misconception feedback/logging; if no rule diagnoses the answer, token alignment classifies the difference, and an `UNKNOWN_ERROR` can enter the asynchronous AI fallback.
+
+Therefore, adding a validator changes local diagnosis only. It does not automatically add a teacher form field or a new visual interaction; those require updates to the concept/type list, authoring controls, and/or canvas routing as appropriate. For a new validator, add a file under `src/rules/validators/` and register it; keep the ID unique.
+
 ### Implementation and rollout status (2026-11-03)
 
 The adaptive canvas, legacy adapter, local chunker and rule registry, asynchronous diagnosis flow, and teacher Realtime status display are implemented and pushed to `main`. The 20 legacy questions remain in their existing format; they are adapted when loaded into the canvas rather than rewritten in the `questions` table. Automated checks passed: 37 tests, TypeScript type-check, Vite production build, and Deno Edge Function type-check. The production build still reports a large main-bundle size warning.
