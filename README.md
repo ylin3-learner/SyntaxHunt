@@ -4,15 +4,15 @@
 
 An interactive, cognitive-pipeline-driven English grammar learning tool designed for K-12 education.
 
-Built with **Vue 3, TypeScript, Vite, and Supabase**, this application takes a pedagogical approach to teaching **Post-modifiers (Relative Clauses & Prepositional Phrases)**, specifically targeting the common L1 interference (Chinese pre-modifiers vs. English post-modifiers), structural misconceptions (e.g., redundant pronouns like `who she`), and **Phrase Chunking**.
+Built with **Vue 3, TypeScript, Vite, and Supabase**, this application takes a pedagogical approach to teaching **Post-modifiers (Relative Clauses & Prepositional Phrases)**, specifically targeting the common L1 interference (Chinese pre-modifiers vs. English post-modifiers), structural misconceptions (e.g., redundant pronouns like `who she`), and **Phrase Chunking**. Teachers can also author general grammar questions in `BUILD`, `REDUCE`, or `MORPH` mode; these use a local rule engine with cached and AI-assisted diagnosis for errors it cannot classify locally.
 
-It is designed around a single 45-minute lesson for **Grade 9 (115 iE5, Unit 5: *The Man Who Shook Hands with Me Is My Favorite Star*)**, covering Grammar Focus 1 (prepositional phrases), Grammar Focus 2 (subject relative clauses with *who / which / that*), and the p.107 Read activity.
+The sample lesson is designed for a 45-minute class for **Grade 9 (115 iE5, Unit 5: *The Man Who Shook Hands with Me Is My Favorite Star*)**, covering Grammar Focus 1 (prepositional phrases), Grammar Focus 2 (subject relative clauses with *who / which / that*), and the p.107 Read activity.
 
 ---
 
 ## 🧠 The Cognitive Pipeline (Pedagogy-Driven Design)
 
-This app is built upon Second Language Acquisition (SLA) theories and features **three distinct question types**, guiding students through a specific cognitive loop:
+This app is built upon Second Language Acquisition (SLA) theories. The sample lesson guides students through an input-to-output sequence:
 
 ```mermaid
 flowchart TD
@@ -62,6 +62,7 @@ flowchart TD
 1. **Chunk Phrase Quiz**: Establishes Form-Meaning Mapping.
 2. **Macro Drag & Contrast Puzzle**: Builds a spatial sense of English post-modification (no text labels to prevent answer leaking).
 3. **Standard & Reduce**: Features Input Processing, Focus on Form using a unique **"Trash Can" subtraction mechanic**, Prosody Output, and Consciousness-Raising.
+4. **General Grammar Canvas**: A separate teacher-authored activity supports `BUILD` (assemble chunks), `REDUCE` (remove redundant chunks), and `MORPH` (change an inflected chunk).
 
 ---
 
@@ -94,6 +95,7 @@ graph TD
             Action_Proxy["teacher-action<br>(Validate & Update)"]
             TTS_Proxy["deepgram-tts<br>(Deepgram TTS)"]
             STT_Proxy["edge-stt<br>(Deepgram STT)"]
+            Grammar_Proxy["grammar-assistant<br>(AI authoring & diagnosis)"]
         end
     end
 
@@ -121,6 +123,8 @@ graph TD
     
     StudentUI -- "STT Request" --> STT_Proxy
     STT_Proxy --> Deepgram
+    AdminUI -- "Generate chunks & error matrix" --> Grammar_Proxy
+    StudentUI -- "Fallback diagnosis" --> Grammar_Proxy
 
     %% Logic Dependencies
     StudentUI -.-> Composables
@@ -195,21 +199,19 @@ sequenceDiagram
 
 ---
 
-## 🔬 Diagnostic Rule Engine
+## 🔬 Grammar Rule Engine & Diagnosis
 
-| Code | Triggered when | What it tells the teacher |
+`src/rules/grammarRules.ts` runs deterministic local validators for duplicate pronouns after a relative pronoun, antecedent-based subject-verb agreement, *who / which* choice, `REDUCE` leftovers, common subject-verb agreement, `a/an` choice, and `MORPH` forms. If those rules do not provide a definite diagnosis, an LCS token alignment compares the student answer with the key to classify omissions, additions, substitutions, or reordering. These checks are rule-based heuristics, not a general-purpose English parser; verb agreement coverage depends on the local verb table.
+
+| Code family | Examples | Local diagnosis |
 | :--- | :--- | :--- |
-| `DUPLICATE_PRONOUN` | A subject pronoun follows *who / which / that*. | The student doesn't see the relative pronoun replaces the noun. |
-| `SV_AGREEMENT` | The verb disagrees with the antecedent's number. | The student hasn't mastered verb agreement. |
-| `WRONG_RELATIVE` | *who* for a thing, or *which* for a person. | The student can't choose the pronoun by antecedent type. |
-| `NOT_REDUCED` | In a **reduce** question, the relative pronoun is still present. | The student didn't apply the conversion. |
-| `INCOMPLETE_REDUCTION` | The pronoun is gone but a *be* verb is left. | The student removed the pronoun but not the *be* verb. |
-| `WRONG_ORDER` | Grammar is fine but tile order differs. | Word order is off. |
-| `PUZZLE_ERROR` | Puzzle piece misses the target slot. | Lacks spatial sense of post-modification. |
+| `M:*` | `M:VERB`, `M:AUX`, `M:DET`, `M:PREP` | A required verb, auxiliary, determiner, or preposition is missing. |
+| `R:*` | `R:VERB:SVA`, `R:VERB:TENSE`, `R:RELATIVE`, `R:PREP`, `R:DET`, `R:NOUN:NUM` | A verb form, relative pronoun, preposition, determiner, or noun number is misformed. |
+| `U:*` | `U:PRON`, `U:VERB`, `U:RELATIVE` | An unnecessary pronoun, verb, or relative pronoun remains. |
+| `O:WRONG_ORDER` | — | The same words appear in a different order. |
+| `UNKNOWN_ERROR` | — | Local rules cannot assign a specific error; try a prepared diagnosis or AI fallback. |
 
-### General Grammar Questions & Four-Layer Diagnosis
-
-Teachers can create a **General Grammar Question** in `BUILD`, `REDUCE`, or `MORPH` mode. Chunks can be generated with AI and adjusted manually, including morph options. Student diagnosis checks local rules/LCS first, then `diagnosis_cache`, and calls Gemini only as a fallback. Remote diagnosis times out after three seconds and asks the student to review the answer. Teachers can prebuild likely-error matrices; analytics shows the four SST categories.
+Each diagnosis also has an SST category: `Omission`, `Addition`, `Misformation`, or `Misordering`. Definite local diagnoses are used first. Otherwise, the app checks `diagnosis_cache` and then calls Gemini through the `grammar-assistant` Edge Function; that remote attempt times out after three seconds and prompts the student to review the answer if it fails. Teachers can generate chunks, edit morph options, and prebuild likely-error diagnoses. Analytics groups recorded errors by the four SST categories.
 
 Apply the database migration, deploy the function, and configure the Gemini key:
 
@@ -244,8 +246,9 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ### Supabase Setup
 1. Create a **Public** Storage bucket named `tts-audio`.
 2. Create a table `classroom_state` and enable Realtime (`supabase_realtime`).
-3. Deploy the Edge Functions:
+3. Apply the database migrations and deploy the Edge Functions:
    ```bash
+   npx supabase db push
    npx supabase functions deploy deepgram-tts
    npx supabase functions deploy edge-stt
    npx supabase functions deploy teacher-action
