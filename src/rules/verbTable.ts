@@ -3,7 +3,7 @@ export interface VerbPair {
   plural: string;
 }
 
-// 只列 Unit 5 課本會出現的動詞對，避免亂猜
+// Common present-tense forms used by the local subject-verb agreement rules.
 export const VERB_PAIRS: readonly VerbPair[] = [
   { singular: 'wears',   plural: 'wear'   },
   { singular: 'has',     plural: 'have'   },
@@ -18,6 +18,25 @@ export const VERB_PAIRS: readonly VerbPair[] = [
   { singular: 'leads',   plural: 'lead'   }, // p.98「the line that leads to that booth」
   { singular: 'owns',    plural: 'own'    }, // p.103「Mia owns a coffee shop」
   { singular: 'belongs', plural: 'belong' }, // p.103「belongs to Ms. Starr」
+  { singular: 'goes',    plural: 'go'     },
+  { singular: 'does',    plural: 'do'     },
+  { singular: 'says',    plural: 'say'    },
+  { singular: 'comes',   plural: 'come'   },
+  { singular: 'takes',   plural: 'take'   },
+  { singular: 'makes',   plural: 'make'   },
+  { singular: 'eats',    plural: 'eat'    },
+  { singular: 'walks',   plural: 'walk'   },
+  { singular: 'runs',    plural: 'run'    },
+  { singular: 'reads',   plural: 'read'   },
+  { singular: 'writes',  plural: 'write'  },
+  { singular: 'studies', plural: 'study'  },
+  { singular: 'carries', plural: 'carry'  },
+  { singular: 'watches', plural: 'watch'  },
+  { singular: 'teaches', plural: 'teach'  },
+  { singular: 'wants',   plural: 'want'   },
+  { singular: 'needs',   plural: 'need'   },
+  { singular: 'knows',   plural: 'know'   },
+  { singular: 'thinks',  plural: 'think'  },
 ] as const;
 
 // O(1) 查表

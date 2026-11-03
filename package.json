@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
+    "fastest-levenshtein": "^1.0.16",
     "html2canvas": "^1.4.1",
     "vue": "^3.4.0",
     "vue-draggable-plus": "^0.6.1"
