@@ -205,6 +205,20 @@ sequenceDiagram
 | `WRONG_ORDER` | 文法正確但字序錯誤。 | 語序錯亂或選錯連接詞。 |
 | `PUZZLE_ERROR` | 拼圖塊未對準目標槽位。 | 缺乏後位修飾的空間位置感。 |
 
+### 通用文法題與四層診斷
+
+教師可新增「通用文法題」，選擇 `BUILD`、`REDUCE` 或 `MORPH`。字塊可由 AI 拆解，也可手動調整變形選項。作答診斷依序使用本地規則/LCS、`diagnosis_cache` 快取，最後才呼叫 Gemini；遠端診斷逾時 3 秒會提示學生先自行檢查答案。教師可在題目列建立常見錯誤矩陣，學情看板則依 SST 四類顯示錯誤比例。
+
+啟用雲端 AI 與診斷快取前，先套用資料庫遷移、部署函式並設定 Gemini 金鑰：
+
+```bash
+npx supabase db push
+npx supabase functions deploy grammar-assistant
+npx supabase secrets set GEMINI_API_KEY=your_gemini_api_key
+```
+
+Gemini 金鑰只設定在 Supabase Edge Function Secrets，不要放入 `.env.local` 或前端程式碼。未部署函式或未設定金鑰時，AI 拆解/兜底診斷會顯示明確錯誤；本地診斷仍可使用。
+
 ---
 
 ## 🛠️ 技術棧與工程

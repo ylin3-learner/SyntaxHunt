@@ -2,9 +2,11 @@ import { supabase } from '../services/supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 let channel: RealtimeChannel | null = null;
+let reportSyncError: ((message: string) => void) | null = null;
 
 export function useClassroomSync() {
     const joinRoom = (onReceive: (event: string, payload: any) => void, studentId: string = 'anonymous') => {
+        reportSyncError = (message) => onReceive('SYNC_ERROR', { message });
         if (channel) {
             supabase.removeChannel(channel);
             channel = null;
@@ -37,29 +39,53 @@ export function useClassroomSync() {
                 onReceive('PRESENCE_SYNC', { completedCount });
             })
             .subscribe(async (status) => {
-                console.log(`[Realtime] Channel status:`, status); 
+                console.log(`[Realtime] Channel status:`, status);
+                onReceive('REALTIME_STATUS', { status });
                 if (status === 'SUBSCRIBED') {
-                    await channel?.track({ status: 'answering' });
-                    const { data } = await supabase.from('classroom_state').select('*').eq('id', 'current_state').single();
-                    if (data) {
-                        onReceive('SYNC_STATE', {
-                            id: data.current_question_id,
-                            timerEndTime: data.timer_end_time,
-                            isClassMode: data.is_class_mode,
-                            targetCount: data.target_count
-                        });
+                    const activeChannel = channel;
+                    if (!activeChannel) return;
+                    try {
+                        const trackStatus = await activeChannel.track({ status: 'answering' });
+                        if (trackStatus !== 'ok') {
+                            throw new Error(`Presence 更新失敗：${trackStatus}`);
+                        }
+                        const { data, error } = await supabase
+                            .from('classroom_state')
+                            .select('*')
+                            .eq('id', 'current_state')
+                            .single();
+                        if (error) throw error;
+                        if (data) {
+                            onReceive('SYNC_STATE', {
+                                id: data.current_question_id,
+                                timerEndTime: data.timer_end_time,
+                                isClassMode: data.is_class_mode,
+                                targetCount: data.target_count
+                            });
+                        }
+                    } catch (error) {
+                        const message = error instanceof Error ? error.message : String(error);
+                        console.error('Realtime 同步初始化失敗:', error);
+                        onReceive('SYNC_ERROR', { message });
                     }
                 }
             });
     };
 
-    const trackCompleted = async () => {
-        if (channel) await channel.track({ status: 'completed' });
+    const trackPresence = async (status: 'completed' | 'answering') => {
+        if (!channel) return;
+        try {
+            const result = await channel.track({ status });
+            if (result !== 'ok') throw new Error(`Presence 更新失敗：${result}`);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error('Realtime Presence 更新失敗:', error);
+            reportSyncError?.(message);
+        }
     };
 
-    const trackAnswering = async () => {
-        if (channel) await channel.track({ status: 'answering' });
-    };
+    const trackCompleted = () => trackPresence('completed');
+    const trackAnswering = () => trackPresence('answering');
 
     // 新增：老師廣播重置全班進度
     const sendResetProgress = () => {
@@ -99,6 +125,7 @@ export function useClassroomSync() {
 
     const leaveRoom = () => {
         if (channel) { supabase.removeChannel(channel); channel = null; }
+        reportSyncError = null;
     };
 
     return { joinRoom, trackCompleted, trackAnswering, sendResetProgress, sendPush, sendAddTime, updateClassMode, leaveRoom };

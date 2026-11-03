@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { CloudDatabase, type LearningLog } from '../services/CloudDatabase';
-import type { QuestionData } from '../data/questions';
+import type { QuestionData, SSTCategory } from '../rules/types';
 
 const props = defineProps<{
     questionBank: QuestionData[];
@@ -51,7 +51,22 @@ const adviceDictionary: Record<string, string> = {
     'NOT_REDUCED': '學生在轉換題保留了關代。請提醒：關代（that/which）在轉換時要直接刪除。',
     'INCOMPLETE_REDUCTION': '學生刪了關代，卻忘了刪 be 動詞。請提醒：關代與 be 動詞必須「一起」省略。',
     'WRONG_ORDER': '學生排列正確，但語序有誤。請提醒他們檢查「名詞 + 關代 + 動詞」的順序。',
-    'PUZZLE_ERROR': '學生將修飾語放錯位置（可能受中文干擾）。請提醒：英文修飾語要放在名詞「後面」。'
+    'PUZZLE_ERROR': '學生將修飾語放錯位置（可能受中文干擾）。請提醒：英文修飾語要放在名詞「後面」。',
+    'M:VERB': '學生漏掉了句子必要的動詞。請一起找出主詞和句子的主要動作。',
+    'M:AUX': '學生漏掉助動詞或 be 動詞。請檢查時態、疑問句或被動結構。',
+    'M:DET': '學生漏掉冠詞。請確認可數名詞前是否需要 a、an 或 the。',
+    'M:PREP': '學生漏掉介系詞。可用位置、時間或動詞搭配線索補上必要介系詞。',
+    'R:VERB:TENSE': '學生選錯動詞形式。請利用時間線索和句子中的助動詞檢查時態。',
+    'R:VERB:SVA': '學生尚未掌握主詞與動詞一致。請先找主詞，再判斷動詞單複數。',
+    'R:PREP': '學生混淆介系詞。可用位置、時間或搭配詞線索重新辨認。',
+    'R:DET': '學生混淆 a/an。提醒依後面單字的起始發音選擇。',
+    'R:NOUN:NUM': '學生混淆名詞單複數。請檢查數量詞和名詞詞尾。',
+    'R:RELATIVE': '學生混淆關係代名詞。請根據先行詞是人或物判斷。',
+    'U:PRON': '學生加入重複代名詞。提醒 who/which/that 已代替先行詞。',
+    'U:VERB': '學生可能保留了多餘動詞。請檢查助動詞及句型是否重複。',
+    'U:RELATIVE': '學生保留了不需要的關係代名詞。請依題目模式檢查是否需刪除。',
+    'O:WRONG_ORDER': '學生選字正確但排列錯誤。請標示主詞、動詞和修飾語後重排。',
+    'O:INVERSION': '學生可能把主詞和助動詞的位置倒置。請先確定句型是否需要倒裝。'
 };
 
 const titleDictionary: Record<string, string> = {
@@ -61,8 +76,73 @@ const titleDictionary: Record<string, string> = {
     'NOT_REDUCED': '未簡化轉換',
     'INCOMPLETE_REDUCTION': '未完全簡化',
     'WRONG_ORDER': '字序錯誤',
-    'PUZZLE_ERROR': '拼圖方向錯誤'
+    'PUZZLE_ERROR': '拼圖方向錯誤',
+    'M:VERB': '遺漏動詞',
+    'M:AUX': '遺漏助動詞',
+    'M:DET': '遺漏冠詞',
+    'M:PREP': '遺漏介系詞',
+    'R:VERB:TENSE': '動詞時態錯誤',
+    'R:VERB:SVA': '主詞與動詞單複數不一致',
+    'R:PREP': '介系詞使用錯誤',
+    'R:DET': '冠詞使用錯誤',
+    'R:NOUN:NUM': '名詞單複數錯誤',
+    'R:RELATIVE': '關係代名詞選擇錯誤',
+    'U:PRON': '多餘代名詞',
+    'U:VERB': '多餘動詞',
+    'U:RELATIVE': '多餘關係代名詞',
+    'O:WRONG_ORDER': '語序錯誤',
+    'O:INVERSION': '倒裝語序錯誤',
+    'UNKNOWN_ERROR': '其他文法錯誤'
 };
+
+const sstLabels: Record<SSTCategory, string> = {
+    Omission: '遺漏',
+    Addition: '多加',
+    Misformation: '形式錯誤',
+    Misordering: '語序錯誤',
+};
+
+const inferSst = (log: LearningLog): SSTCategory => {
+    if (log.sst) return log.sst;
+    if (log.error_code.startsWith('M:')) return 'Omission';
+    if (log.error_code.startsWith('U:')) return 'Addition';
+    if (log.error_code.startsWith('O:')) return 'Misordering';
+    return 'Misformation';
+};
+
+const sstDistribution = computed(() => {
+    const categories: SSTCategory[] = ['Omission', 'Addition', 'Misformation', 'Misordering'];
+    const counts = categories.map(category => ({
+        category,
+        label: sstLabels[category],
+        count: logs.value.filter(log => log.error_code !== 'SUCCESS' && inferSst(log) === category).length,
+    }));
+    const total = counts.reduce((sum, item) => sum + item.count, 0);
+    return counts.map(item => ({
+        ...item,
+        percent: total > 0 ? Math.round((item.count / total) * 100) : 0,
+    }));
+});
+
+const sstPieStyle = computed(() => {
+      const total = sstDistribution.value.reduce((sum, item) => sum + item.count, 0);
+      if (total === 0) return { background: '#edf0f3' };
+
+      const colors: Record<SSTCategory, string> = {
+          Omission: '#1cb0f6',
+          Addition: '#ff9800',
+          Misformation: '#ff4b4b',
+          Misordering: '#9c27b0',
+      };
+      let start = 0;
+      const segments = sstDistribution.value.map(item => {
+          const end = start + (item.count / total) * 100;
+          const segment = `${colors[item.category]} ${start}% ${end}%`;
+          start = end;
+          return segment;
+      });
+      return { background: `conic-gradient(${segments.join(', ')})` };
+});
 
 interface SubNode {
     questionId: string;
@@ -100,7 +180,9 @@ const errorTree = computed<ErrorNode[]>(() => {
 
                 if (targetQ) {
                     const noun = targetQ.targetNoun;
-                    const modifier = targetQ.grammarFeature?.relative?.label || '';
+                    const modifier = targetQ.grammarFeature?.relative?.label
+                        || targetQ.correctAnswer?.join(' ')
+                        || '';
 
                     // 👇 如果有克漏字上下文，就把它們組合起來
                     if (targetQ.contextCloze) {
@@ -151,6 +233,22 @@ const errorTree = computed<ErrorNode[]>(() => {
 
             <div v-else class="stats-container">
                 <p class="subtitle">總計收集 {{ logs.length }} 筆學習紀錄（點擊展開錯誤題目）</p>
+
+                <section class="sst-chart" aria-label="SST 錯誤比例">
+                    <h3>SST 四類錯誤策略</h3>
+                    <div class="sst-pie-layout">
+                        <div class="sst-pie" :style="sstPieStyle" role="img" aria-label="四類錯誤比例圓餅圖">
+                            <div class="sst-pie-center">錯誤<br />分布</div>
+                        </div>
+                        <div class="sst-legend">
+                            <div v-for="item in sstDistribution" :key="item.category" class="sst-legend-item">
+                                <span class="sst-swatch" :class="item.category"></span>
+                                <span>{{ item.label }}</span>
+                                <strong>{{ item.count }} 次（{{ item.percent }}%）</strong>
+                            </div>
+                        </div>
+                    </div>
+                </section>
 
                 <div class="mindmap">
                     <div class="mindmap-root">
@@ -302,6 +400,80 @@ const errorTree = computed<ErrorNode[]>(() => {
     overflow-y: auto;
     padding-right: 10px;
 }
+
+.sst-chart {
+    margin-bottom: 28px;
+    padding: 18px;
+    border: 1px solid #e5e5e5;
+    border-radius: 14px;
+    background: #fff;
+}
+
+.sst-chart h3 {
+    margin: 0 0 14px;
+    color: #333;
+}
+
+.sst-pie-layout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+}
+
+.sst-pie {
+    width: 190px;
+    height: 190px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+}
+
+.sst-pie-center {
+    display: grid;
+    place-items: center;
+    width: 92px;
+    height: 92px;
+    border-radius: 50%;
+    background: #fff;
+    color: #555;
+    font-weight: bold;
+    text-align: center;
+    line-height: 1.3;
+}
+
+.sst-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 220px;
+}
+
+.sst-legend-item {
+    display: grid;
+    grid-template-columns: 12px minmax(70px, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+
+.sst-legend-item strong {
+    color: #777;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.sst-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.sst-swatch.Omission { background: #1cb0f6; }
+.sst-swatch.Addition { background: #ff9800; }
+.sst-swatch.Misformation { background: #ff4b4b; }
+.sst-swatch.Misordering { background: #9c27b0; }
 
 .mindmap {
     display: flex;

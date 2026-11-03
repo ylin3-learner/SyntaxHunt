@@ -207,6 +207,20 @@ sequenceDiagram
 | `WRONG_ORDER` | Grammar is fine but tile order differs. | Word order is off. |
 | `PUZZLE_ERROR` | Puzzle piece misses the target slot. | Lacks spatial sense of post-modification. |
 
+### General Grammar Questions & Four-Layer Diagnosis
+
+Teachers can create a **General Grammar Question** in `BUILD`, `REDUCE`, or `MORPH` mode. Chunks can be generated with AI and adjusted manually, including morph options. Student diagnosis checks local rules/LCS first, then `diagnosis_cache`, and calls Gemini only as a fallback. Remote diagnosis times out after three seconds and asks the student to review the answer. Teachers can prebuild likely-error matrices; analytics shows the four SST categories.
+
+Apply the database migration, deploy the function, and configure the Gemini key:
+
+```bash
+npx supabase db push
+npx supabase functions deploy grammar-assistant
+npx supabase secrets set GEMINI_API_KEY=your_gemini_api_key
+```
+
+Keep the Gemini key in Supabase Edge Function Secrets; never put it in `.env.local` or frontend code. Without the deployed function/key, AI chunk generation and fallback diagnosis report an explicit error while local diagnosis remains available.
+
 ---
 
 ## 🛠️ Tech Stack & Engineering
@@ -235,11 +249,13 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    npx supabase functions deploy deepgram-tts
    npx supabase functions deploy edge-stt
    npx supabase functions deploy teacher-action
+   npx supabase functions deploy grammar-assistant
    ```
 4. Set the Secrets:
    ```bash
    npx supabase secrets set DEEPGRAM_API_KEY=your_deepgram_key
    npx supabase secrets set TEACHER_PASSWORD=your_teacher_password
+   npx supabase secrets set GEMINI_API_KEY=your_gemini_api_key
    ```
 
 ### Development & Testing
