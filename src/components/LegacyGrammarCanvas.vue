@@ -179,11 +179,14 @@ const checkAnswer = async (force = false) => {
   const definiteSignals = localSignals
     .filter(signal => signal.code !== 'UNKNOWN_ERROR')
     .map(signal => ({ ...signal, source: 'local' as const }));
+  const displayedSignals = props.question.ui_mode === 'REDUCE'
+    ? definiteSignals.slice(0, 1)
+    : definiteSignals;
 
-  if (definiteSignals.length > 0) {
-    signals.value = definiteSignals;
+  if (displayedSignals.length > 0) {
+    signals.value = displayedSignals;
     playError();
-    signals.value.forEach(s => emit('misconception', s.code));
+    displayedSignals.forEach(signal => emit('misconception', signal.code));
     return;
   }
 
@@ -214,10 +217,13 @@ const checkAnswer = async (force = false) => {
     const languageToolSignals = matches.map(match =>
       toLanguageToolSignal(match, submittedText, studentTokens)
     );
-    signals.value = languageToolSignals;
-    if (languageToolSignals.length > 0) {
+    const displayedLanguageToolSignals = props.question.ui_mode === 'REDUCE'
+      ? languageToolSignals.slice(0, 1)
+      : languageToolSignals;
+    signals.value = displayedLanguageToolSignals;
+    if (displayedLanguageToolSignals.length > 0) {
       playError();
-      languageToolSignals.forEach(signal => {
+      displayedLanguageToolSignals.forEach(signal => {
         void CloudDatabase.logEvent({
           student_name: '匿名學生',
           question_id: props.question.id,
@@ -335,14 +341,20 @@ const handleOutsideClick = () => {
           'tile-success': isSuccess,
           'tile-wrong': isWrong,
           'tile-chunk': tile.text.startsWith('[')
-        }" @click="discardTile(tile)">
-          <button type="button" class="reduce-reorder-button" :disabled="index === 0 || isSuccess"
-            :aria-label="`將「${tile.text.replace(/[\[\]]/g, '')}」往左移`"
-            @click.stop="moveReducedTile(tile, -1)">←</button>
-          <span>{{ tile.text.replace(/[\[\]]/g, '') }}</span>
-          <button type="button" class="reduce-reorder-button" :disabled="index === answerArea.length - 1 || isSuccess"
-            :aria-label="`將「${tile.text.replace(/[\[\]]/g, '')}」往右移`"
-            @click.stop="moveReducedTile(tile, 1)">→</button>
+        }">
+          <span class="reduce-tile-text">{{ tile.text.replace(/[\[\]]/g, '') }}</span>
+          <div class="reduce-tile-actions">
+            <button type="button" class="reduce-reorder-button" :disabled="index === 0 || isSuccess"
+              :aria-label="`將「${tile.text.replace(/[\[\]]/g, '')}」往左移`"
+              @click="moveReducedTile(tile, -1)">←</button>
+            <button type="button" class="reduce-reorder-button"
+              :disabled="index === answerArea.length - 1 || isSuccess"
+              :aria-label="`將「${tile.text.replace(/[\[\]]/g, '')}」往右移`"
+              @click="moveReducedTile(tile, 1)">→</button>
+            <button type="button" class="reduce-discard-button" :disabled="isSuccess"
+              :aria-label="`移除「${tile.text.replace(/[\[\]]/g, '')}」`"
+              @click="discardTile(tile)">移除</button>
+          </div>
         </div>
       </template>
     </div>
@@ -384,12 +396,21 @@ const handleOutsideClick = () => {
 
     <!-- 垃圾桶 (Reduce) -->
     <div v-if="question.ui_mode === 'REDUCE'" class="trash-zone-wrapper">
-      <div class="trash-label">🗑️ 丟棄不需要的詞</div>
+      <div class="reduce-instructions">
+        <strong>怎麼操作</strong>
+        <span>用 <b>← →</b> 調整詞序；按字塊上的 <b>移除</b> 刪除多餘詞；需要時到下方垃圾桶按 <b>還原</b>。</span>
+      </div>
+      <div class="trash-label">🗑️ 已移除的字塊（{{ trashArea.length }}）· 點擊還原</div>
       <div class="trash-area">
-        <div v-for="tile in trashArea" :key="tile.id" class="tile trash-tile" @click="restoreTile(tile)">
-          {{ tile.text.replace(/[\[\]]/g, '') }}
+        <div v-for="tile in trashArea" :key="tile.id" class="trash-tile">
+          <span>{{ tile.text.replace(/[\[\]]/g, '') }}</span>
+          <button type="button" class="trash-restore-button"
+            :aria-label="`還原「${tile.text.replace(/[\[\]]/g, '')}」`"
+            @click="restoreTile(tile)">還原 ↶</button>
         </div>
-        <div v-if="trashArea.length === 0" class="trash-placeholder">點擊上方不要的字磚，把它們丟到這裡！</div>
+        <div v-if="trashArea.length === 0" class="trash-placeholder">
+          尚未移除字塊。按上方字塊的「移除」後，可在這裡還原。
+        </div>
       </div>
     </div>
 
@@ -709,10 +730,29 @@ const handleOutsideClick = () => {
   padding-top: 20px;
 }
 
+.reduce-instructions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 12px;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border: 1px solid #b9ddf1;
+  border-radius: 12px;
+  background: #f0f9ff;
+  color: #35566a;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.reduce-instructions strong {
+  color: #155e87;
+}
+
 .trash-label {
   font-size: 0.9rem;
   font-weight: bold;
-  color: #999;
+  color: #6b7280;
   margin-bottom: 8px;
   text-align: center;
 }
@@ -725,39 +765,96 @@ const handleOutsideClick = () => {
 }
 
 .trash-placeholder {
-  color: #ccc;
+  color: #7b8490;
   font-size: 1rem;
   display: flex;
   align-items: center;
+  text-align: center;
 }
 
 .trash-tile {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
+  border: 1px solid #d5d9de;
+  border-radius: 12px;
   background: #f0f0f0;
   color: #999;
-  border-color: #ddd;
   text-decoration: line-through;
   opacity: 0.7;
   transition: all 0.2s;
 }
 
-.trash-tile:hover {
+.trash-tile:hover,
+.trash-tile:focus-within {
   opacity: 1;
   background: white;
   border-color: #1cb0f6;
   color: #1cb0f6;
-  text-decoration: none;
 }
 
-.is-reduce-mode:hover {
-  background-color: #ffe6e6;
-  border-color: #ff4b4b;
-  color: #ff4b4b;
+.trash-tile span {
   text-decoration: line-through;
 }
 
+.trash-restore-button {
+  padding: 5px 9px;
+  border: 1px solid #b9ddf1;
+  border-radius: 8px;
+  background: #fff;
+  color: #155e87;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.is-reduce-mode {
+  gap: 10px;
+  height: auto;
+  cursor: default;
+}
+
+.reduce-tile-text {
+  flex: 1;
+}
+
+.reduce-tile-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(75, 75, 75, 0.18);
+}
+
+.reduce-discard-button {
+  padding: 6px 9px;
+  border: 1px solid #f1b6b6;
+  border-radius: 8px;
+  background: #fff5f5;
+  color: #a52c2c;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reduce-discard-button:hover:not(:disabled) {
+  border-color: #e56767;
+  background: #ffe6e6;
+}
+
+.reduce-discard-button:disabled,
+.reduce-reorder-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .reduce-reorder-button {
-  padding: 0 2px;
+  min-width: 28px;
+  min-height: 30px;
+  padding: 0 5px;
   border: 0;
+  border-radius: 6px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -766,13 +863,8 @@ const handleOutsideClick = () => {
   text-decoration: none;
 }
 
-.reduce-reorder-button:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.is-reduce-mode:hover .reduce-reorder-button {
-  color: #ff4b4b;
+.reduce-reorder-button:hover:not(:disabled) {
+  background: rgba(21, 94, 135, 0.1);
 }
 
 @keyframes shake {

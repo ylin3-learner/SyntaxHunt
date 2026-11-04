@@ -83,7 +83,7 @@ describe('GrammarCanvas', () => {
       props: { question, initialChunks: question.chunks },
     });
 
-    await wrapper.findAll('.answer-area .tile')[5].trigger('click');
+    await wrapper.find('[aria-label="移除「which」"]').trigger('click');
     await wrapper.find('[aria-label="將「with」往左移"]').trigger('click');
 
     expect(wrapper.findAll('.answer-area .tile span').map(tile => tile.text())).toEqual([
@@ -92,6 +92,82 @@ describe('GrammarCanvas', () => {
     expect(wrapper.find('.answer-area').classes()).toContain('success-bg');
     await vi.advanceTimersByTimeAsync(1500);
     expect(wrapper.emitted('success')).toBeTruthy();
+    wrapper.unmount();
+  });
+
+  it('shows only one local diagnosis for each REDUCE deletion', async () => {
+    const question: GrammarQuestionData = {
+      id: 'reduce-single-diagnosis-test',
+      type: 'grammar',
+      ui_mode: 'REDUCE',
+      targetNoun: 'The writer',
+      antecedent: { noun: 'The writer', number: 'singular', person: 'person' },
+      correctAnswer: ['with', '[a dictionary]'],
+      chunks: [
+        { id: 'who', text: 'who', draggable: true },
+        { id: 'he', text: 'he', draggable: true },
+        { id: 'is', text: 'is', draggable: true },
+        { id: 'dictionary', text: '[a dictionary]', draggable: true },
+      ],
+    };
+    const wrapper = mount(GrammarCanvas, {
+      props: { question, initialChunks: question.chunks },
+    });
+
+    expect(wrapper.text()).toContain('用 ← → 調整詞序');
+    await wrapper.find('.answer-area .is-reduce-mode').trigger('click');
+    expect(wrapper.findAll('.answer-area .is-reduce-mode')).toHaveLength(4);
+
+    await wrapper.find('[aria-label="移除「a dictionary」"]').trigger('click');
+
+    expect(wrapper.findAll('.alert-messages > div')).toHaveLength(1);
+    expect(wrapper.emitted('misconception')).toHaveLength(1);
+    expect(wrapper.text()).toContain('已移除的字塊（1）');
+    await wrapper.find('[aria-label="還原「a dictionary」"]').trigger('click');
+    expect(wrapper.findAll('.answer-area .is-reduce-mode')).toHaveLength(4);
+    expect(wrapper.text()).toContain('尚未移除字塊');
+    wrapper.unmount();
+  });
+
+  it('shows only one LanguageTool result for a REDUCE deletion', async () => {
+    vi.mocked(CloudDatabase.checkLanguageTool).mockResolvedValueOnce([
+      {
+        message: 'First suggestion',
+        offset: 0,
+        length: 5,
+        replacements: [{ value: 'with' }],
+        rule: { id: 'FIRST_RULE', category: { name: 'Grammar' } },
+      },
+      {
+        message: 'Second suggestion',
+        offset: 0,
+        length: 5,
+        replacements: [{ value: 'with' }],
+        rule: { id: 'SECOND_RULE', category: { name: 'Grammar' } },
+      },
+    ]);
+    const question: GrammarQuestionData = {
+      id: 'reduce-single-lt-diagnosis-test',
+      type: 'grammar',
+      ui_mode: 'REDUCE',
+      targetNoun: 'The writer',
+      antecedent: { noun: 'The writer', number: 'singular', person: 'person' },
+      correctAnswer: ['paintbrush', 'dictionary'],
+      chunks: [
+        { id: 'wrong', text: 'banana', draggable: true },
+        { id: 'dictionary', text: 'dictionary', draggable: true },
+      ],
+    };
+    const wrapper = mount(GrammarCanvas, {
+      props: { question, initialChunks: question.chunks },
+    });
+
+    await wrapper.find('[aria-label="移除「dictionary」"]').trigger('click');
+    await vi.waitFor(() => expect(wrapper.text()).toContain('First suggestion'));
+
+    expect(wrapper.findAll('.alert-messages > div')).toHaveLength(1);
+    expect(wrapper.text()).not.toContain('Second suggestion');
+    expect(CloudDatabase.logEvent).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 

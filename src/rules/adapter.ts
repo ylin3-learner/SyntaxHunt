@@ -7,6 +7,13 @@ import {
 
 type LegacyFeature = 'relative' | 'preposition';
 
+export function formatAnswerForDisplay(tokens: string[]): string {
+  return tokens
+    .map(token => token.replace(/[\[\]]/g, '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
 export function mapOffsetToChunkIndex(
   text: string,
   offset: number,

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { convertLegacyQuestion, mapOffsetToChunkIndex } from './adapter';
+import { convertLegacyQuestion, formatAnswerForDisplay, mapOffsetToChunkIndex } from './adapter';
 import type { QuestionData } from './types';
 
 const parseCsvLine = (line: string): string[] => {
@@ -56,6 +56,10 @@ const legacyQuestion: QuestionData = {
 };
 
 describe('convertLegacyQuestion', () => {
+  it('formats reduced answer chunks for the success sentence without bracket markers', () => {
+    expect(formatAnswerForDisplay(['[with a dictionary]'])).toBe('with a dictionary');
+  });
+
   it('maps LanguageTool character ranges to the corresponding chunk including phrases', () => {
     const text = 'The writer carrying a dictionary is Mr. Lee.';
 

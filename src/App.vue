@@ -13,7 +13,7 @@ import DebugConsole from './components/DebugConsole.vue';
 
 import { defaultQuestions } from './data/questions';
 import type { GrammarQuestionData, QuestionData, SSTCategory } from './rules/types';
-import { convertLegacyQuestion } from './rules/adapter';
+import { convertLegacyQuestion, formatAnswerForDisplay } from './rules/adapter';
 import { getQuestionUiMode } from './rules/types';
 import { useSound, unlockAudioContext } from './utils/useSound';
 import { unlockTTS } from './utils/useSpeech';
@@ -221,7 +221,9 @@ const handlePreviewSuccess = () => { currentQuestion.value.type === 'chunk' ? ha
 
 const fullSentenceData = computed(() => {
   const noun = currentQuestion.value.targetNoun;
-  const modifier = currentQuestion.value.grammarFeature
+  const modifier = getQuestionUiMode(currentQuestion.value) === 'REDUCE'
+    ? formatAnswerForDisplay(microQuestion.value.correctAnswer)
+    : currentQuestion.value.grammarFeature
     ? currentQuestion.value.type === 'contrast'
       ? currentQuestion.value.grammarFeature.relative.label
       : currentQuestion.value.grammarFeature[currentMode.value].label
