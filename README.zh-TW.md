@@ -1,4 +1,4 @@
-# 🕵️ Anime Character Hunter Lite（動漫角色大搜尋）
+# 🕵️ SyntaxHunt (文法出題診斷系統)
 
 **[English](README.md) | [繁體中文](README.zh-TW.md)**
 
