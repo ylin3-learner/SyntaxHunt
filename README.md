@@ -196,6 +196,7 @@ sequenceDiagram
 - **Presence Dashboard**: Input the target student count. Watch the live progress bar (`completed / target`) update in real-time as students finish.
 - **Class Mode Toggle**: Lock the entire class's progression instantly. Perfect for synchronized classroom teaching.
 - **Funnel-Based Authoring**: Wrap phrases in `[ ]`. Visualizes "Kept" and "Discarded" words. If a verb needs to become a preposition, edit the green box.
+- **Visual Question Flow**: Open a full-screen node canvas to see the question sequence as connected steps. Drag nodes before or after other questions to reorder them; `Alt` + `←` / `→` also moves the focused node.
 - **Master Remote Control**: Push questions, force-reset timers, and add time (`+30s`) instantly.
 
 ### Using general grammar questions
