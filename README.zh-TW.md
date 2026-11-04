@@ -4,7 +4,7 @@
 
 一套以「認知歷程管線」為核心、專為 K-12 設計的互動式英語文法學習工具。
 
-本專案以 **Vue 3、TypeScript、Vite 與 Supabase** 打造，教學主題為**後位修飾（關係子句與介系詞片語）**，特別針對母語干擾（中文為前位修飾、英文為後位修飾）與結構性迷思（例如 `who she` 這類多餘代名詞）。教師也可建立 `BUILD`、`REDUCE` 或 `MORPH` 通用文法題，並透過本地規則引擎、診斷快取及 AI 兜底辨識作答錯誤。
+本專案以 **Vue 3、TypeScript、Vite 與 Supabase** 打造，教學主題為**後位修飾（關係子句與介系詞片語）**，特別針對母語干擾（中文為前位修飾、英文為後位修飾）與結構性迷思（例如 `who she` 這類多餘代名詞）。教師也可建立 `BUILD`、`REDUCE` 或 `MORPH` 通用文法題，並透過本地規則引擎及 LanguageTool 進階診斷辨識作答錯誤。
 
 範例課程以一節 45 分鐘的**國三（115 iE5 Unit 5：*The Man Who Shook Hands with Me Is My Favorite Star*）**為設計情境。
 
@@ -95,7 +95,7 @@ graph TD
             Action_Proxy["🛡️ teacher-action<br>(安全驗證與設定)"]
             TTS_Proxy["🔊 deepgram-tts<br>(Deepgram TTS)"]
             STT_Proxy["🎤 edge-stt<br>(Deepgram STT)"]
-            Grammar_Proxy["🧩 grammar-assistant<br>(AI 錯誤矩陣與診斷)"]
+            LT_Proxy["🧩 lt-proxy<br>(LanguageTool 文法診斷)"]
         end
     end
 
@@ -123,8 +123,8 @@ graph TD
     
     StudentUI -- "語音辨識請求" --> STT_Proxy
     STT_Proxy --> Deepgram
-    AdminUI -- "產生字塊與錯誤矩陣" --> Grammar_Proxy
-    StudentUI -- "診斷兜底" --> Grammar_Proxy
+    StudentUI -- "進階文法檢查" --> LT_Proxy
+    LT_Proxy --> LanguageTool["自架 LanguageTool<br>(Google Cloud Run)"]
 
     %% 邏輯依賴
     StudentUI -.-> Composables
@@ -198,8 +198,8 @@ sequenceDiagram
 1. 開啟 **教師備課中心**，在題目編輯器選擇 **通用文法題**。
 2. 選擇文法概念與互動模式。系統會依概念預設模式，也可以自行切換。
 3. 輸入來源句與精確的正確答案。`REDUCE` 的來源句填完整句，答案填刪減後的句子。
-4. 點選 **確定性自動拆解**，或手動拆解句子。若要將多個字詞視為一塊，請在來源句用中括號標示，例如 `[in a blue uniform]`。使用前請檢查拆解結果。
-5. 使用 `MORPH` 時，勾選可變形字塊並輸入逗號分隔的形式，例如 `go, goes, went`。自動拆解只涵蓋少量內建字彙，請手動補齊或修正形式。
+4. 點選 **本地切詞**，或手動拆解句子。若要將多個字詞視為一塊，請在來源句用中括號標示，例如 `[in a blue uniform]`。在膠囊預覽中檢查並編輯拆解結果。
+5. 使用 `MORPH` 時，勾選可變形字塊並輸入逗號分隔的形式，例如 `go, goes, went`。切詞使用 compromise.js 與不規則動詞 JSON 表；必要時請手動補齊或修正形式。
 6. 點選 **加入題庫**。若要指定學生目前作答的題目，請在該題列按 **發送給全班**；或按 **完成備課** 儲存題庫並關閉編輯器（之後可重新開啟教師備課中心再發送）。學生以點選字磚作答：`BUILD` 組句、`REDUCE` 移除字塊、`MORPH` 選擇字形。
 
 > **教師登入提醒：**目前前端示範版固定以 `admin123` 驗證；Supabase 的 `TEACHER_PASSWORD` Secret 並未設定這項檢查。這不是安全的身分驗證，請勿將此教師介面直接公開部署至正式環境。
@@ -216,17 +216,17 @@ sequenceDiagram
 | `R:*` | `R:VERB:SVA`、`R:VERB:TENSE`、`R:VERB:FORM`、`R:VERB:MOOD`、`R:RELATIVE`、`R:PREP`、`R:DET`、`R:NOUN:NUM`、`R:CONJ` | 動詞形式、關係代名詞、介系詞、限定詞、名詞單複數或連接詞有誤。 |
 | `U:*` | `U:PRON`、`U:VERB`、`U:RELATIVE`、`U:CONJ` | 多出不必要的代名詞、動詞、關係代名詞或連接詞。 |
 | `O:*` | `O:WRONG_ORDER`、`O:INVERSION` | 字詞順序錯誤，包含倒裝句助動詞位置不正確。 |
-| `UNKNOWN_ERROR` | — | 本地規則無法判定特定錯誤，接續查詢預建診斷或 AI 兜底。 |
+| `UNKNOWN_ERROR` | — | 本地規則無法判定特定錯誤，接續請 LanguageTool 提供建議。 |
 
-每筆診斷也會標記 SST 類別：`Omission`（遺漏）、`Addition`（多加）、`Misformation`（形式錯誤）或 `Misordering`（語序錯誤）。明確的本地診斷優先使用；若本地結果為 `UNKNOWN_ERROR`，學生會先立即過關，系統同時建立 `PENDING` 紀錄並在背景呼叫 `grammar-assistant` Edge Function。函式先查 `diagnosis_cache`，再視需要呼叫 Gemini，並將同一筆紀錄更新為 `SUCCESS` 或 `FAILED`；教師看板透過 Supabase Realtime 顯示批改狀態與更新結果。
+本地診斷保留 K-12 迷思錯誤碼及 SST 類別：`Omission`（遺漏）、`Addition`（多加）、`Misformation`（形式錯誤）或 `Misordering`（語序錯誤）。若本地規則無法分類錯誤答案，系統會透過 `lt-proxy` Supabase Edge Function 呼叫 LanguageTool，保留原生訊息、分類、Rule ID、替換建議及字元範圍，並將字元偏移映射回畫面字塊以供高亮。服務逾時（3 秒）或失敗時會顯示中性提示，並允許學生略過到下一題。`BUILD` 與 `MORPH` 模式也可在尚未填滿所有字塊前檢查目前答案。
 
-教師建立通用文法題時可選擇概念與互動模式。`autoChunk(sentence, concept)` 優先保留中括號片語，再以確定性切詞及小型片語/動詞字典拆解，不呼叫 LLM。MORPH 選項以字串陣列儲存，`current_index` 表示初始選取形式，並保留 `morph_options` 舊欄位相容。新概念會路由至時間軸、情態語氣計、碎紙機或磁吸卡槽；未設定概念的舊題仍使用既有畫布。
+教師建立通用文法題時可選擇概念與互動模式。`autoChunk(sentence, concept)` 使用 compromise.js 確定性切詞與動詞辨識，優先查詢不規則動詞表，並將中括號片語保留為明確字塊；不呼叫 LLM。MORPH 選項以字串陣列儲存，`current_index` 表示初始選取形式，並保留 `morph_options` 舊欄位相容。新概念會路由至時間軸、情態語氣計、碎紙機或磁吸卡槽；未設定概念的舊題仍使用既有畫布。
 
 ### RuleRegistry 如何串起出題、遊戲介面與診斷
 
 RuleRegistry 是**本地診斷規則的插件註冊點**，不是出題表單或遊戲介面的路由器：
 
-1. **教師出題：**在 Teacher Admin 選擇文法概念與 `BUILD`、`REDUCE` 或 `MORPH`，輸入句子和答案，再用確定性 `autoChunk` 切詞（也可手動編輯字塊及變形選項）。題目會儲存所選概念與模式。`autoChunk` 不會查詢 RuleRegistry。
+1. **教師出題：**在 Teacher Admin 選擇文法概念與 `BUILD`、`REDUCE` 或 `MORPH`，輸入句子和答案，再用本地 `autoChunk` 切詞（也可手動編輯字塊及變形選項）。題目會儲存所選概念與模式。`autoChunk` 不會查詢 RuleRegistry。
 2. **遊戲介面：**`GrammarCanvas.vue` 依題目儲存的 `concept` 與 `ui_mode` 選擇畫布，並不查詢已註冊規則。`defaultUiModeForConcept` 提供概念預設模式，教師仍可覆寫。現行路由如下：
 
    | 題目設定 | 學生互動介面 |
@@ -246,7 +246,7 @@ RuleRegistry 是**本地診斷規則的插件註冊點**，不是出題表單或
    | `MORPH` — 選擇時態或動詞形式 | `MODAL_VERB` — 選擇情態強度 |
    | :---: | :---: |
    | ![時態 MORPH 與組句介面示意圖](docs/images/adaptive-grammar-game-ui.svg) | ![情態動詞語氣壓力計介面示意圖](docs/images/grammar-modal-ui.svg) |
-3. **作答診斷：**學生送出答案後，`diagnoseGrammar` 執行通用規則，以及符合該題概念的專屬規則。`grammarRules.ts` 會 eager-load `src/rules/validators/*.ts`；每個插件以唯一 ID、驗證函式及可選的概念清單呼叫 `registerGrammarRule`。例如連接詞規則套用於子句概念、倒裝規則套用於問句／倒裝概念、情態動詞形式規則套用於 `MODAL_VERB`。明確的本地診斷訊號會沿用既有迷思回饋與紀錄流程；若規則未能診斷，則以字詞對齊分類差異，`UNKNOWN_ERROR` 可再進入非同步 AI 兜底。
+3. **作答診斷：**學生送出答案後，`diagnoseGrammar` 執行通用規則，以及符合該題概念的專屬規則。`grammarRules.ts` 會 eager-load `src/rules/validators/*.ts`；每個插件以唯一 ID、驗證函式及可選的概念清單呼叫 `registerGrammarRule`。例如連接詞規則套用於子句概念、倒裝規則套用於問句／倒裝概念、情態動詞形式規則套用於 `MODAL_VERB`。明確的本地診斷訊號會沿用既有迷思回饋與紀錄流程；若本地規則無法分類，則呼叫 LanguageTool，並保留其原生診斷資料。
 
 因此，新增 validator 只會擴充本地診斷，不會自動新增教師表單選項或視覺互動；如需新概念或新畫布，還需視需求更新型別／概念選項及介面路由。新增規則時，將檔案放在 `src/rules/validators/` 並註冊唯一 ID。
 
@@ -259,31 +259,32 @@ RuleRegistry 是**本地診斷規則的插件註冊點**，不是出題表單或
 | 句子單位、S/V/O/C、五大句型 | `BUILD` | 可組合指定正解，但不會標示文法角色，也沒有各句型專屬題目機制。 |
 | 主謂一致、時態與狀態 | `MORPH` 或 `BUILD` | 可設定字形選項並依正解判斷；自動產生形式的字彙有限，時間軸也未完整建模所有時態／狀態組合。 |
 | 問句與倒裝 | `BUILD` | 可組合問句／倒裝句；本地倒裝診斷是啟發式規則，並非通用問句解析器。 |
-| 連接詞、名詞／形容詞／副詞子句 | `BUILD`／`REDUCE` | 可組合或刪減教師設定的字塊，但切詞依賴小型片語字典，尚未明確表示子句邊界或角色。 |
+| 連接詞、名詞／形容詞／副詞子句 | `BUILD`／`REDUCE` | 可組合或刪減教師設定的字塊；確定性切詞不會辨識子句邊界或文法角色，教師可用中括號指定片語並編輯生成的字塊。 |
 | 假設語氣與條件句 | `MORPH`／`BUILD` | 可練習教師提供的形式與語序，但沒有專門呈現兩個子句關係的條件句互動；本地語氣診斷僅涵蓋少數形式。 |
 | 情態動詞（目前範圍文件之外的額外概念） | 情態強度計加 `BUILD` | 強度軸僅為粗略提示，無法涵蓋情態動詞依語境而變的所有語意；本地檢查主要針對情態動詞後接原形。 |
 
 **建議：**若要開始練習這些範圍，不需要立刻新增頂層遊戲題型；`BUILD`、`REDUCE`、`MORPH` 已涵蓋組合、移除與變形三種基本操作。但目前也不足以宣稱已完整支援 K–12 文法。建議先在既有模式補強 S/V/O/C 與子句結構鷹架、豐富時態／狀態選項、增加雙子句條件句提示，並擴充診斷規則。只有當某概念無法用字塊組合、刪減或形式選擇表達時，才需要新增獨立遊戲題型。
 
-### 實作與部署進度（2026-11-03）
+### 實作與部署進度（2026-11-04）
 
-自適應畫布、舊題轉接器、本地切詞與規則註冊表、非同步診斷流程及教師看板 Realtime 狀態已完成並推送至 `main`。既有 20 題維持原格式；題目載入畫布時才轉接，不會改寫 `questions` 資料表。自動化驗證已通過：37 項測試、TypeScript 型別檢查、Vite production build 與 Deno Edge Function 型別檢查。Production build 目前仍有主 bundle 體積偏大的警告。
+自適應畫布、舊題轉接器、compromise.js 本地切詞、本地規則引擎及 LanguageTool 代理流程已實作。舊題載入畫布時才轉接，不會改寫 `questions` 資料表。
 
-**Supabase 部署尚未完成。** 尚未套用 `supabase/migrations/20261103215800_async_diagnosis_status.sql`，也尚未部署新版 `grammar-assistant` Edge Function 或連線驗證正式 Supabase 專案。啟用雲端診斷前，請先套用遷移、部署函式並設定 Gemini 金鑰：
+**Supabase 部署尚未完成。** 套用資料庫遷移，並將 `LANGUAGETOOL_URL` 設為 Cloud Run LanguageTool API 後部署代理：
 
 ```bash
 npx supabase db push
-npx supabase functions deploy grammar-assistant
-npx supabase secrets set GEMINI_API_KEY=your_gemini_api_key
+npx supabase secrets set LANGUAGETOOL_URL=https://lt-proxy-xxx.run.app/v2/check
+npx supabase functions deploy lt-proxy
 ```
 
-此遷移會在 `learning_logs` 新增 `status`、`diagnosis` 欄位，並啟用該資料表的 Realtime 更新。Gemini 金鑰只設定在 Supabase Edge Function Secrets，不要放入 `.env.local` 或前端程式碼。遷移與函式部署完成前，AI 錯誤矩陣及背景診斷尚不可用；確定性切詞與本地診斷仍可使用。
+LanguageTool 遷移會在 `learning_logs` 新增 `source`、`category`、`rule_id`，並刪除已不使用的診斷快取資料表。前端只呼叫 Supabase 代理，不會直接連接 Cloud Run。
 
 ---
 
 ## 🛠️ 技術棧與工程
 
 - **前端**：Vue 3（Composition API）+ Vite + TypeScript
+- **本地 NLP**：compromise.js + `english-verbs-irregular`
 - **後端與資料庫**：Supabase（PostgreSQL、Storage、Edge Functions、Realtime Presence）
 - **語音 (TTS & STT)**：Deepgram API（透過 Edge Function 代理）+ Web Speech API 降級備援
 - **拖曳**：原生 Pointer Events 與 `vue-draggable-plus`
@@ -308,13 +309,13 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    npx supabase functions deploy deepgram-tts
    npx supabase functions deploy edge-stt
    npx supabase functions deploy teacher-action
-   npx supabase functions deploy grammar-assistant
+   npx supabase functions deploy lt-proxy
    ```
 4. 設定 Secrets（API 金鑰與教師密碼）：
    ```bash
    npx supabase secrets set DEEPGRAM_API_KEY=your_deepgram_key
    npx supabase secrets set TEACHER_PASSWORD=your_teacher_password
-   npx supabase secrets set GEMINI_API_KEY=your_gemini_api_key
+   npx supabase secrets set LANGUAGETOOL_URL=https://lt-proxy-xxx.run.app/v2/check
    ```
 
 ### 開發與測試

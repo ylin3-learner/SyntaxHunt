@@ -4,7 +4,7 @@
 
 An interactive, cognitive-pipeline-driven English grammar learning tool designed for K-12 education.
 
-Built with **Vue 3, TypeScript, Vite, and Supabase**, this application takes a pedagogical approach to teaching **Post-modifiers (Relative Clauses & Prepositional Phrases)**, specifically targeting the common L1 interference (Chinese pre-modifiers vs. English post-modifiers), structural misconceptions (e.g., redundant pronouns like `who she`), and **Phrase Chunking**. Teachers can also author general grammar questions in `BUILD`, `REDUCE`, or `MORPH` mode; these use a local rule engine with cached and AI-assisted diagnosis for errors it cannot classify locally.
+Built with **Vue 3, TypeScript, Vite, and Supabase**, this application takes a pedagogical approach to teaching **Post-modifiers (Relative Clauses & Prepositional Phrases)**, specifically targeting the common L1 interference (Chinese pre-modifiers vs. English post-modifiers), structural misconceptions (e.g., redundant pronouns like `who she`), and **Phrase Chunking**. Teachers can also author general grammar questions in `BUILD`, `REDUCE`, or `MORPH` mode; answers are checked by a local rule engine first, with self-hosted LanguageTool providing additional diagnostics when local rules cannot classify an incorrect answer.
 
 The sample lesson is designed for a 45-minute class for **Grade 9 (115 iE5, Unit 5: *The Man Who Shook Hands with Me Is My Favorite Star*)**, covering Grammar Focus 1 (prepositional phrases), Grammar Focus 2 (subject relative clauses with *who / which / that*), and the p.107 Read activity.
 
@@ -95,12 +95,13 @@ graph TD
             Action_Proxy["teacher-action<br>(Validate & Update)"]
             TTS_Proxy["deepgram-tts<br>(Deepgram TTS)"]
             STT_Proxy["edge-stt<br>(Deepgram STT)"]
-            Grammar_Proxy["grammar-assistant<br>(AI error matrix & diagnosis)"]
+            LT_Proxy["lt-proxy<br>(LanguageTool grammar diagnosis)"]
         end
     end
 
     subgraph ThirdParty ["Third-Party API"]
         Deepgram["Deepgram API"]
+        LanguageTool["Self-hosted LanguageTool<br>(Google Cloud Run)"]
     end
 
     %% Data Flow
@@ -123,8 +124,8 @@ graph TD
     
     StudentUI -- "STT Request" --> STT_Proxy
     STT_Proxy --> Deepgram
-    AdminUI -- "Generate chunks & error matrix" --> Grammar_Proxy
-    StudentUI -- "Fallback diagnosis" --> Grammar_Proxy
+    StudentUI -- "Advanced grammar check" --> LT_Proxy
+    LT_Proxy --> LanguageTool
 
     %% Logic Dependencies
     StudentUI -.-> Composables
@@ -202,8 +203,8 @@ sequenceDiagram
 1. Open **Teacher Admin** and select **General Grammar** in the question editor.
 2. Choose a grammar concept and interaction mode. The concept supplies a default mode, which can be changed.
 3. Enter the source sentence and the exact target answer. For `REDUCE`, enter the complete sentence as the source and the reduced sentence as the answer.
-4. Click **Deterministic auto-chunk** or split the sentence manually. Bracket a multi-word chunk in the source, e.g. `[in a blue uniform]`. Review the generated chunks before using them.
-5. For `MORPH`, mark each changeable chunk and provide its comma-separated forms (e.g. `go, goes, went`). The auto-chunker recognizes only a small built-in vocabulary; add or correct forms manually.
+4. Click **Local chunking** or split the sentence manually. Bracket a multi-word chunk in the source, e.g. `[in a blue uniform]`. Review the generated chips and edit the chunks before using them.
+5. For `MORPH`, mark each changeable chunk and provide its comma-separated forms (e.g. `go, goes, went`). Chunking uses compromise.js and an irregular-verb JSON table; add or correct forms manually when needed.
 6. Click **Add to question bank**. Click **Send to class** on that question to make it active, or click **Finish prep** to save the bank and close the editor (reopen Teacher Admin to push it later). Students answer by clicking tiles: assemble in `BUILD`, remove tiles in `REDUCE`, and select forms in `MORPH`.
 
 > **Teacher access note:** The current frontend demo checks the fixed password `admin123`; the `TEACHER_PASSWORD` Supabase secret does not configure this check. This is not secure authentication—do not expose the demo as a public or production teacher console.
@@ -220,17 +221,17 @@ sequenceDiagram
 | `R:*` | `R:VERB:SVA`, `R:VERB:TENSE`, `R:VERB:FORM`, `R:VERB:MOOD`, `R:RELATIVE`, `R:PREP`, `R:DET`, `R:NOUN:NUM`, `R:CONJ` | A verb form, relative pronoun, preposition, determiner, noun number, or conjunction is incorrect. |
 | `U:*` | `U:PRON`, `U:VERB`, `U:RELATIVE`, `U:CONJ` | An unnecessary pronoun, verb, relative pronoun, or conjunction remains. |
 | `O:*` | `O:WRONG_ORDER`, `O:INVERSION` | Words are out of order, including incorrect auxiliary placement in inversion. |
-| `UNKNOWN_ERROR` | — | Local rules cannot assign a specific error; try a prepared diagnosis or AI fallback. |
+| `UNKNOWN_ERROR` | — | Local rules cannot assign a specific error; LanguageTool is asked for additional suggestions. |
 
-Each diagnosis also has an SST category: `Omission`, `Addition`, `Misformation`, or `Misordering`. Definite local diagnoses are used first. When local diagnosis returns `UNKNOWN_ERROR`, the student is allowed to continue immediately while the app records a `PENDING` log and requests an asynchronous diagnosis through the `grammar-assistant` Edge Function. The function checks `diagnosis_cache`, calls Gemini if needed, and updates the same log to `SUCCESS` (or `FAILED`); Teacher Analytics reflects status and completed results through Supabase Realtime.
+Local diagnoses retain their K-12 error codes and SST category (`Omission`, `Addition`, `Misformation`, or `Misordering`). If local rules cannot classify an incorrect answer, the app requests LanguageTool through the `lt-proxy` Supabase Edge Function. The LanguageTool message, category, rule ID, replacements, and character range are retained as native diagnostics; character offsets are mapped back to visible chunks for highlighting. A three-second timeout or service failure displays a neutral notice and lets the student skip to the next question. In `BUILD` and `MORPH`, students can also check a partial answer before filling every slot.
 
-Teacher-authored general grammar questions choose a concept and interaction mode. `autoChunk(sentence, concept)` uses bracketed phrases first, then deterministic tokenization and a small phrase/verb dictionary; it does not call an LLM. MORPH options are stored as strings with `current_index` identifying the initial selected form, while legacy `morph_options` remains supported. The canvas routes new concepts to a timeline, modal-strength gauge, shredder, or magnetic-slot interaction. Questions without a concept keep the legacy canvas.
+Teacher-authored general grammar questions choose a concept and interaction mode. `autoChunk(sentence, concept)` uses compromise.js for deterministic tokenization and verb parsing, checks the irregular-verb table first, and preserves bracketed phrases as explicit chunks. It does not call an LLM. MORPH options are stored as strings with `current_index` identifying the initial selected form, while legacy `morph_options` remains supported. The canvas routes new concepts to a timeline, modal-strength gauge, shredder, or magnetic-slot interaction. Questions without a concept keep the legacy canvas.
 
 ### How the Rule Registry connects authoring, gameplay, and diagnosis
 
 The registry is the **local diagnosis plugin point**, not the question authoring UI router:
 
-1. **Authoring:** In Teacher Admin, the teacher selects a grammar concept and `BUILD`, `REDUCE`, or `MORPH`, enters a sentence and answer, then uses deterministic `autoChunk` (or edits the chunks and morphology options). The chosen concept and mode are saved with the question. `autoChunk` does not consult the Rule Registry.
+1. **Authoring:** In Teacher Admin, the teacher selects a grammar concept and `BUILD`, `REDUCE`, or `MORPH`, enters a sentence and answer, then uses local `autoChunk` (or edits the chunks and morphology options). The chosen concept and mode are saved with the question. `autoChunk` does not consult the Rule Registry.
 2. **Gameplay UI:** `GrammarCanvas.vue` selects a canvas from the saved `concept` and `ui_mode`; it does not look up registered rules. Concept defaults are provided by `defaultUiModeForConcept`, and the teacher may override the mode. The current routing is:
 
    | Question setting | Student interaction |
@@ -250,7 +251,7 @@ The registry is the **local diagnosis plugin point**, not the question authoring
    | `MORPH` — select a tense or verb form | `MODAL_VERB` — choose a modal strength |
    | :---: | :---: |
    | ![Tense MORPH and sentence assembly UI illustration](docs/images/adaptive-grammar-game-ui.svg) | ![Modal verb strength gauge UI illustration](docs/images/grammar-modal-ui.svg) |
-3. **Diagnosis:** After submission, `diagnoseGrammar` runs general validators plus validators registered for that question's concept. `grammarRules.ts` eagerly loads `src/rules/validators/*.ts`; each plugin calls `registerGrammarRule` with an ID, validator, and optional concept list. For example, conjunction rules target clause concepts, inversion targets question/inversion concepts, and modal-form checks target `MODAL_VERB`. A definite local signal drives the existing misconception feedback/logging; if no rule diagnoses the answer, token alignment classifies the difference, and an `UNKNOWN_ERROR` can enter the asynchronous AI fallback.
+3. **Diagnosis:** After submission, `diagnoseGrammar` runs general validators plus validators registered for that question's concept. `grammarRules.ts` eagerly loads `src/rules/validators/*.ts`; each plugin calls `registerGrammarRule` with an ID, validator, and optional concept list. For example, conjunction rules target clause concepts, inversion targets question/inversion concepts, and modal-form checks target `MODAL_VERB`. A definite local signal drives the existing misconception feedback/logging; if local rules cannot classify the incorrect answer, LanguageTool is called through the Supabase `lt-proxy` Edge Function and its native result is retained.
 
 Therefore, adding a validator changes local diagnosis only. It does not automatically add a teacher form field or a new visual interaction; those require updates to the concept/type list, authoring controls, and/or canvas routing as appropriate. For a new validator, add a file under `src/rules/validators/` and register it; keep the ID unique.
 
@@ -263,31 +264,32 @@ The authoring form exposes every concept listed in the scope, but that does **no
 | Sentence units, S/V/O/C, five sentence patterns | `BUILD` | Can assemble a keyed sentence; it does not label grammatical roles or model each pattern as a distinct task. |
 | Subject-verb agreement; tense and aspect | `MORPH` or `BUILD` | Supports configured alternatives and exact-answer checking. Auto-generated forms use a small vocabulary; the timeline does not fully model all tense/aspect combinations. |
 | Questions and inversion | `BUILD` | Can assemble a question/inverted sentence. Local inversion diagnosis is heuristic, not a general question parser. |
-| Connectors; noun, adjective, and adverb clauses | `BUILD` / `REDUCE` | Can assemble or reduce teacher-authored chunks. Chunking uses a small phrase dictionary and does not represent clause boundaries or roles explicitly. |
+| Connectors; noun, adjective, and adverb clauses | `BUILD` / `REDUCE` | Can assemble or reduce teacher-authored chunks. Deterministic tokenization does not identify clause boundaries or grammatical roles; teachers can bracket phrases and edit the generated chunks. |
 | Subjunctive mood and conditionals | `MORPH` / `BUILD` | Can practice supplied forms and sentence order, but there is no dedicated two-clause conditional interaction; local mood diagnosis covers only narrow patterns. |
 | Modal verbs (an additional concept beyond the current scope list) | Modal-strength gauge plus `BUILD` | The gauge presents an approximate strength order; it does not capture all context-dependent modal meanings. Local checking focuses on the base form after a modal. |
 
 **Recommendation:** A new top-level game mode is not necessary to start teaching these topics: `BUILD`, `REDUCE`, and `MORPH` already provide the basic assemble/remove/change-form actions. However, the current UI is not enough to claim complete K–12 grammar coverage. Prioritize improvements within those modes—explicit S/V/O/C and clause scaffolds, richer tense/aspect choices, and paired-clause conditional prompts—along with broader validators. Add a separate game type only if those concepts need interaction that cannot be expressed as chunk assembly, removal, or form selection.
 
-### Implementation and rollout status (2026-11-03)
+### Implementation and rollout status (2026-11-04)
 
-The adaptive canvas, legacy adapter, local chunker and rule registry, asynchronous diagnosis flow, and teacher Realtime status display are implemented and pushed to `main`. The 20 legacy questions remain in their existing format; they are adapted when loaded into the canvas rather than rewritten in the `questions` table. Automated checks passed: 37 tests, TypeScript type-check, Vite production build, and Deno Edge Function type-check. The production build still reports a large main-bundle size warning.
+The adaptive canvas, legacy adapter, compromise.js chunker, local rule engine, and LanguageTool proxy path are implemented. Legacy questions are adapted when loaded into the canvas rather than rewritten in the `questions` table.
 
-**Supabase rollout is still pending.** The migration `supabase/migrations/20261103215800_async_diagnosis_status.sql` has not been applied, and the updated `grammar-assistant` Edge Function has not been deployed or verified against a live Supabase project. Apply the migration, deploy the function, and configure the Gemini key before enabling cloud diagnosis:
+**Supabase rollout is still pending.** Apply the migrations and deploy the LanguageTool proxy after setting `LANGUAGETOOL_URL` to the Cloud Run LanguageTool endpoint:
 
 ```bash
 npx supabase db push
-npx supabase functions deploy grammar-assistant
-npx supabase secrets set GEMINI_API_KEY=your_gemini_api_key
+npx supabase secrets set LANGUAGETOOL_URL=https://lt-proxy-xxx.run.app/v2/check
+npx supabase functions deploy lt-proxy
 ```
 
-The migration adds `status` and `diagnosis` to `learning_logs` and enables Realtime updates for that table. Keep the Gemini key in Supabase Edge Function Secrets; never put it in `.env.local` or frontend code. Until the migration and function are deployed, AI error-matrix generation and asynchronous diagnosis are unavailable; deterministic chunking and local diagnosis remain available.
+The LanguageTool migration adds `source`, `category`, and `rule_id` to `learning_logs` and removes the obsolete diagnosis cache. The frontend calls only the Supabase proxy; it does not connect to Cloud Run directly.
 
 ---
 
 ## 🛠️ Tech Stack & Engineering
 
 - **Frontend**: Vue 3 (Composition API) + Vite + TypeScript
+- **Local NLP**: compromise.js + `english-verbs-irregular`
 - **Backend & DB**: Supabase (PostgreSQL, Storage, Edge Functions, Realtime Presence)
 - **Speech**: Deepgram API (via Edge Function proxy) + Native Web Speech API fallback
 - **Drag & Drop**: Native Pointer Events & `vue-draggable-plus`
@@ -312,13 +314,13 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    npx supabase functions deploy deepgram-tts
    npx supabase functions deploy edge-stt
    npx supabase functions deploy teacher-action
-   npx supabase functions deploy grammar-assistant
+   npx supabase functions deploy lt-proxy
    ```
 4. Set the Secrets:
    ```bash
    npx supabase secrets set DEEPGRAM_API_KEY=your_deepgram_key
    npx supabase secrets set TEACHER_PASSWORD=your_teacher_password
-   npx supabase secrets set GEMINI_API_KEY=your_gemini_api_key
+   npx supabase secrets set LANGUAGETOOL_URL=https://lt-proxy-xxx.run.app/v2/check
    ```
 
 ### Development & Testing
