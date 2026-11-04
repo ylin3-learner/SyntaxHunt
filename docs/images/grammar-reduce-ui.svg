@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+  <title id="title">REDUCE sentence reduction interface illustration</title>
+  <desc id="desc">A student removes unnecessary chunks from a complete sentence using the shredder-style reduce canvas.</desc>
+  <rect width="1120" height="560" rx="28" fill="#f7f5f4"/>
+  <rect x="34" y="28" width="1052" height="504" rx="24" fill="#fff"/>
+  <text x="68" y="78" font-family="Segoe UI,Arial,sans-serif" font-size="27" font-weight="700" fill="#22364d">通用文法練習</text>
+  <rect x="860" y="48" width="190" height="38" rx="19" fill="#fff1f1"/>
+  <text x="884" y="73" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#a63737">REDUCE 刪除</text>
+  <rect x="68" y="112" width="984" height="54" rx="15" fill="#fff9df"/>
+  <text x="91" y="146" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="600" fill="#695a24">保留必要結構，移除多餘片語</text>
+  <text x="80" y="215" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" fill="#536276">原始句子字塊（點選要刪除的部分）</text>
+  <rect x="68" y="232" width="984" height="118" rx="18" fill="#fbfcfe" stroke="#e1e7ef"/>
+  <rect x="91" y="264" width="134" height="54" rx="13" fill="#f1f3ff" stroke="#c8d0ef"/>
+  <text x="115" y="298" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#4352a3">The book</text>
+  <rect x="237" y="264" width="95" height="54" rx="13" fill="#fff0f0" stroke="#edb4b4"/>
+  <text x="262" y="298" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#a63737">which</text>
+  <rect x="344" y="264" width="77" height="54" rx="13" fill="#fff0f0" stroke="#edb4b4"/>
+  <text x="366" y="298" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#a63737">I</text>
+  <rect x="433" y="264" width="98" height="54" rx="13" fill="#f1f3ff" stroke="#c8d0ef"/>
+  <text x="455" y="298" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#4352a3">bought</text>
+  <rect x="543" y="264" width="88" height="54" rx="13" fill="#f1f3ff" stroke="#c8d0ef"/>
+  <text x="567" y="298" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#4352a3">yesterday</text>
+  <text x="80" y="392" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" fill="#536276">移除區</text>
+  <rect x="68" y="410" width="984" height="78" rx="17" fill="#fff8f8" stroke="#f0cccc"/>
+  <rect x="91" y="424" width="133" height="48" rx="12" fill="#fff0f0" stroke="#edb4b4"/>
+  <text x="117" y="454" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#a63737">碎紙機　which</text>
+  <text x="237" y="454" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#a63737">I</text>
+  <text x="68" y="514" font-family="Segoe UI,Arial,sans-serif" font-size="13" fill="#8997a4">介面示意圖：點選字塊移除並可還原；非即時應用程式截圖。</text>
+</svg>

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+  <title id="title">Modal verb strength gauge interface illustration</title>
+  <desc id="desc">A student selects a modal verb along an approximate strength scale, then completes the sentence.</desc>
+  <rect width="1120" height="560" rx="28" fill="#f4fbff"/>
+  <rect x="34" y="28" width="1052" height="504" rx="24" fill="#fff"/>
+  <text x="68" y="78" font-family="Segoe UI,Arial,sans-serif" font-size="27" font-weight="700" fill="#22364d">通用文法練習</text>
+  <rect x="860" y="48" width="190" height="38" rx="19" fill="#eff8ff"/>
+  <text x="884" y="73" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#2874a9">情態語氣壓力計</text>
+  <rect x="68" y="112" width="984" height="54" rx="15" fill="#fff9df"/>
+  <text x="91" y="146" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="600" fill="#695a24">依語境選擇適當的情態動詞，再完成句子</text>
+  <rect x="68" y="200" width="984" height="148" rx="18" fill="#edf7ff" stroke="#d7e9f5"/>
+  <text x="96" y="238" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#15507a">You</text>
+  <text x="148" y="238" font-family="Segoe UI,Arial,sans-serif" font-size="16" fill="#526879">情態動詞</text>
+  <rect x="286" y="211" width="160" height="42" rx="12" fill="#fff" stroke="#c7dce9"/>
+  <text x="311" y="239" font-family="Segoe UI,Arial,sans-serif" font-size="20" font-weight="700" fill="#7d3cb5">→ should</text>
+  <text x="96" y="294" font-family="Segoe UI,Arial,sans-serif" font-size="14" fill="#667a8d">較委婉</text>
+  <text x="942" y="294" font-family="Segoe UI,Arial,sans-serif" font-size="14" fill="#667a8d">較堅定</text>
+  <path d="M170 286h724" stroke="#bccbd7" stroke-width="6" stroke-linecap="round"/>
+  <path d="M170 286h515" stroke="#4aa5ce" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="685" cy="286" r="13" fill="#fff" stroke="#2874a9" stroke-width="5"/>
+  <text x="158" y="324" font-family="Segoe UI,Arial,sans-serif" font-size="13" fill="#77899a">might</text>
+  <text x="456" y="324" font-family="Segoe UI,Arial,sans-serif" font-size="13" fill="#77899a">can</text>
+  <text x="663" y="324" font-family="Segoe UI,Arial,sans-serif" font-size="13" fill="#77899a">should</text>
+  <text x="868" y="324" font-family="Segoe UI,Arial,sans-serif" font-size="13" fill="#77899a">must</text>
+  <text x="80" y="392" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" fill="#4a5d71">組合句子字塊</text>
+  <rect x="68" y="410" width="984" height="78" rx="17" fill="#fbfcfe" stroke="#e1e7ef"/>
+  <rect x="91" y="424" width="80" height="48" rx="12" fill="#f1f3ff" stroke="#c8d0ef"/>
+  <text x="113" y="454" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#4352a3">You</text>
+  <rect x="183" y="424" width="104" height="48" rx="12" fill="#f5eefe" stroke="#d8c4ed"/>
+  <text x="206" y="454" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#7d3cb5">should</text>
+  <rect x="299" y="424" width="99" height="48" rx="12" fill="#f1f3ff" stroke="#c8d0ef"/>
+  <text x="325" y="454" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#4352a3">study</text>
+  <text x="68" y="514" font-family="Segoe UI,Arial,sans-serif" font-size="13" fill="#8997a4">介面示意圖：量表只是情態強度的粗略提示，不代表所有語意差異；非即時截圖。</text>
+</svg>

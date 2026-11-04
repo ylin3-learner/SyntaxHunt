@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="560" viewBox="0 0 1120 560" role="img" aria-labelledby="title desc">
+  <title id="title">BUILD sentence assembly interface illustration</title>
+  <desc id="desc">A student assembles shuffled English chunks into a sentence using the magnetic build canvas.</desc>
+  <rect width="1120" height="560" rx="28" fill="#f3f7ff"/>
+  <rect x="34" y="28" width="1052" height="504" rx="24" fill="#fff"/>
+  <text x="68" y="78" font-family="Segoe UI,Arial,sans-serif" font-size="27" font-weight="700" fill="#22364d">通用文法練習</text>
+  <rect x="860" y="48" width="190" height="38" rx="19" fill="#eff8ff"/>
+  <text x="884" y="73" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#2874a9">BUILD 組句</text>
+  <rect x="68" y="112" width="984" height="54" rx="15" fill="#fff9df"/>
+  <text x="91" y="146" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="600" fill="#695a24">🧲 依序點選語序卡片，組成正確句型</text>
+  <text x="80" y="215" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" fill="#4352a3">組句答案</text>
+  <rect x="68" y="232" width="984" height="116" rx="18" fill="#f7f8ff" stroke="#9ca9db" stroke-dasharray="8 7"/>
+  <rect x="91" y="264" width="156" height="54" rx="13" fill="#f1f3ff" stroke="#c8d0ef"/>
+  <text x="114" y="298" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#4352a3">The student</text>
+  <rect x="258" y="264" width="112" height="54" rx="13" fill="#f5eefe" stroke="#d8c4ed"/>
+  <text x="282" y="298" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#7d3cb5">reads</text>
+  <rect x="381" y="264" width="108" height="54" rx="13" fill="#f1f3ff" stroke="#c8d0ef"/>
+  <text x="405" y="298" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#4352a3">a book</text>
+  <text x="80" y="392" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" fill="#4352a3">可用字塊（點選加入答案）</text>
+  <rect x="68" y="410" width="984" height="78" rx="17" fill="#fbfcfe" stroke="#e1e7ef"/>
+  <rect x="91" y="424" width="99" height="48" rx="12" fill="#f1f3ff" stroke="#c8d0ef"/>
+  <text x="116" y="454" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#4352a3">reads</text>
+  <rect x="202" y="424" width="128" height="48" rx="12" fill="#f1f3ff" stroke="#c8d0ef"/>
+  <text x="224" y="454" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#4352a3">The student</text>
+  <rect x="342" y="424" width="101" height="48" rx="12" fill="#f1f3ff" stroke="#c8d0ef"/>
+  <text x="367" y="454" font-family="Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" fill="#4352a3">a book</text>
+  <text x="68" y="514" font-family="Segoe UI,Arial,sans-serif" font-size="13" fill="#8997a4">介面示意圖：字塊語序建構；非即時應用程式截圖。</text>
+</svg>

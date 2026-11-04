@@ -52,7 +52,7 @@
   <text x="627" y="523" font-family="Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" fill="#4352a3">yesterday</text>
 
   <rect x="92" y="559" width="668" height="56" rx="14" fill="#fbfcfe" stroke="#b8c5d1" stroke-dasharray="7 6"/>
-  <text x="119" y="594" font-family="Segoe UI,Arial,sans-serif" font-size="16" fill="#7d8d9d">將字塊拖放到這裡組成答案⋯</text>
+  <text x="119" y="594" font-family="Segoe UI,Arial,sans-serif" font-size="16" fill="#7d8d9d">點選下方字塊，依序填入答案⋯</text>
   <rect x="786" y="558" width="232" height="58" rx="17" fill="#36b8ee"/>
   <text x="841" y="595" font-family="Segoe UI,Arial,sans-serif" font-size="19" font-weight="700" fill="#fff">檢查答案　➜</text>
   <text x="93" y="643" font-family="Segoe UI,Arial,sans-serif" font-size="13" fill="#8997a4">介面示意圖：時態 MORPH 題型；實際畫面依題目概念與 UI 模式切換。</text>
