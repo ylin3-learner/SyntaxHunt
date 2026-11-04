@@ -61,6 +61,40 @@ describe('GrammarCanvas', () => {
     wrapper.unmount();
   });
 
+  it('lets students reorder retained REDUCE chunks to form the correct sentence', async () => {
+    vi.useFakeTimers();
+    const question: GrammarQuestionData = {
+      id: 'reduce-reorder-test',
+      type: 'grammar',
+      ui_mode: 'REDUCE',
+      targetNoun: 'The writer',
+      antecedent: { noun: 'The writer', number: 'singular', person: 'person' },
+      correctAnswer: ['The writer', 'with', '[a dictionary]', 'is', 'Mr. Lee.'],
+      chunks: [
+        { id: 'writer', text: 'The writer', draggable: true },
+        { id: 'dictionary', text: '[a dictionary]', draggable: true },
+        { id: 'with', text: 'with', draggable: true },
+        { id: 'is', text: 'is', draggable: true },
+        { id: 'lee', text: 'Mr. Lee.', draggable: true },
+        { id: 'which', text: 'which', draggable: true },
+      ],
+    };
+    const wrapper = mount(GrammarCanvas, {
+      props: { question, initialChunks: question.chunks },
+    });
+
+    await wrapper.findAll('.answer-area .tile')[5].trigger('click');
+    await wrapper.find('[aria-label="將「with」往左移"]').trigger('click');
+
+    expect(wrapper.findAll('.answer-area .tile span').map(tile => tile.text())).toEqual([
+      'The writer', 'with', 'a dictionary', 'is', 'Mr. Lee.',
+    ]);
+    expect(wrapper.find('.answer-area').classes()).toContain('success-bg');
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(wrapper.emitted('success')).toBeTruthy();
+    wrapper.unmount();
+  });
+
   it('uses LanguageTool for an incorrect answer that local rules cannot classify', async () => {
     const question: GrammarQuestionData = {
       id: 'unknown-error-test',

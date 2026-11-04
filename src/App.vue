@@ -177,7 +177,7 @@ const instructionText = computed(() => {
   if (currentStage.value === 'macro') return '請將角色圖塊拖曳到名詞的「後方」。';
   if (currentStage.value === 'micro') {
     return getQuestionUiMode(currentQuestion.value) === 'REDUCE'
-      ? '請點擊上方多餘的字磚，將它們丟進垃圾桶，只保留正確的簡化片語。'
+      ? '點擊多餘字磚將它丟進垃圾桶；用字磚左右箭頭調整保留詞序。'
       : getQuestionUiMode(currentQuestion.value) === 'MORPH'
         ? '請排列字磚，並點擊紫色字磚切換成正確的單字形式。'
         : '請點擊下方的字磚，將它們排列成正確的英文句子。';

@@ -93,6 +93,18 @@ const discardTile = (tile: Chunk) => {
   }
 };
 
+const moveReducedTile = (tile: Chunk, direction: -1 | 1) => {
+  if (isSuccess.value || props.question.ui_mode !== 'REDUCE') return;
+  const index = answerArea.value.findIndex(current => current.id === tile.id);
+  const nextIndex = index + direction;
+  if (index < 0 || nextIndex < 0 || nextIndex >= answerArea.value.length) return;
+
+  answerArea.value.splice(index, 1);
+  answerArea.value.splice(nextIndex, 0, tile);
+  resetState();
+  void checkAnswer();
+};
+
 const restoreTile = (tile: Chunk) => {
   if (isSuccess.value) return;
   const index = trashArea.value.findIndex(t => t.id === tile.id);
@@ -324,7 +336,13 @@ const handleOutsideClick = () => {
           'tile-wrong': isWrong,
           'tile-chunk': tile.text.startsWith('[')
         }" @click="discardTile(tile)">
-          {{ tile.text.replace(/[\[\]]/g, '') }}
+          <button type="button" class="reduce-reorder-button" :disabled="index === 0 || isSuccess"
+            :aria-label="`將「${tile.text.replace(/[\[\]]/g, '')}」往左移`"
+            @click.stop="moveReducedTile(tile, -1)">←</button>
+          <span>{{ tile.text.replace(/[\[\]]/g, '') }}</span>
+          <button type="button" class="reduce-reorder-button" :disabled="index === answerArea.length - 1 || isSuccess"
+            :aria-label="`將「${tile.text.replace(/[\[\]]/g, '')}」往右移`"
+            @click.stop="moveReducedTile(tile, 1)">→</button>
         </div>
       </template>
     </div>
@@ -355,7 +373,7 @@ const handleOutsideClick = () => {
       </div>
     </div>
     <div v-else-if="isWrong" class="gentle-alert">
-      <p>順序好像不太對喔，點擊字磚退回重排看看！</p>
+      <p>順序好像不太對喔，使用左右箭頭調整，或點擊多餘字磚退回看看！</p>
     </div>
     <div v-if="remoteStatus" class="remote-status" role="status" :aria-busy="!canContinue">
       <span>{{ remoteStatus }}</span>
@@ -735,6 +753,26 @@ const handleOutsideClick = () => {
   border-color: #ff4b4b;
   color: #ff4b4b;
   text-decoration: line-through;
+}
+
+.reduce-reorder-button {
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.reduce-reorder-button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.is-reduce-mode:hover .reduce-reorder-button {
+  color: #ff4b4b;
 }
 
 @keyframes shake {

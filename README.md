@@ -242,7 +242,7 @@ The registry is the **local diagnosis plugin point**, not the question authoring
    | `BUILD` | Magnetic sentence slots |
    | No concept or an unmatched combination | Legacy canvas |
 
-   The gallery shows **illustrative UI mockups, not live application screenshots**. The student's actual canvas is routed as above; interaction tiles are selected by clicking, not dragging.
+   The gallery shows **illustrative UI mockups, not live application screenshots**. The student's actual canvas is routed as above; tiles are selected by clicking rather than dragging, and retained `REDUCE` tiles can be reordered with their arrow controls.
 
    | `BUILD` — assemble sentence chunks | `REDUCE` — remove unnecessary chunks |
    | :---: | :---: |

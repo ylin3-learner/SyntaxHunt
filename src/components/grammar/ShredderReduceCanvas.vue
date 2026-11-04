@@ -18,7 +18,7 @@ const emit = defineEmits<{
 <template>
   <section class="shredder-canvas">
     <div class="shredder-prompt" aria-hidden="true">
-      <span>保留必要結構</span><span class="shredder-icon">▤</span><span>碎紙機：移除多餘片語</span>
+      <span>保留必要結構</span><span class="shredder-icon">▤</span><span>移除多餘片語並調整詞序</span>
     </div>
     <LegacyGrammarCanvas :question="question" :initial-chunks="initialChunks" :speech-rate="speechRate"
       @success="emit('success')" @misconception="emit('misconception', $event)"

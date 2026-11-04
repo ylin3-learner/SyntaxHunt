@@ -89,6 +89,19 @@ describe('Grammar Engine - diagnoseGrammar', () => {
     expect(signals[0].sst).toBe('Addition');
   });
 
+  it('不會把正解需要的 be 動詞誤判為 REDUCE 多餘詞', () => {
+    const reduceQuestion: QuestionData = {
+      ...mockQuestion,
+      ui_mode: 'REDUCE',
+      correctAnswer: ['The writer', 'with', '[a dictionary]', 'is', 'Mr. Lee.'],
+    };
+    const studentTokens = ['The writer', '[a dictionary]', 'with', 'is', 'Mr. Lee.'];
+    const signals = diagnoseGrammar(studentTokens, reduceQuestion.correctAnswer!, reduceQuestion);
+
+    expect(signals.some(signal => signal.code === 'U:VERB')).toBe(false);
+    expect(signals.some(signal => signal.code === 'O:WRONG_ORDER')).toBe(true);
+  });
+
   // 測試 8：MORPH 模式 - 時態錯誤 (R:VERB:TENSE)
   it('應該抓出 MORPH 模式下時態未變化的錯誤 (R:VERB:TENSE)', () => {
     const morphQuestion: QuestionData = {

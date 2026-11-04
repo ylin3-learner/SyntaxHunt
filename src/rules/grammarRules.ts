@@ -291,10 +291,21 @@ export const checkRelativeChoice: RuleValidator = (ctx) => {
 };
 
 export const checkReduced: RuleValidator = (ctx) => {
-  const { studentTokens, question } = ctx;
+  const { studentTokens, correctTokens, question } = ctx;
   if (question.ui_mode !== 'REDUCE') return [];
 
-  const idx = studentTokens.findIndex(t => RELATIVE_PRONOUNS.has(cleanToken(t)));
+  const isExcessToken = (token: string, index: number) => {
+    const normalized = cleanToken(token);
+    const occurrence = studentTokens
+      .slice(0, index + 1)
+      .filter(studentToken => cleanToken(studentToken) === normalized).length;
+    const targetCount = correctTokens.filter(correctToken => cleanToken(correctToken) === normalized).length;
+    return occurrence > targetCount;
+  };
+
+  const idx = studentTokens.findIndex((token, index) =>
+    RELATIVE_PRONOUNS.has(cleanToken(token)) && isExcessToken(token, index)
+  );
 
   // 情況 1：關代還在，代表沒簡化
   if (idx !== -1) {
@@ -306,7 +317,9 @@ export const checkReduced: RuleValidator = (ctx) => {
   }
 
   // 情況 2：關代刪了，但留下了多餘的 Be 動詞 (如 is/are)
-  const beIndex = studentTokens.findIndex(t => BE_VERBS.has(cleanToken(t)));
+  const beIndex = studentTokens.findIndex((token, index) =>
+    BE_VERBS.has(cleanToken(token)) && isExcessToken(token, index)
+  );
   if (beIndex !== -1) {
     return [{
       code: 'U:VERB', sst: 'Addition', index: beIndex,
