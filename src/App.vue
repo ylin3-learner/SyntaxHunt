@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, defineAsyncComponent, onMounted, onUnmounted, watch } from 'vue';
 import MacroDragCanvas from './components/MacroDragCanvas.vue';
 import GrammarCanvas from './components/GrammarCanvas.vue';
-import TeacherAdmin from './components/TeacherAdmin.vue';
 import TeacherAnalytics from './components/TeacherAnalytics.vue';
 import ContrastPuzzle from './components/ContrastPuzzle.vue';
 import StructuredInput from './components/StructuredInput.vue';
@@ -23,6 +22,8 @@ import { CloudDatabase } from './services/CloudDatabase';
 import { useQuizTimer } from './composables/useQuizTimer';
 import { useFocusMonitor } from './composables/useFocusMonitor';
 import { useClassroomSync } from './composables/useClassroomSync';
+
+const TeacherAdmin = defineAsyncComponent(() => import('./components/TeacherAdmin.vue'));
 
 const isDebugMode = window.location.search.includes('debug=1');
 
@@ -245,6 +246,7 @@ const handleMisconception = (code: string) => {
     student_name: '匿名學生',
     question_id: currentQuestion.value.id,
     error_code: code,
+    source: 'local',
     sst,
   });
 };
@@ -270,8 +272,8 @@ const handleSuccess = () => {
   if (completedCount.value <= currentIndex.value) completedCount.value = currentIndex.value + 1;
 };
 
-const nextQuestion = () => {
-  if (isClassMode.value) {
+const nextQuestion = (allowClassModeSkip = false) => {
+  if (isClassMode.value && !allowClassModeSkip) {
     alert('請等待老師統一發送下一題！');
     return;
   }
@@ -485,6 +487,7 @@ const logoutAdmin = () => {
           :question="microQuestion"
           :initialChunks="microQuestion.chunks"
           :speechRate="currentQuestion.speechRate || 0.8" @success="handleSuccess"
+          @continue="nextQuestion(true)"
           @misconception="handleMisconception" />
       </div>
     </main>

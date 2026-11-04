@@ -17,6 +17,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'success'): void;
   (e: 'misconception', code: string): void;
+  (e: 'continue'): void;
 }>();
 
 const selectedCanvas = computed(() => {
@@ -27,6 +28,7 @@ const selectedCanvas = computed(() => {
   if (uiMode === 'MORPH' && [
     'SUBJECT_VERB_AGREEMENT',
     'TENSE_ASPECT',
+    'PAST_TENSE',
     'SUBJUNCTIVE',
     'CONDITIONALS',
   ].includes(concept)) return TimelineMorphCanvas;
@@ -43,5 +45,6 @@ const selectedCanvas = computed(() => {
     :speech-rate="speechRate"
     @success="emit('success')"
     @misconception="emit('misconception', $event)"
+    @continue="emit('continue')"
   />
 </template>

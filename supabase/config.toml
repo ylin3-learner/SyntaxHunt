@@ -43,8 +43,7 @@ entrypoint = "./functions/teacher-action/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/teacher-action/*.html" ]
 
-[functions.grammar-assistant]
+[functions.lt-proxy]
 enabled = true
 verify_jwt = false
-import_map = "./functions/grammar-assistant/deno.json"
-entrypoint = "./functions/grammar-assistant/index.ts"
+entrypoint = "./functions/lt-proxy/index.ts"

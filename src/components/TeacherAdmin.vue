@@ -2,7 +2,6 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import type { Chunk, GrammarConcept, QuestionData, UIMode } from '../rules/types';
 import { autoChunk, defaultUiModeForConcept } from '../rules/autoChunk';
-import { CloudDatabase } from '../services/CloudDatabase';
 import { VueDraggable } from 'vue-draggable-plus';
 import { useClassroomSync } from '../composables/useClassroomSync';
 
@@ -15,9 +14,7 @@ const grammarConcept = ref<GrammarConcept>('SENTENCE_PATTERN');
 const grammarSentence = ref('');
 const grammarAnswer = ref('');
 const grammarChunks = ref<Chunk[]>([]);
-const isPreparingCache = ref(false);
 const grammarError = ref('');
-const cacheStatus = ref('');
 const isQuestionsExpanded = ref(true);
 
 // 👈 新增：控制班級控制面板的收合狀態
@@ -96,7 +93,7 @@ const handleGrammarConceptChange = () => {
 
 const resetForm = () => {
   grammarSentence.value = ''; grammarAnswer.value = ''; grammarChunks.value = [];
-  uiMode.value = 'BUILD'; grammarConcept.value = 'SENTENCE_PATTERN'; grammarError.value = ''; cacheStatus.value = '';
+  uiMode.value = 'BUILD'; grammarConcept.value = 'SENTENCE_PATTERN'; grammarError.value = '';
   chunkZhInput.value = ''; chunkQuizInput.value = ''; distractorImageUrl.value = '';
   correctLabel.value = ''; distractorLabel.value = '';
   antecedentNumber.value = 'singular'; speechRate.value = 0.8;
@@ -128,7 +125,6 @@ const editQuestion = (q: QuestionData) => {
     grammarSentence.value = grammarChunks.value.map(chunk => chunk.text).join(' ');
     enabledStages.value = q.enabledStages || ['micro'];
     grammarError.value = '';
-    cacheStatus.value = '';
     activeUploadTarget.value = null;
     return;
   }
@@ -175,7 +171,6 @@ const autoChunkGrammarSentence = () => {
     ...chunk,
     id: `${editingId.value || 'new'}-auto-${index}`,
   }));
-  cacheStatus.value = '';
 };
 
 const splitGrammarSentenceManually = () => {
@@ -188,23 +183,6 @@ const splitGrammarSentenceManually = () => {
     morph_options: [],
   }));
   grammarError.value = '';
-  cacheStatus.value = '';
-};
-
-const prepareQuestionDiagnosis = async (id: string) => {
-  const question = localQuestions.value.find(item => item.id === id);
-  if (!question) return;
-  isPreparingCache.value = true;
-  cacheStatus.value = '';
-  grammarError.value = '';
-  try {
-    const count = await CloudDatabase.prepareDiagnosisCache(question);
-    cacheStatus.value = `已建立 ${count} 組常見錯誤診斷快取。`;
-  } catch (error) {
-    grammarError.value = error instanceof Error ? error.message : '錯誤矩陣建立失敗。';
-  } finally {
-    isPreparingCache.value = false;
-  }
 };
 
 const updateMorphOptions = (chunk: Chunk, event: Event) => {
@@ -546,10 +524,6 @@ const saveAllAndClose = () => {
                     </div>
 
                     <div class="q-actions">
-                      <button v-if="q.type === 'grammar'" class="btn-push" :disabled="isPreparingCache"
-                        @click.stop="prepareQuestionDiagnosis(q.id)">
-                        {{ isPreparingCache ? '建立中...' : '🧠 建錯誤矩陣' }}
-                      </button>
                       <button class="btn-push" @click.stop="handleSaveAndPush(q.id)">🚀 發送給全班</button>
                       <button class="btn-delete" @click.stop="deleteQuestion(q.id)" title="刪除">✕</button>
                     </div>
@@ -596,6 +570,7 @@ const saveAllAndClose = () => {
                   <option value="SUBJUNCTIVE">假設語氣</option>
                   <option value="CONDITIONALS">條件句</option>
                   <option value="MODAL_VERB">情態動詞</option>
+                  <option value="PAST_TENSE">過去式</option>
                 </select>
               </div>
               <div class="form-group">
@@ -635,12 +610,20 @@ const saveAllAndClose = () => {
                 <input v-model="tagsInput" type="text" placeholder="例如：過去式, 動詞時態" />
               </div>
               <div class="form-group">
-                <button class="btn-save" @click="autoChunkGrammarSentence">✨ 確定性自動拆解</button>
+                <button class="btn-save" @click="autoChunkGrammarSentence">⚡ 本地切詞</button>
                 <button class="btn-push" style="margin-top: 10px;" @click="splitGrammarSentenceManually">
                   以空白拆解（手動設定變形）
                 </button>
                 <p v-if="grammarError" class="grammar-error" role="alert">{{ grammarError }}</p>
-                <p v-if="cacheStatus" class="grammar-status" role="status">{{ cacheStatus }}</p>
+              </div>
+              <div v-if="grammarChunks.length" class="form-group">
+                <label>切詞預覽</label>
+                <div class="grammar-chunk-preview" aria-label="切詞預覽">
+                  <span v-for="chunk in grammarChunks" :key="`preview-${chunk.id}`"
+                    class="grammar-chunk-chip" :class="{ 'morph-chip': chunk.can_morph }">
+                    {{ chunk.text }}
+                  </span>
+                </div>
               </div>
               <div v-if="grammarChunks.length" class="form-group">
                 <label>字塊檢視（可編輯；勾選字塊可設定 MORPH 選項）</label>
@@ -1580,14 +1563,40 @@ const saveAllAndClose = () => {
   white-space: nowrap;
 }
 
-.grammar-error,
-.grammar-status {
+.grammar-chunk-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #d6e5f1;
+  border-radius: 12px;
+  background: #f7fbff;
+}
+
+.grammar-chunk-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid #b9ddf1;
+  border-radius: 999px;
+  background: #e8f6ff;
+  color: #155e87;
+  font-weight: 700;
+}
+
+.grammar-chunk-chip.morph-chip {
+  border-color: #d3b5f2;
+  background: #f4eaff;
+  color: #7136a7;
+}
+
+.grammar-error {
   margin: 10px 0 0;
   font-weight: 600;
 }
 
 .grammar-error { color: #d32f2f; }
-.grammar-status { color: #388e3c; }
 
 .ghost {
   opacity: 0.5;

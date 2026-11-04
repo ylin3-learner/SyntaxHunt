@@ -14,9 +14,6 @@ const logs = ref<LearningLog[]>([]);
 const isLoading = ref(true);
 const isClearing = ref(false);
 const expandedCode = ref<string | null>(null);
-const pendingDiagnosisCount = computed(() =>
-    logs.value.filter(log => log.status === 'PENDING').length
-);
 let learningLogsChannel: ReturnType<typeof supabase.channel> | undefined;
 
 const loadData = async (preserveRealtimeUpdates = true) => {
@@ -176,6 +173,8 @@ const sstDistribution = computed(() => {
         category,
         label: sstLabels[category],
         count: logs.value.filter(log =>
+            log.source !== 'languagetool'
+            &&
             log.error_code !== 'SUCCESS'
             && log.status !== 'PENDING'
             && inferSst(log) === category
@@ -208,6 +207,19 @@ const sstPieStyle = computed(() => {
       return { background: `conic-gradient(${segments.join(', ')})` };
 });
 
+const languageToolStats = computed(() => {
+    const grouped = new Map<string, { category: string; ruleId: string; count: number }>();
+    logs.value.filter(log => log.source === 'languagetool').forEach(log => {
+        const category = log.category || '未分類';
+        const ruleId = log.rule_id || log.error_code;
+        const key = `${category}\u0000${ruleId}`;
+        const item = grouped.get(key);
+        if (item) item.count += 1;
+        else grouped.set(key, { category, ruleId, count: 1 });
+    });
+    return [...grouped.values()].sort((left, right) => right.count - left.count);
+});
+
 interface SubNode {
     questionId: string;
     questionText: string;
@@ -225,6 +237,8 @@ interface ErrorNode {
 // 👇 核心邏輯：將資料分群成雙層結構，並加入克漏字上下文
 const errorTree = computed<ErrorNode[]>(() => {
     const errorLogs = logs.value.filter(log =>
+        log.source !== 'languagetool'
+        &&
         log.error_code !== 'SUCCESS' && log.status !== 'PENDING'
     );
     const counts: Record<string, { total: number; questions: Record<string, number> }> = {};
@@ -299,11 +313,8 @@ const errorTree = computed<ErrorNode[]>(() => {
 
             <div v-else class="stats-container">
                 <p class="subtitle">總計收集 {{ logs.length }} 筆學習紀錄（點擊展開錯誤題目）</p>
-                <p v-if="pendingDiagnosisCount > 0" class="ai-pending" role="status">
-                    ✨ AI 批改中... {{ pendingDiagnosisCount }} 筆答案處理中
-                </p>
 
-                <section class="sst-chart" aria-label="SST 錯誤比例">
+                <section class="sst-chart" aria-label="本地規則引擎錯誤比例">
                     <h3>SST 四類錯誤策略</h3>
                     <div class="sst-pie-layout">
                         <div class="sst-pie" :style="sstPieStyle" role="img" aria-label="四類錯誤比例圓餅圖">
@@ -315,6 +326,21 @@ const errorTree = computed<ErrorNode[]>(() => {
                                 <span>{{ item.label }}</span>
                                 <strong>{{ item.count }} 次（{{ item.percent }}%）</strong>
                             </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="language-tool-chart" aria-label="LanguageTool 原生錯誤統計">
+                    <h3>LanguageTool 原生分類與規則</h3>
+                    <p v-if="languageToolStats.length === 0" class="language-tool-empty">
+                        尚無 LanguageTool 診斷紀錄。
+                    </p>
+                    <div v-else class="language-tool-list">
+                        <div v-for="item in languageToolStats"
+                            :key="`${item.category}-${item.ruleId}`" class="language-tool-row">
+                            <span>{{ item.category }}</span>
+                            <code>{{ item.ruleId }}</code>
+                            <strong>{{ item.count }} 次</strong>
                         </div>
                     </div>
                 </section>
@@ -458,15 +484,6 @@ const errorTree = computed<ErrorNode[]>(() => {
     align-items: center;
 }
 
-.ai-pending {
-    margin: 0 0 16px;
-    padding: 12px 16px;
-    border-radius: 12px;
-    background: #fff7e6;
-    color: #8a5700;
-    font-weight: 700;
-}
-
 .subtitle {
     color: #777;
     margin-bottom: 24px;
@@ -490,6 +507,44 @@ const errorTree = computed<ErrorNode[]>(() => {
 .sst-chart h3 {
     margin: 0 0 14px;
     color: #333;
+}
+
+.language-tool-chart {
+    margin-bottom: 28px;
+    padding: 18px;
+    border: 1px solid #d5e0e8;
+    border-radius: 14px;
+    background: #f8fbfd;
+}
+
+.language-tool-chart h3 {
+    margin: 0 0 14px;
+    color: #333;
+}
+
+.language-tool-empty {
+    margin: 0;
+    color: #777;
+}
+
+.language-tool-list {
+    display: grid;
+    gap: 8px;
+}
+
+.language-tool-row {
+    display: grid;
+    grid-template-columns: minmax(100px, 1fr) minmax(120px, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.language-tool-row code {
+    color: #155e87;
+    overflow-wrap: anywhere;
 }
 
 .sst-pie-layout {

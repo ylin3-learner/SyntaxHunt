@@ -14,9 +14,8 @@ vi.mock('../src/utils/useSpeech', () => ({
 
 vi.mock('../src/services/CloudDatabase', () => ({
   CloudDatabase: {
-    lookupDiagnosis: vi.fn(async () => null),
-    createPendingDiagnosisLog: vi.fn(async () => 1),
-    diagnoseWithAI: vi.fn(),
+    checkLanguageTool: vi.fn(async () => []),
+    logEvent: vi.fn(),
   },
 }));
 
@@ -26,6 +25,7 @@ describe('GrammarCanvas', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+    vi.mocked(CloudDatabase.checkLanguageTool).mockResolvedValue([]);
   });
 
   it('lets students change a MORPH tile to an allowed answer form', async () => {
@@ -61,7 +61,7 @@ describe('GrammarCanvas', () => {
     wrapper.unmount();
   });
 
-  it('lets an unknown wrong answer proceed while AI diagnosis runs in the background', async () => {
+  it('uses LanguageTool for an incorrect answer that local rules cannot classify', async () => {
     const question: GrammarQuestionData = {
       id: 'unknown-error-test',
       type: 'grammar',
@@ -85,16 +85,113 @@ describe('GrammarCanvas', () => {
       await wrapper.find('.word-bank .tile').trigger('click');
     }
 
-    expect(wrapper.emitted('success')).toBeTruthy();
-    await vi.waitFor(() => {
-      expect(CloudDatabase.createPendingDiagnosisLog).toHaveBeenCalledWith(question.id);
-      expect(CloudDatabase.diagnoseWithAI).toHaveBeenCalledWith(
-        ['I', 'eat', 'pie'],
-        question.correctAnswer,
-        question,
-        1
-      );
+    await vi.waitFor(() => expect(CloudDatabase.checkLanguageTool).toHaveBeenCalledWith(
+      'I eat pie',
+      expect.any(AbortSignal)
+    ));
+    expect(wrapper.emitted('success')).toBeUndefined();
+    expect(wrapper.text()).toContain('進階文法檢查目前沒有其他建議');
+    expect(wrapper.find('.continue-button').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('lets students submit a partial answer to detect an omitted preposition', async () => {
+    const question: GrammarQuestionData = {
+      id: 'missing-word-test',
+      type: 'grammar',
+      ui_mode: 'BUILD',
+      targetNoun: 'I',
+      antecedent: { noun: 'I', number: 'singular', person: 'person' },
+      correctAnswer: ['I', 'eat', 'in', 'room'],
+      chunks: [
+        { id: 'i', text: 'I', draggable: true },
+        { id: 'eat', text: 'eat', draggable: true },
+        { id: 'room', text: 'room', draggable: true },
+      ],
+    };
+    const wrapper = mount(GrammarCanvas, {
+      props: { question, initialChunks: question.chunks },
     });
+
+    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
+    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
+    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
+    await wrapper.find('.check-answer-button').trigger('click');
+
+    expect(wrapper.text()).toContain('少了「in」');
+    expect(CloudDatabase.checkLanguageTool).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('maps LanguageTool offsets to the matching tile and displays its native suggestion', async () => {
+    vi.mocked(CloudDatabase.checkLanguageTool).mockResolvedValueOnce([{
+      message: 'Use the past tense.',
+      offset: 6,
+      length: 3,
+      replacements: [{ value: 'went' }],
+      rule: { id: 'HE_VERB_AGR', category: { name: 'Grammar' } },
+    }]);
+    const question: GrammarQuestionData = {
+      id: 'lt-offset-test',
+      type: 'grammar',
+      ui_mode: 'BUILD',
+      targetNoun: 'I',
+      antecedent: { noun: 'I', number: 'singular', person: 'person' },
+      correctAnswer: ['I', 'eat', 'cake'],
+      chunks: [
+        { id: 'i', text: 'I', draggable: true },
+        { id: 'eat', text: 'eat', draggable: true },
+        { id: 'pie', text: 'pie', draggable: true },
+      ],
+    };
+    const wrapper = mount(GrammarCanvas, {
+      props: { question, initialChunks: question.chunks },
+    });
+
+    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
+    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
+    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
+    await vi.waitFor(() => expect(wrapper.text()).toContain('Use the past tense.'));
+
+    expect(wrapper.find('.answer-area .tile-error').text()).toBe('pie');
+    expect(wrapper.text()).toContain('HE_VERB_AGR');
+    expect(wrapper.text()).toContain('went');
+    expect(CloudDatabase.logEvent).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'languagetool',
+      category: 'Grammar',
+      rule_id: 'HE_VERB_AGR',
+    }));
+    wrapper.unmount();
+  });
+
+  it('lets students continue to the next question when LanguageTool times out', async () => {
+    vi.useFakeTimers();
+    vi.mocked(CloudDatabase.checkLanguageTool).mockImplementationOnce(() => new Promise(() => {}));
+    const question: GrammarQuestionData = {
+      id: 'lt-timeout-test',
+      type: 'grammar',
+      ui_mode: 'BUILD',
+      targetNoun: 'I',
+      antecedent: { noun: 'I', number: 'singular', person: 'person' },
+      correctAnswer: ['I', 'eat', 'cake'],
+      chunks: [
+        { id: 'i', text: 'I', draggable: true },
+        { id: 'eat', text: 'eat', draggable: true },
+        { id: 'pie', text: 'pie', draggable: true },
+      ],
+    };
+    const wrapper = mount(GrammarCanvas, {
+      props: { question, initialChunks: question.chunks },
+    });
+
+    for (const _chunk of question.chunks) {
+      await wrapper.find('.word-bank .tile').trigger('click');
+    }
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(wrapper.text()).toContain('系統連線中，暫無法提供進階文法建議');
+    await wrapper.find('.continue-button').trigger('click');
+    expect(wrapper.emitted('continue')).toBeTruthy();
     wrapper.unmount();
   });
 

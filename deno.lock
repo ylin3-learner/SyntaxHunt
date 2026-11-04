@@ -25,6 +25,8 @@
         "npm:@vitejs/plugin-vue@5",
         "npm:@vitest/coverage-v8@2",
         "npm:@vue/test-utils@^2.4.0",
+        "npm:compromise@^14.19.0",
+        "npm:english-verbs-irregular@^3.4.0",
         "npm:fastest-levenshtein@^1.0.16",
         "npm:gh-pages@^6.3.0",
         "npm:html2canvas@^1.4.1",

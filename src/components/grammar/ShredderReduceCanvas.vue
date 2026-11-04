@@ -11,6 +11,7 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'success'): void;
   (e: 'misconception', code: string): void;
+  (e: 'continue'): void;
 }>();
 </script>
 
@@ -20,7 +21,8 @@ const emit = defineEmits<{
       <span>保留必要結構</span><span class="shredder-icon">▤</span><span>碎紙機：移除多餘片語</span>
     </div>
     <LegacyGrammarCanvas :question="question" :initial-chunks="initialChunks" :speech-rate="speechRate"
-      @success="emit('success')" @misconception="emit('misconception', $event)" />
+      @success="emit('success')" @misconception="emit('misconception', $event)"
+      @continue="emit('continue')" />
   </section>
 </template>
 

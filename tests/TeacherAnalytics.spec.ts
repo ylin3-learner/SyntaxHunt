@@ -3,18 +3,27 @@ import { flushPromises, mount } from '@vue/test-utils';
 import TeacherAnalytics from '../src/components/TeacherAnalytics.vue';
 
 const realtime = vi.hoisted(() => ({ callback: undefined as unknown }));
-const pendingLog = {
+const localLog = {
   id: 7,
   student_name: '匿名學生',
-  question_id: 'q-async',
-  error_code: 'UNKNOWN_ERROR',
+  question_id: 'q-local',
+  error_code: 'R:VERB:FORM',
   sst: 'Misformation' as const,
-  status: 'PENDING' as const,
+  source: 'local' as const,
+};
+const languageToolLog = {
+  id: 8,
+  student_name: '匿名學生',
+  question_id: 'q-language-tool',
+  error_code: 'HE_VERB_AGR',
+  source: 'languagetool' as const,
+  category: 'Grammar',
+  rule_id: 'HE_VERB_AGR',
 };
 
 vi.mock('../src/services/CloudDatabase', () => ({
   CloudDatabase: {
-    fetchLogs: vi.fn(async () => [pendingLog]),
+    fetchLogs: vi.fn(async () => [localLog, languageToolLog]),
     clearAllLogs: vi.fn(async () => true),
   },
 }));
@@ -40,12 +49,14 @@ describe('TeacherAnalytics realtime diagnosis updates', () => {
     vi.clearAllMocks();
   });
 
-  it('shows pending AI work and refreshes the error chart when the log completes', async () => {
+  it('separates local SST data from LanguageTool categories and rule IDs', async () => {
     const wrapper = mount(TeacherAnalytics, { props: { questionBank: [] } });
     await flushPromises();
 
-    expect(wrapper.text()).toContain('AI 批改中');
-    expect(wrapper.text()).not.toContain('1 次（100%）');
+    expect(wrapper.text()).toContain('動詞形式錯誤');
+    expect(wrapper.text()).toContain('HE_VERB_AGR');
+    expect(wrapper.text()).toContain('Grammar');
+    expect(wrapper.text()).toContain('1 次（100%）');
 
     const receive = realtime.callback as (payload: {
       eventType: string;
@@ -54,13 +65,14 @@ describe('TeacherAnalytics realtime diagnosis updates', () => {
     }) => void;
     receive({
       eventType: 'UPDATE',
-      new: { ...pendingLog, error_code: 'R:VERB:FORM', status: 'SUCCESS' },
-      old: pendingLog,
+      new: { ...languageToolLog, category: 'Style', rule_id: 'STYLE_WORDINESS' },
+      old: languageToolLog,
     });
     await flushPromises();
 
-    expect(wrapper.text()).not.toContain('AI 批改中');
-    expect(wrapper.text()).toContain('形式錯誤');
+    expect(wrapper.text()).toContain('STYLE_WORDINESS');
+    expect(wrapper.text()).toContain('Style');
+    expect(wrapper.text()).not.toContain('HE_VERB_AGR');
     expect(wrapper.text()).toContain('1 次（100%）');
     wrapper.unmount();
   });

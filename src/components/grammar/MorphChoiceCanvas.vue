@@ -13,6 +13,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'success'): void;
   (e: 'misconception', code: string): void;
+  (e: 'continue'): void;
 }>();
 
 const selectedForms = reactive<Record<string, string>>({});
@@ -112,7 +113,7 @@ const strategyHint = computed(() => props.strategy === 'timeline'
     </p>
     <LegacyGrammarCanvas :key="canvasKey" :question="question" :initial-chunks="adjustedChunks"
       :speech-rate="speechRate" @success="emit('success')"
-      @misconception="emit('misconception', $event)" />
+      @misconception="emit('misconception', $event)" @continue="emit('continue')" />
   </section>
 </template>
 

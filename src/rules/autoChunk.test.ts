@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoChunk, defaultUiModeForConcept } from './autoChunk';
+import { autoChunk, defaultUiModeForConcept, getVerbForms } from './autoChunk';
 
 describe('autoChunk', () => {
   it('keeps bracketed phrases as a single chunk before applying other tokenization', () => {
@@ -26,6 +26,13 @@ describe('autoChunk', () => {
     );
   });
 
+  it('does not morph a manually bracketed phrase', () => {
+    const chunks = autoChunk('He [is carrying a dictionary].', 'PAST_TENSE');
+
+    expect(chunks[1].text).toBe('[is carrying a dictionary].');
+    expect(chunks[1].can_morph).toBeUndefined();
+  });
+
   it('adds known inflection choices for morphology concepts only', () => {
     const morphChunks = autoChunk('He went home.', 'TENSE_ASPECT');
     const buildChunks = autoChunk('He went home.', 'QUESTION_FORM');
@@ -38,8 +45,26 @@ describe('autoChunk', () => {
     expect(buildChunks[1].can_morph).toBeUndefined();
   });
 
+  it('uses the irregular verb table first and compromise for regular verbs', () => {
+    expect(getVerbForms('went')).toMatchObject({
+      infinitive: 'go',
+      present: 'goes',
+      past: 'went',
+      participle: 'gone',
+      gerund: 'going',
+    });
+    expect(getVerbForms('walked')).toMatchObject({
+      infinitive: 'walk',
+      present: 'walks',
+      past: 'walked',
+      participle: 'walked',
+      gerund: 'walking',
+    });
+  });
+
   it('chooses a default interaction mode for each supported concept', () => {
     expect(defaultUiModeForConcept('TENSE_ASPECT')).toBe('MORPH');
+    expect(defaultUiModeForConcept('PAST_TENSE')).toBe('MORPH');
     expect(defaultUiModeForConcept('ADJECTIVE_CLAUSE')).toBe('REDUCE');
     expect(defaultUiModeForConcept('QUESTION_FORM')).toBe('BUILD');
   });

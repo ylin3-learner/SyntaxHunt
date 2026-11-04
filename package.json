@@ -24,6 +24,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
+    "compromise": "^14.19.0",
+    "english-verbs-irregular": "^3.4.0",
     "fastest-levenshtein": "^1.0.16",
     "html2canvas": "^1.4.1",
     "vue": "^3.4.0",

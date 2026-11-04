@@ -26,7 +26,8 @@ export type GrammarConcept =
   | 'INVERSION'
   | 'SUBJUNCTIVE'
   | 'CONDITIONALS'
-  | 'MODAL_VERB';
+  | 'MODAL_VERB'
+  | 'PAST_TENSE';
 
 /** 統一的錯誤代碼定義 (結合 ERRANT 標準與自訂擴充) */
 export type DiagnosticCode =
@@ -40,14 +41,37 @@ export type DiagnosticCode =
   | 'R:RELATIVE' // 加入這個，解決 TS 報錯
   | 'U:PRON' | 'U:VERB' | 'U:RELATIVE' | 'U:CONJ'
   | 'O:WRONG_ORDER' | 'O:INVERSION'
-  | 'UNKNOWN_ERROR';                     // 未知錯誤 (Fallback 給 AI 處理)
+  | 'UNKNOWN_ERROR';                     // 本地規則無法分類，交由進階診斷處理
+
+export interface LanguageToolDiagnosticData {
+  message: string;
+  offset: number;
+  length: number;
+  replacements: Array<{
+    value: string;
+    context?: { text: string; offset: number; length: number };
+  }>;
+  rule: {
+    id: string;
+    description?: string;
+    category: { id?: string; name: string };
+  };
+  context?: { text: string; offset: number; length: number };
+}
 
 export interface DiagnosticSignal {
-  code: DiagnosticCode;
-  sst: SSTCategory; // 認知策略分類
-  index: number;    // 錯誤發生的字塊索引 (用於 UI 標紅)
-  message: string;  // 給學生看的白話文解釋
-  hint?: string;    // 進階提示
+  code: string;
+  sst?: SSTCategory;
+  index?: number;
+  message: string;
+  hint?: string;
+  source?: 'local' | 'languagetool';
+  ruleId?: string;
+  category?: string;
+  offset?: number;
+  length?: number;
+  replacements?: Array<{ value: string; context?: { text: string; offset: number; length: number } }>;
+  nativeMatch?: LanguageToolDiagnosticData;
 }
 
 // ==========================================

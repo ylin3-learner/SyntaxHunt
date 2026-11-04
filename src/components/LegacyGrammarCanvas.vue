@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { diagnoseGrammar } from '../rules/grammarRules';
+import { mapOffsetToChunkIndex } from '../rules/adapter';
 import type { DiagnosticSignal, GrammarQuestionData, Chunk } from '../rules/types';
 import { useSound } from '../utils/useSound';
 import { useTTS } from '../utils/useSpeech';
-import { CloudDatabase } from '../services/CloudDatabase';
+import { CloudDatabase, type LanguageToolMatch } from '../services/CloudDatabase';
 
 const { playError, playSuccess } = useSound();
 const { speak } = useTTS();
@@ -18,16 +19,22 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'success'): void;
   (e: 'misconception', code: string): void;
+  (e: 'continue'): void;
 }>();
 
 // 將字塊轉換為 UI 狀態
 const answerArea = ref<Chunk[]>([]);
 const trashArea = ref<Chunk[]>([]);
 const wordBank = ref<Chunk[]>([]);
+const answerSlotCount = computed(() =>
+  Math.max(props.question.correctAnswer.length, answerArea.value.length)
+);
 const signals = ref<DiagnosticSignal[]>([]);
 const isSuccess = ref(false);
 const isWrong = ref(false);
 const remoteStatus = ref('');
+const canContinue = ref(false);
+const isCheckingLanguageTool = ref(false);
 
 // 處理展開變形選單的狀態
 const activeMorphId = ref<string | null>(null);
@@ -49,9 +56,13 @@ initTiles();
 
 let diagnosisRequest = 0;
 let successTimeout: ReturnType<typeof setTimeout> | undefined;
+let activeDiagnosisController: AbortController | undefined;
+let diagnosisTimeout: ReturnType<typeof setTimeout> | undefined;
 
 onBeforeUnmount(() => {
   diagnosisRequest++;
+  activeDiagnosisController?.abort();
+  if (diagnosisTimeout) clearTimeout(diagnosisTimeout);
   if (successTimeout) clearTimeout(successTimeout);
 });
 
@@ -118,12 +129,18 @@ const unselectTile = (tile: Chunk) => {
 
 const resetState = () => {
   diagnosisRequest++;
+  activeDiagnosisController?.abort();
+  activeDiagnosisController = undefined;
+  if (diagnosisTimeout) clearTimeout(diagnosisTimeout);
+  diagnosisTimeout = undefined;
   isWrong.value = false;
   signals.value = [];
   remoteStatus.value = '';
+  canContinue.value = false;
+  isCheckingLanguageTool.value = false;
 };
 
-const checkAnswer = async () => {
+const checkAnswer = async (force = false) => {
   const studentTokens = answerArea.value.map(t => t.text);
   const correctTokens = props.question.correctAnswer;
 
@@ -144,10 +161,12 @@ const checkAnswer = async () => {
     return;
   }
 
-  if (props.question.ui_mode !== 'REDUCE' && studentTokens.length < correctTokens.length) return;
+  if (!force && props.question.ui_mode !== 'REDUCE' && studentTokens.length < correctTokens.length) return;
   const requestId = ++diagnosisRequest;
   const localSignals = diagnoseGrammar(studentTokens, correctTokens, props.question);
-  const definiteSignals = localSignals.filter(signal => signal.code !== 'UNKNOWN_ERROR');
+  const definiteSignals = localSignals
+    .filter(signal => signal.code !== 'UNKNOWN_ERROR')
+    .map(signal => ({ ...signal, source: 'local' as const }));
 
   if (definiteSignals.length > 0) {
     signals.value = definiteSignals;
@@ -156,34 +175,88 @@ const checkAnswer = async () => {
     return;
   }
 
-  if (localSignals.some(signal => signal.code === 'UNKNOWN_ERROR')) {
-    diagnosisRequest++;
-    isSuccess.value = true;
-    playSuccess();
-    emit('success');
-    void queueBackgroundDiagnosis([...studentTokens], [...correctTokens]);
-    return;
-  }
+  const controller = new AbortController();
+  activeDiagnosisController = controller;
+  remoteStatus.value = '正在連線檢查進階文法…';
+  canContinue.value = false;
+  isCheckingLanguageTool.value = true;
+  let timedOut = false;
+  let requestTimeout: ReturnType<typeof setTimeout> | undefined;
+  const submittedText = studentTokens.map(token => token.replace(/[\[\]]/g, '')).join(' ');
+  const timeout = new Promise<never>((_, reject) => {
+    requestTimeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      reject(new Error('LanguageTool request timed out.'));
+    }, 3000);
+    diagnosisTimeout = requestTimeout;
+  });
 
-  if (requestId !== diagnosisRequest) return;
-};
-
-const queueBackgroundDiagnosis = async (
-  studentTokens: string[],
-  correctTokens: string[]
-) => {
   try {
-    const logId = await CloudDatabase.createPendingDiagnosisLog(props.question.id);
-    await CloudDatabase.diagnoseWithAI(
-      studentTokens,
-      correctTokens,
-      props.question,
-      logId
+    const matches = await Promise.race([
+      CloudDatabase.checkLanguageTool(submittedText, controller.signal),
+      timeout,
+    ]);
+    if (requestId !== diagnosisRequest) return;
+
+    const languageToolSignals = matches.map(match =>
+      toLanguageToolSignal(match, submittedText, studentTokens)
     );
+    signals.value = languageToolSignals;
+    if (languageToolSignals.length > 0) {
+      playError();
+      languageToolSignals.forEach(signal => {
+        void CloudDatabase.logEvent({
+          student_name: '匿名學生',
+          question_id: props.question.id,
+          error_code: signal.ruleId || signal.code,
+          source: 'languagetool',
+          category: signal.category,
+          rule_id: signal.ruleId,
+          diagnosis: signal,
+        });
+      });
+      remoteStatus.value = '';
+    } else {
+      remoteStatus.value = '進階文法檢查目前沒有其他建議，請再檢查答案。';
+      canContinue.value = true;
+    }
   } catch (error) {
-    console.error('背景 AI 文法診斷失敗:', error);
+    if (requestId !== diagnosisRequest) return;
+    if (!timedOut) console.error('LanguageTool 診斷失敗:', error);
+    remoteStatus.value = '系統連線中，暫無法提供進階文法建議';
+    canContinue.value = true;
+  } finally {
+    if (requestTimeout) clearTimeout(requestTimeout);
+    if (diagnosisTimeout === requestTimeout) diagnosisTimeout = undefined;
+    if (activeDiagnosisController === controller) {
+      activeDiagnosisController = undefined;
+      isCheckingLanguageTool.value = false;
+    }
   }
 };
+
+const toLanguageToolSignal = (
+  match: LanguageToolMatch,
+  submittedText: string,
+  submittedChunks: string[]
+): DiagnosticSignal => ({
+  code: match.rule.id,
+  source: 'languagetool',
+  ruleId: match.rule.id,
+  category: match.rule.category?.name,
+  offset: match.offset,
+  length: match.length,
+  index: mapOffsetToChunkIndex(
+    submittedText,
+    match.offset,
+    match.length,
+    submittedChunks.map(token => token.replace(/[\[\]]/g, ''))
+  ),
+  message: match.message,
+  replacements: match.replacements,
+  nativeMatch: match,
+});
 
 const isError = (index: number) => signals.value.some(s => s.index === index);
 
@@ -219,7 +292,7 @@ const handleOutsideClick = () => {
     <!-- 作答區 -->
     <div class="answer-area" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
       <template v-if="question.ui_mode !== 'REDUCE'">
-        <div v-for="(slot, index) in question.correctAnswer.length" :key="index" class="answer-slot">
+        <div v-for="(_, index) in answerSlotCount" :key="index" class="answer-slot">
           <div v-if="answerArea[index]" class="tile-wrapper">
             <div class="tile" :class="{
               'tile-error': isError(index),
@@ -255,17 +328,40 @@ const handleOutsideClick = () => {
         </div>
       </template>
     </div>
+    <button v-if="question.ui_mode !== 'REDUCE' && answerArea.length > 0
+      && answerArea.length < question.correctAnswer.length && signals.length === 0
+      && !isCheckingLanguageTool"
+      type="button" class="check-answer-button" @click.stop="checkAnswer(true)">
+      檢查目前答案
+    </button>
 
     <!-- 錯誤提示 -->
     <div v-if="signals.length > 0" class="alert-bubble">
       <div class="alert-icon">⚠️</div>
       <div class="alert-messages">
-        <p v-for="s in signals" :key="s.code">{{ s.message }}</p>
-        <p v-if="signals[0].hint" class="hint-text">💡 {{ signals[0].hint }}</p>
+        <div v-for="(s, index) in signals" :key="`${s.code}-${index}`">
+          <p>{{ s.message }}</p>
+          <p v-if="s.category" class="diagnosis-meta">
+            {{ s.source === 'languagetool' ? 'LanguageTool' : '本地診斷' }} · {{ s.category }}
+            <span v-if="s.ruleId"> · {{ s.ruleId }}</span>
+          </p>
+          <p v-if="s.replacements?.length" class="diagnosis-replacements">
+            建議：<span v-for="replacement in s.replacements.slice(0, 5)" :key="replacement.value">
+              {{ replacement.value }}
+            </span>
+          </p>
+          <p v-if="s.hint" class="hint-text">💡 {{ s.hint }}</p>
+        </div>
       </div>
     </div>
     <div v-else-if="isWrong" class="gentle-alert">
       <p>順序好像不太對喔，點擊字磚退回重排看看！</p>
+    </div>
+    <div v-if="remoteStatus" class="remote-status" role="status" :aria-busy="!canContinue">
+      <span>{{ remoteStatus }}</span>
+      <button v-if="canContinue" type="button" class="continue-button" @click="emit('continue')">
+        下一題（略過）
+      </button>
     </div>
 
     <!-- 垃圾桶 (Reduce) -->
@@ -364,6 +460,58 @@ const handleOutsideClick = () => {
   font-weight: bold;
   cursor: pointer;
   z-index: 2;
+}
+
+.remote-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #f1f3f5;
+  color: #68717b;
+}
+
+.check-answer-button {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: 1px solid #b9ddf1;
+  border-radius: 8px;
+  background: #e8f6ff;
+  color: #155e87;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.diagnosis-meta {
+  margin: 4px 0;
+  color: #68717b;
+  font-size: .85rem;
+}
+
+.diagnosis-replacements {
+  margin: 6px 0;
+}
+
+.diagnosis-replacements span {
+  display: inline-block;
+  margin: 2px 6px 2px 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e7f5ff;
+  color: #155e87;
+}
+
+.continue-button {
+  padding: 8px 14px;
+  border: 1px solid #c5cbd1;
+  border-radius: 8px;
+  background: #fff;
+  color: #4b5560;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .tile {
