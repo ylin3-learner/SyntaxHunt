@@ -197,6 +197,17 @@ sequenceDiagram
 - **Funnel-Based Authoring**: Wrap phrases in `[ ]`. Visualizes "Kept" and "Discarded" words. If a verb needs to become a preposition, edit the green box.
 - **Master Remote Control**: Push questions, force-reset timers, and add time (`+30s`) instantly.
 
+### Using general grammar questions
+
+1. Open **Teacher Admin** and select **General Grammar** in the question editor.
+2. Choose a grammar concept and interaction mode. The concept supplies a default mode, which can be changed.
+3. Enter the source sentence and the exact target answer. For `REDUCE`, enter the complete sentence as the source and the reduced sentence as the answer.
+4. Click **Deterministic auto-chunk** or split the sentence manually. Bracket a multi-word chunk in the source, e.g. `[in a blue uniform]`. Review the generated chunks before using them.
+5. For `MORPH`, mark each changeable chunk and provide its comma-separated forms (e.g. `go, goes, went`). The auto-chunker recognizes only a small built-in vocabulary; add or correct forms manually.
+6. Click **Add to question bank**. Click **Send to class** on that question to make it active, or click **Finish prep** to save the bank and close the editor (reopen Teacher Admin to push it later). Students answer by clicking tiles: assemble in `BUILD`, remove tiles in `REDUCE`, and select forms in `MORPH`.
+
+> **Teacher access note:** The current frontend demo checks the fixed password `admin123`; the `TEACHER_PASSWORD` Supabase secret does not configure this check. This is not secure authentication—do not expose the demo as a public or production teacher console.
+
 ---
 
 ## 🔬 Grammar Rule Engine & Diagnosis
@@ -230,12 +241,33 @@ The registry is the **local diagnosis plugin point**, not the question authoring
    | `BUILD` | Magnetic sentence slots |
    | No concept or an unmatched combination | Legacy canvas |
 
-   ![Illustrative student game UI for a tense MORPH question](docs/images/adaptive-grammar-game-ui.svg)
+   The gallery shows **illustrative UI mockups, not live application screenshots**. The student's actual canvas is routed as above; interaction tiles are selected by clicking, not dragging.
 
-   *Illustrative UI, not a live application screenshot. The actual canvas, prompt, and chunks depend on the selected question.*
+   | `BUILD` — assemble sentence chunks | `REDUCE` — remove unnecessary chunks |
+   | :---: | :---: |
+   | ![BUILD sentence assembly UI illustration](docs/images/grammar-build-ui.svg) | ![REDUCE sentence reduction UI illustration](docs/images/grammar-reduce-ui.svg) |
+
+   | `MORPH` — select a tense or verb form | `MODAL_VERB` — choose a modal strength |
+   | :---: | :---: |
+   | ![Tense MORPH and sentence assembly UI illustration](docs/images/adaptive-grammar-game-ui.svg) | ![Modal verb strength gauge UI illustration](docs/images/grammar-modal-ui.svg) |
 3. **Diagnosis:** After submission, `diagnoseGrammar` runs general validators plus validators registered for that question's concept. `grammarRules.ts` eagerly loads `src/rules/validators/*.ts`; each plugin calls `registerGrammarRule` with an ID, validator, and optional concept list. For example, conjunction rules target clause concepts, inversion targets question/inversion concepts, and modal-form checks target `MODAL_VERB`. A definite local signal drives the existing misconception feedback/logging; if no rule diagnoses the answer, token alignment classifies the difference, and an `UNKNOWN_ERROR` can enter the asynchronous AI fallback.
 
 Therefore, adding a validator changes local diagnosis only. It does not automatically add a teacher form field or a new visual interaction; those require updates to the concept/type list, authoring controls, and/or canvas routing as appropriate. For a new validator, add a file under `src/rules/validators/` and register it; keep the ID unique.
+
+### Does the current UI cover `Grammar_Scope.md`?
+
+The authoring form exposes every concept listed in the scope, but that does **not** mean every grammatical distinction is modeled or diagnosed exhaustively. Current coverage is:
+
+| Scope topic | Current interaction | Coverage and limitation |
+| :--- | :--- | :--- |
+| Sentence units, S/V/O/C, five sentence patterns | `BUILD` | Can assemble a keyed sentence; it does not label grammatical roles or model each pattern as a distinct task. |
+| Subject-verb agreement; tense and aspect | `MORPH` or `BUILD` | Supports configured alternatives and exact-answer checking. Auto-generated forms use a small vocabulary; the timeline does not fully model all tense/aspect combinations. |
+| Questions and inversion | `BUILD` | Can assemble a question/inverted sentence. Local inversion diagnosis is heuristic, not a general question parser. |
+| Connectors; noun, adjective, and adverb clauses | `BUILD` / `REDUCE` | Can assemble or reduce teacher-authored chunks. Chunking uses a small phrase dictionary and does not represent clause boundaries or roles explicitly. |
+| Subjunctive mood and conditionals | `MORPH` / `BUILD` | Can practice supplied forms and sentence order, but there is no dedicated two-clause conditional interaction; local mood diagnosis covers only narrow patterns. |
+| Modal verbs (an additional concept beyond the current scope list) | Modal-strength gauge plus `BUILD` | The gauge presents an approximate strength order; it does not capture all context-dependent modal meanings. Local checking focuses on the base form after a modal. |
+
+**Recommendation:** A new top-level game mode is not necessary to start teaching these topics: `BUILD`, `REDUCE`, and `MORPH` already provide the basic assemble/remove/change-form actions. However, the current UI is not enough to claim complete K–12 grammar coverage. Prioritize improvements within those modes—explicit S/V/O/C and clause scaffolds, richer tense/aspect choices, and paired-clause conditional prompts—along with broader validators. Add a separate game type only if those concepts need interaction that cannot be expressed as chunk assembly, removal, or form selection.
 
 ### Implementation and rollout status (2026-11-03)
 
