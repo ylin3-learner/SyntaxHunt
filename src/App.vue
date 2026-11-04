@@ -393,7 +393,7 @@ const logoutAdmin = () => {
     </Transition>
 
     <header>
-      <h1>🕵️ Anime Character Hunter</h1>
+      <h1>🕵️ SyntaxHunt</h1>
 
       <div class="header-controls">
         <div class="status-group">

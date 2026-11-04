@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import type { Chunk, GrammarConcept, QuestionData, UIMode } from '../rules/types';
 import { autoChunk, defaultUiModeForConcept } from '../rules/autoChunk';
 import { useClassroomSync } from '../composables/useClassroomSync';
+import QuestionFlow from './QuestionFlow.vue';
 
 const props = defineProps<{ currentQuestions: QuestionData[]; }>();
 
@@ -15,6 +16,7 @@ const grammarAnswer = ref('');
 const grammarChunks = ref<Chunk[]>([]);
 const grammarError = ref('');
 const isQuestionsExpanded = ref(true);
+const showQuestionFlow = ref(false);
 
 // 👈 新增：控制班級控制面板的收合狀態
 const isClassPanelExpanded = ref(true);
@@ -45,6 +47,11 @@ const emit = defineEmits<{
 }>();
 
 const localQuestions = ref<QuestionData[]>(JSON.parse(JSON.stringify(props.currentQuestions)));
+watch(() => props.currentQuestions, (questions) => {
+  if (localQuestions.value.length === 0 && questions.length > 0) {
+    localQuestions.value = JSON.parse(JSON.stringify(questions));
+  }
+}, { deep: true });
 
 const editingId = ref<string | null>(null);
 const questionType = ref<'standard' | 'contrast' | 'chunk' | 'grammar'>('standard');
@@ -107,6 +114,7 @@ const resetForm = () => {
 };
 
 const editQuestion = (q: QuestionData) => {
+  showQuestionFlow.value = false;
   if (q.type === 'grammar') {
     editingId.value = q.id;
     questionType.value = 'grammar';
@@ -198,15 +206,6 @@ const deleteQuestion = (id: string) => {
     localQuestions.value = localQuestions.value.filter(q => q.id !== id);
     if (editingId.value === id) resetForm();
   }
-};
-
-const moveQuestion = (index: number, direction: -1 | 1) => {
-  const targetIndex = index + direction;
-  const question = localQuestions.value[index];
-  if (targetIndex < 0 || targetIndex >= localQuestions.value.length || !question) return;
-
-  localQuestions.value.splice(index, 1);
-  localQuestions.value.splice(targetIndex, 0, question);
 };
 
 const triggerUpload = (target: 'noun' | 'distractor' | 'modifier') => {
@@ -463,18 +462,28 @@ const saveAllAndClose = () => {
   emit('update', localQuestions.value);
   emit('close');
 };
+
+const openQuestionEdit = (id: string) => {
+  const question = localQuestions.value.find(item => item.id === id);
+  if (question) editQuestion(question);
+};
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="admin-modal">
+    <QuestionFlow v-if="showQuestionFlow" :questions="localQuestions" :selected-id="editingId"
+      @reorder="localQuestions = $event" @edit="openQuestionEdit" @back="showQuestionFlow = false" />
+    <div v-else class="admin-modal">
       <div class="admin-layout">
         <!-- 左側邊欄 -->
         <div class="sidebar">
           <!-- 1. 固定頭部 -->
           <div class="sidebar-header">
             <h2>📚 課前備課中心</h2>
-            <p>點擊題目編輯，或點擊「發送」讓全班跳轉。</p>
+            <p>編輯題目，或用流程畫布直覺調整作答順序。</p>
+            <button type="button" class="btn-flow" @click="showQuestionFlow = true">
+              🧩 開啟流程編排 <span>{{ localQuestions.length }}</span>
+            </button>
           </div>
 
           <!-- 2. 可折疊的班級控制 -->
@@ -523,14 +532,6 @@ const saveAllAndClose = () => {
                       </span>
                       <span v-if="q.isTimed" class="q-time-tag">🔴 {{ q.timeLimit || 60 }}s</span>
                       <span v-else class="q-free-tag">🟢 自由</span>
-                      <div class="q-order-actions">
-                        <button class="btn-order" type="button" :disabled="index === 0"
-                          :aria-label="`將第 ${index + 1} 關上移`" title="上移題目"
-                          @click.stop="moveQuestion(index, -1)">↑</button>
-                        <button class="btn-order" type="button" :disabled="index === localQuestions.length - 1"
-                          :aria-label="`將第 ${index + 1} 關下移`" title="下移題目"
-                          @click.stop="moveQuestion(index, 1)">↓</button>
-                      </div>
                     </div>
                     <div class="q-content">
                       <span class="q-noun">{{ q.targetNoun }}</span>
@@ -886,7 +887,7 @@ const saveAllAndClose = () => {
               </div>
             </template>
             </template>
-          </div>
+            </div>
 
           <div class="editor-footer">
             <button v-if="isEditing" class="btn-cancel" @click="resetForm">取消</button>
@@ -921,7 +922,7 @@ const saveAllAndClose = () => {
 .admin-layout {
   display: flex;
   width: 90vw;
-  max-width: 1000px;
+  max-width: 1440px;
   height: 85vh;
   background: #ffffff;
   border-radius: 24px;
@@ -976,6 +977,36 @@ const saveAllAndClose = () => {
   font-size: 0.85rem;
   color: #777;
   line-height: 1.5;
+}
+
+.btn-flow {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding: 10px 12px;
+  border: 1px solid #bae6fd;
+  border-radius: 9px;
+  background: #f0f9ff;
+  color: #0369a1;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-flow:hover {
+  border-color: #38bdf8;
+  background: #e0f2fe;
+}
+
+.btn-flow span {
+  display: grid;
+  min-width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 0.75rem;
 }
 
 /* 班級控制面板 (可折疊) */
@@ -1419,36 +1450,6 @@ const saveAllAndClose = () => {
   border-radius: 4px;
   background: #e6f7e6;
   color: #58cc02;
-}
-
-.q-order-actions {
-  display: flex;
-  gap: 4px;
-  margin-left: auto;
-}
-
-.btn-order {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #475569;
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.btn-order:hover:not(:disabled) {
-  border-color: #1cb0f6;
-  background: #e6f7ff;
-  color: #0284c7;
-}
-
-.btn-order:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .q-actions {
