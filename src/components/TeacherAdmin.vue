@@ -2,7 +2,6 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import type { Chunk, GrammarConcept, QuestionData, UIMode } from '../rules/types';
 import { autoChunk, defaultUiModeForConcept } from '../rules/autoChunk';
-import { VueDraggable } from 'vue-draggable-plus';
 import { useClassroomSync } from '../composables/useClassroomSync';
 
 const props = defineProps<{ currentQuestions: QuestionData[]; }>();
@@ -199,6 +198,15 @@ const deleteQuestion = (id: string) => {
     localQuestions.value = localQuestions.value.filter(q => q.id !== id);
     if (editingId.value === id) resetForm();
   }
+};
+
+const moveQuestion = (index: number, direction: -1 | 1) => {
+  const targetIndex = index + direction;
+  const question = localQuestions.value[index];
+  if (targetIndex < 0 || targetIndex >= localQuestions.value.length || !question) return;
+
+  localQuestions.value.splice(index, 1);
+  localQuestions.value.splice(targetIndex, 0, question);
 };
 
 const triggerUpload = (target: 'noun' | 'distractor' | 'modifier') => {
@@ -501,13 +509,11 @@ const saveAllAndClose = () => {
             </div>
             <div class="list-wrapper" v-show="isQuestionsExpanded">
               <div class="question-list">
-                <VueDraggable v-model="localQuestions" :animation="150" ghostClass="ghost" handle=".drag-handle"
-                  class="question-list-inner">
+                <div class="question-list-inner">
                   <div v-for="(q, index) in localQuestions" :key="q.id" class="question-item"
                     :class="{ active: editingId === q.id }" @click="editQuestion(q)">
 
                     <div class="q-index">
-                      <div class="drag-handle" title="按住拖曳排序">⋮⋮</div>
                       第 {{ index + 1 }} 關
                       <span class="q-type-tag" :class="q.type">
                         {{ q.type === 'contrast' ? '對比題' : q.type === 'chunk' ? '片語題' : '標準題' }}
@@ -517,6 +523,14 @@ const saveAllAndClose = () => {
                       </span>
                       <span v-if="q.isTimed" class="q-time-tag">🔴 {{ q.timeLimit || 60 }}s</span>
                       <span v-else class="q-free-tag">🟢 自由</span>
+                      <div class="q-order-actions">
+                        <button class="btn-order" type="button" :disabled="index === 0"
+                          :aria-label="`將第 ${index + 1} 關上移`" title="上移題目"
+                          @click.stop="moveQuestion(index, -1)">↑</button>
+                        <button class="btn-order" type="button" :disabled="index === localQuestions.length - 1"
+                          :aria-label="`將第 ${index + 1} 關下移`" title="下移題目"
+                          @click.stop="moveQuestion(index, 1)">↓</button>
+                      </div>
                     </div>
                     <div class="q-content">
                       <span class="q-noun">{{ q.targetNoun }}</span>
@@ -528,7 +542,7 @@ const saveAllAndClose = () => {
                       <button class="btn-delete" @click.stop="deleteQuestion(q.id)" title="刪除">✕</button>
                     </div>
                   </div>
-                </VueDraggable>
+                </div>
                 <button class="btn-new" @click="resetForm" :class="{ active: editingId === null }">➕ 新增題目</button>
               </div>
             </div>
@@ -1397,7 +1411,6 @@ const saveAllAndClose = () => {
   border-radius: 4px;
   background: #ffe6e6;
   color: #ff4b4b;
-  margin-left: auto;
 }
 
 .q-free-tag {
@@ -1406,19 +1419,36 @@ const saveAllAndClose = () => {
   border-radius: 4px;
   background: #e6f7e6;
   color: #58cc02;
+}
+
+.q-order-actions {
+  display: flex;
+  gap: 4px;
   margin-left: auto;
 }
 
-.drag-handle {
-  cursor: grab;
-  padding: 0 4px;
-  font-size: 1.2rem;
-  color: #ccc;
-  user-select: none;
+.btn-order {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.drag-handle:active {
-  cursor: grabbing;
+.btn-order:hover:not(:disabled) {
+  border-color: #1cb0f6;
+  background: #e6f7ff;
+  color: #0284c7;
+}
+
+.btn-order:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .q-actions {
