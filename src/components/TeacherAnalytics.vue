@@ -15,10 +15,12 @@ const isLoading = ref(true);
 const isClearing = ref(false);
 const expandedCode = ref<string | null>(null);
 let learningLogsChannel: ReturnType<typeof supabase.channel> | undefined;
+let hasSubscribedToLearningLogs = false;
 
 const loadData = async (preserveRealtimeUpdates = true) => {
     isLoading.value = true;
     const fetched = await CloudDatabase.fetchLogs();
+    console.info('[教師看板] 作答紀錄載入完成:', fetched.length);
     const latestById = new Map<number, LearningLog>();
     fetched.forEach(log => {
         if (typeof log.id === 'number') latestById.set(log.id, log);
@@ -40,12 +42,23 @@ const applyRealtimeLog = (payload: {
 }) => {
     if (payload.eventType === 'DELETE') {
         const deletedId = payload.old.id;
+        console.info('[教師看板] 收到作答紀錄刪除事件:', deletedId);
         logs.value = logs.value.filter(log => log.id !== deletedId);
         return;
     }
 
     const incoming = payload.new as unknown as LearningLog;
-    if (typeof incoming.id !== 'number') return;
+    if (typeof incoming.id !== 'number') {
+        console.warn('[教師看板] Realtime 作答紀錄缺少有效 id:', payload.new);
+        return;
+    }
+    console.info('[教師看板] 收到作答紀錄即時更新:', {
+        eventType: payload.eventType,
+        id: incoming.id,
+        questionId: incoming.question_id,
+        errorCode: incoming.error_code,
+        status: incoming.status,
+    });
     const index = logs.value.findIndex(log => log.id === incoming.id);
     if (index === -1) logs.value.unshift(incoming);
     else logs.value[index] = incoming;
@@ -60,6 +73,15 @@ onMounted(async () => {
             table: 'learning_logs',
         }, applyRealtimeLog)
         .subscribe(status => {
+            console.info('[教師看板] learning_logs Realtime 狀態:', status);
+            if (status === 'SUBSCRIBED') {
+                if (hasSubscribedToLearningLogs) {
+                    console.info('[教師看板] Realtime 已重新連線，重新同步作答紀錄。');
+                    void loadData();
+                }
+                hasSubscribedToLearningLogs = true;
+                return;
+            }
             if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                 console.error('教師看板 Realtime 訂閱失敗:', status);
             }

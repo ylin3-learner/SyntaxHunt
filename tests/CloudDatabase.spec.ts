@@ -6,6 +6,7 @@ const supabaseMocks = vi.hoisted(() => ({
   from: vi.fn(),
   select: vi.fn(),
   order: vi.fn(),
+  insert: vi.fn(),
   upsert: vi.fn(),
   delete: vi.fn(),
   in: vi.fn(),
@@ -47,6 +48,34 @@ describe('CloudDatabase LanguageTool warm-up', () => {
 
     await expect(CloudDatabase.warmLanguageTool()).resolves.toBeUndefined();
     expect(consoleError).toHaveBeenCalledWith('LanguageTool 預熱失敗:', error);
+    consoleError.mockRestore();
+  });
+});
+
+describe('CloudDatabase learning logs', () => {
+  beforeEach(() => {
+    supabaseMocks.from.mockReset().mockReturnValue({ insert: supabaseMocks.insert });
+    supabaseMocks.insert.mockReset();
+  });
+
+  it('logs Supabase error details when a learning log insert fails', async () => {
+    const error = {
+      code: 'PGRST204',
+      message: "Could not find the 'sst' column of 'learning_logs' in the schema cache",
+      details: null,
+      hint: null,
+    };
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    supabaseMocks.insert.mockResolvedValue({ error });
+
+    await CloudDatabase.logEvent({
+      student_name: '匿名學生',
+      question_id: 'q-test',
+      error_code: 'M:VERB',
+      sst: 'Omission',
+    });
+
+    expect(consoleError).toHaveBeenCalledWith('寫入紀錄失敗:', error);
     consoleError.mockRestore();
   });
 });

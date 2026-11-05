@@ -1,0 +1,21 @@
+name: Keep LanguageTool Alive on Render
+
+on:
+  schedule:
+    # 每 10 分鐘執行一次 (GitHub Actions 的排程偶爾會延遲幾分鐘，但足以避開 15 分鐘的休眠限制)
+    - cron: '*/10 * * * *'
+  # 允許你手動在 Actions 頁面點擊執行，方便測試
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render LanguageTool Endpoint
+        run: |
+          echo "Sending POST request to keep Render awake..."
+          # 使用 curl 發送 POST 請求，若失敗（例如剛好在冷啟動）則印出提示，不讓整個 Action 報錯
+          curl -X POST "https://languagetool-latest-20ci.onrender.com/v2/check" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "text=hello&language=en-US" \
+            -s -o /dev/null -w "HTTP Status: %{http_code}\n" || echo "Ping failed, might be cold starting."

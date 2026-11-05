@@ -114,7 +114,19 @@ export const CloudDatabase = {
     try {
       console.log('🚀 準備寫入軌跡:', log);
       const { error } = await supabase.from('learning_logs').insert([log]);
-      if (error) console.error('寫入紀錄失敗:', error);
+      if (error) {
+        console.error('寫入紀錄失敗:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        });
+        return;
+      }
+      console.info('[作答紀錄] 寫入成功:', {
+        questionId: log.question_id,
+        errorCode: log.error_code,
+      });
     } catch (e) {
       console.error('連線錯誤:', e);
     }

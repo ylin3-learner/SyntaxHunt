@@ -305,12 +305,13 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ### Supabase 設定
 1. 請先建立應用程式使用的基礎資料表；此程式庫未包含建立這些資料表的遷移：
    - `questions`：`id`、`data`、`created_at`。
-   - `learning_logs`：`id`、`student_name`、`question_id`、`error_code`、`created_at`。診斷相關欄位會由遷移新增。
+   - `learning_logs`：`id`、`student_name`、`question_id`、`error_code`、`created_at`。資料表建好後，請套用遷移新增 `sst`、`status`、`diagnosis`、`source`、`category`、`rule_id` 等診斷欄位。
    - `classroom_state`：`id`、`current_question_id`、`timer_end_time`、`is_class_mode`、`target_count`、`updated_at`。新增 `id = 'current_state'` 的資料列，並為此表開啟 Realtime。
 
    請依部署需求設定前端 Supabase anon key 所需的資料表存取政策。前端會直接讀寫題庫與學習紀錄；教師課堂狀態則透過 `teacher-action` Edge Function 更新。
 2. 套用資料庫遷移並部署 Edge Functions：
    ```bash
+   npx supabase link --project-ref <你的 Supabase project ref>
    npx supabase db push
    npx supabase functions deploy deepgram-tts
    npx supabase functions deploy edge-stt
@@ -323,6 +324,8 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    npx supabase secrets set LANGUAGETOOL_URL=https://lt-proxy-xxx.run.app/v2/check
    ```
    `LANGUAGETOOL_URL` 僅在啟用 LanguageTool 診斷時需要。示範版請勿設定 `TEACHER_PASSWORD`，以使用固定的 `admin123`；若設定其他值，會與前端密碼不符。
+
+若寫入 `learning_logs` 出現 HTTP 400，請先檢查瀏覽器 console 的 Supabase `code` 與 `message`，並確認 migration 已套用到目前前端連線的同一個 Supabase 專案。若錯誤指出欄位不在 schema cache，先確認資料表已有該欄位；若欄位已存在，再於 Supabase SQL Editor 執行 `notify pgrst, 'reload schema';` 更新 API schema cache。
 
 ### 開發與測試
 ```bash
