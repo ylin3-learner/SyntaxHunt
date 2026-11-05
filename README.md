@@ -271,11 +271,13 @@ The authoring form exposes every concept listed in the scope, but that does **no
 
 **Recommendation:** A new top-level game mode is not necessary to start teaching these topics: `BUILD`, `REDUCE`, and `MORPH` already provide the basic assemble/remove/change-form actions. However, the current UI is not enough to claim complete K–12 grammar coverage. Prioritize improvements within those modes—explicit S/V/O/C and clause scaffolds, richer tense/aspect choices, and paired-clause conditional prompts—along with broader validators. Add a separate game type only if those concepts need interaction that cannot be expressed as chunk assembly, removal, or form selection.
 
-### Implementation and rollout status (2026-11-04)
+### Implementation and rollout status (2026-11-05)
 
-The adaptive canvas, legacy adapter, compromise.js chunker, local rule engine, and LanguageTool proxy path are implemented. Legacy questions are adapted when loaded into the canvas rather than rewritten in the `questions` table.
+The adaptive canvas, legacy adapter, compromise.js chunker, local rule engine, and LanguageTool diagnosis path are implemented. For an incorrect answer without a definite local diagnosis, the browser calls the Supabase `lt-proxy` Edge Function, which forwards the text to the configured Cloud Run LanguageTool endpoint and returns native matches for display and logging. The proxy handles browser `POST` preflight requests and returns an explicit configuration error if `LANGUAGETOOL_URL` is missing. Legacy questions are adapted when loaded into the canvas rather than rewritten in the `questions` table.
 
-**Supabase rollout is still pending.** Apply the migrations and deploy the LanguageTool proxy after setting `LANGUAGETOOL_URL` to the Cloud Run LanguageTool endpoint:
+After the teacher password is accepted, the app automatically sends a short, valid sentence through the same LanguageTool proxy to warm the service. This request does not create a learning log and does not block teacher access if it fails.
+
+The code path is integrated, but this repository cannot confirm whether the hosted Supabase project and Cloud Run service are configured and reachable. To enable the deployed path, apply the migrations, set `LANGUAGETOOL_URL` to the actual Cloud Run LanguageTool `/v2/check` endpoint, and deploy the proxy:
 
 ```bash
 npx supabase db push
@@ -283,7 +285,7 @@ npx supabase secrets set LANGUAGETOOL_URL=https://lt-proxy-xxx.run.app/v2/check
 npx supabase functions deploy lt-proxy
 ```
 
-The LanguageTool migration adds `source`, `category`, and `rule_id` to `learning_logs` and removes the obsolete diagnosis cache. The frontend calls only the Supabase proxy; it does not connect to Cloud Run directly.
+The LanguageTool migration adds `source`, `category`, and `rule_id` to `learning_logs` and removes the obsolete diagnosis cache. The frontend calls only the Supabase proxy; it does not connect to Cloud Run directly. Replace the example `lt-proxy-xxx.run.app` host above with the real endpoint.
 
 ---
 

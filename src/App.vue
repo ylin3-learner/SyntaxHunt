@@ -360,6 +360,7 @@ const openAnalytics = () => { if (isAdminAuthenticated.value) showAnalytics.valu
 const verifyAdmin = () => {
   if (adminPasswordInput.value === 'admin123') {
     isAdminAuthenticated.value = true; sessionStorage.setItem('admin_auth', 'true'); showAdminAuth.value = false; adminPasswordInput.value = '';
+    void CloudDatabase.warmLanguageTool();
     if (pendingAction.value === 'admin') showAdmin.value = true;
     else if (pendingAction.value === 'analytics') showAnalytics.value = true;
     pendingAction.value = null;

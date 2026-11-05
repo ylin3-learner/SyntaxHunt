@@ -266,11 +266,13 @@ RuleRegistry 是**本地診斷規則的插件註冊點**，不是出題表單或
 
 **建議：**若要開始練習這些範圍，不需要立刻新增頂層遊戲題型；`BUILD`、`REDUCE`、`MORPH` 已涵蓋組合、移除與變形三種基本操作。但目前也不足以宣稱已完整支援 K–12 文法。建議先在既有模式補強 S/V/O/C 與子句結構鷹架、豐富時態／狀態選項、增加雙子句條件句提示，並擴充診斷規則。只有當某概念無法用字塊組合、刪減或形式選擇表達時，才需要新增獨立遊戲題型。
 
-### 實作與部署進度（2026-11-04）
+### 實作與部署進度（2026-11-05）
 
-自適應畫布、舊題轉接器、compromise.js 本地切詞、本地規則引擎及 LanguageTool 代理流程已實作。舊題載入畫布時才轉接，不會改寫 `questions` 資料表。
+自適應畫布、舊題轉接器、compromise.js 本地切詞、本地規則引擎及 LanguageTool 診斷鏈路均已實作。錯誤答案若沒有明確的本地診斷，瀏覽器會呼叫 Supabase `lt-proxy` Edge Function，再由代理轉送文字至已設定的 Cloud Run LanguageTool，並回傳原生診斷供畫面顯示與紀錄。代理已處理瀏覽器 `POST` 預檢；若未設定 `LANGUAGETOOL_URL`，會明確回傳設定錯誤。舊題載入畫布時才轉接，不會改寫 `questions` 資料表。
 
-**Supabase 部署尚未完成。** 套用資料庫遷移，並將 `LANGUAGETOOL_URL` 設為 Cloud Run LanguageTool API 後部署代理：
+教師密碼驗證成功後，系統會自動透過相同代理送出一段有效短句，預熱 LanguageTool 服務。此請求不會建立學習紀錄；即使預熱失敗，也不會阻擋教師進入系統。
+
+程式中的串接鏈路已完成，但無法僅從此程式庫確認線上 Supabase 專案與 Cloud Run 服務是否已正確設定且可連線。部署時需套用資料庫遷移，將 `LANGUAGETOOL_URL` 設為實際 Cloud Run LanguageTool `/v2/check` 端點，再部署代理：
 
 ```bash
 npx supabase db push
@@ -278,7 +280,7 @@ npx supabase secrets set LANGUAGETOOL_URL=https://lt-proxy-xxx.run.app/v2/check
 npx supabase functions deploy lt-proxy
 ```
 
-LanguageTool 遷移會在 `learning_logs` 新增 `source`、`category`、`rule_id`，並刪除已不使用的診斷快取資料表。前端只呼叫 Supabase 代理，不會直接連接 Cloud Run。
+LanguageTool 遷移會在 `learning_logs` 新增 `source`、`category`、`rule_id`，並刪除已不使用的診斷快取資料表。前端只呼叫 Supabase 代理，不會直接連接 Cloud Run。請將上述範例中的 `lt-proxy-xxx.run.app` 換成實際服務網址。
 
 ---
 

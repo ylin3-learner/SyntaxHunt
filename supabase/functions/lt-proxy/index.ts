@@ -1,11 +1,8 @@
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 }
-
-const languageToolUrl = () =>
-  Deno.env.get("LANGUAGETOOL_URL")
-  ?? "https://lt-proxy-xxx.run.app/v2/check"
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -27,11 +24,20 @@ Deno.serve(async (req) => {
       })
     }
 
+    const endpoint = Deno.env.get("LANGUAGETOOL_URL")
+    if (!endpoint) {
+      console.error("LANGUAGETOOL_URL is not configured.")
+      return new Response(JSON.stringify({ error: "LanguageTool is not configured." }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+    }
+
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 10_000)
     let response: Response
     try {
-      response = await fetch(languageToolUrl(), {
+      response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ text: body.text, language: "en-US" }),

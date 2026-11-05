@@ -142,5 +142,21 @@ export const CloudDatabase = {
       throw new Error('LanguageTool 服務回傳的資料格式無效。');
     }
     return data.matches;
+  },
+
+  async warmLanguageTool(): Promise<void> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+    try {
+      await this.checkLanguageTool(
+        'The quick brown fox jumps over the lazy dog.',
+        controller.signal
+      );
+      console.info('LanguageTool 預熱完成。');
+    } catch (error) {
+      console.error('LanguageTool 預熱失敗:', error);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 };
