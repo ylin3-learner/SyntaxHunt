@@ -89,8 +89,6 @@ graph TD
     subgraph Supabase ["Supabase Cloud Backend"]
         DB[("PostgreSQL<br>(Questions, Logs, State)")]
         Realtime[("Realtime WebSocket<br>(Postgres Changes & Presence)")]
-        Storage[("Storage<br>(Images & TTS Cache)")]
-        
         subgraph EdgeFunctions ["Edge Functions (Deno)"]
             Action_Proxy["teacher-action<br>(Validate & Update)"]
             TTS_Proxy["deepgram-tts<br>(Deepgram TTS)"]
@@ -103,6 +101,8 @@ graph TD
         Deepgram["Deepgram API"]
         LanguageTool["Self-hosted LanguageTool<br>(Google Cloud Run)"]
     end
+
+    BrowserTTS["Browser SpeechSynthesis"]
 
     %% Data Flow
     AdminUI -- "1. Action Request (with Pwd)" --> Action_Proxy
@@ -118,10 +118,9 @@ graph TD
     AdminUI -- "CRUD" --> DB
     StudentUI -- "CRUD & Logs" --> DB
     
-    StudentUI -- "TTS Request" --> TTS_Proxy
+    StudentUI -- "Native TTS (when available)" --> BrowserTTS
+    StudentUI -- "Fallback TTS" --> TTS_Proxy
     TTS_Proxy --> Deepgram
-    TTS_Proxy -- "Cache Audio" --> Storage
-    
     StudentUI -- "STT Request" --> STT_Proxy
     STT_Proxy --> Deepgram
     StudentUI -- "Advanced grammar check" --> LT_Proxy
@@ -136,10 +135,10 @@ graph TD
 
 ## 🎙️ Hybrid Speech Architecture
 
-To ensure 100% stability across all devices (iPads, computers, and smart whiteboards with no system voice packs), this app implements a robust **fallback mechanism**.
+To support devices with different voice-pack availability, speech playback uses native English voices when available and can route to Deepgram through a Supabase Edge Function.
 
-- **TTS**: Detects native voices. If none, routes to **Deepgram TTS** via Supabase Edge Function.
-- **STT**: Bypasses browser restrictions by sending audio to **Deepgram STT** via Supabase Edge Function.
+- **TTS**: Uses a preferred native English voice when available; otherwise it requests **Deepgram TTS** through the `deepgram-tts` Edge Function. A failed Deepgram request does not automatically fall back to a native voice.
+- **STT**: Records audio with the browser's `MediaRecorder` and sends it to **Deepgram STT** through the `edge-stt` Edge Function. If transcription fails, students can play back their recording and continue; there is no automatic browser speech-recognition fallback.
 
 ---
 
@@ -189,8 +188,8 @@ sequenceDiagram
 - **Trash Can Subtraction UI (Reduce Mode)**: Students see the complete sentence and physically discard redundant words into a trash can, witnessing the sentence shrink.
 - **Class Mode Lock**: When the teacher enables Class Mode, the "Next" button is disabled. Students must wait for the teacher's push command.
 - **Phrase Chunking Visuals**: Multi-word units appear as distinct blue tiles.
-- **Randomized Audio**: TTS randomly selects from a pool of voices.
-- **Text-Diff Pronunciation Panel**: Record your voice via Deepgram STT.
+- **Speech Playback**: Hear the sentence through a native English voice or Deepgram TTS.
+- **Pronunciation Practice**: Record your voice for Deepgram STT transcription and word-by-word comparison.
 
 ### For Teachers (Teacher Admin)
 - **Presence Dashboard**: Input the target student count. Watch the live progress bar (`completed / target`) update in real-time as students finish.
@@ -208,7 +207,7 @@ sequenceDiagram
 5. For `MORPH`, mark each changeable chunk and provide its comma-separated forms (e.g. `go, goes, went`). Chunking uses compromise.js and an irregular-verb JSON table; add or correct forms manually when needed.
 6. Click **Add to question bank**. Click **Send to class** on that question to make it active, or click **Finish prep** to save the bank and close the editor (reopen Teacher Admin to push it later). Students answer by clicking tiles: assemble in `BUILD`, remove tiles in `REDUCE`, and select forms in `MORPH`.
 
-> **Teacher access note:** The current frontend demo checks the fixed password `admin123`; the `TEACHER_PASSWORD` Supabase secret does not configure this check. This is not secure authentication—do not expose the demo as a public or production teacher console.
+> **Teacher access note:** The frontend demo uses the fixed password `admin123` and sends that same value to `teacher-action`. The Edge Function defaults to `admin123` when `TEACHER_PASSWORD` is unset; setting that secret to a different value will break remote teacher actions until the frontend is updated too. This is not secure authentication—do not expose the demo as a public or production teacher console.
 
 ---
 
@@ -293,9 +292,9 @@ The LanguageTool migration adds `source`, `category`, and `rule_id` to `learning
 
 - **Frontend**: Vue 3 (Composition API) + Vite + TypeScript
 - **Local NLP**: compromise.js + `english-verbs-irregular`
-- **Backend & DB**: Supabase (PostgreSQL, Storage, Edge Functions, Realtime Presence)
-- **Speech**: Deepgram API (via Edge Function proxy) + Native Web Speech API fallback
-- **Drag & Drop**: Native Pointer Events & `vue-draggable-plus`
+- **Backend & DB**: Supabase (PostgreSQL, Edge Functions, Realtime Presence)
+- **Speech**: Native `SpeechSynthesis` for available TTS voices; Deepgram TTS/STT via Edge Functions
+- **Drag & Drop**: Native Pointer Events and the browser's HTML Drag and Drop API
 
 ---
 
@@ -309,9 +308,13 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### Supabase Setup
-1. Create a **Public** Storage bucket named `tts-audio`.
-2. Create a table `classroom_state` and enable Realtime (`supabase_realtime`).
-3. Apply the database migrations and deploy the Edge Functions:
+1. Create the application's baseline tables before applying migrations; this repository does not include migrations that create these tables:
+   - `questions`: `id`, `data`, and `created_at`.
+   - `learning_logs`: `id`, `student_name`, `question_id`, `error_code`, and `created_at`. The migrations add diagnosis-related columns.
+   - `classroom_state`: `id`, `current_question_id`, `timer_end_time`, `is_class_mode`, `target_count`, and `updated_at`. Add the row with `id = 'current_state'` and enable Realtime for this table.
+
+   Configure the required table access policies for the frontend's Supabase anon key. The frontend directly reads/writes the question bank and learning logs; teacher state changes go through the `teacher-action` Edge Function.
+2. Apply the database migrations and deploy the Edge Functions:
    ```bash
    npx supabase db push
    npx supabase functions deploy deepgram-tts
@@ -319,12 +322,12 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    npx supabase functions deploy teacher-action
    npx supabase functions deploy lt-proxy
    ```
-4. Set the Secrets:
+3. Set the service secrets:
    ```bash
    npx supabase secrets set DEEPGRAM_API_KEY=your_deepgram_key
-   npx supabase secrets set TEACHER_PASSWORD=your_teacher_password
    npx supabase secrets set LANGUAGETOOL_URL=https://lt-proxy-xxx.run.app/v2/check
    ```
+   `LANGUAGETOOL_URL` is only needed for LanguageTool diagnosis. Leave `TEACHER_PASSWORD` unset for the demo's fixed `admin123` password; a different secret will not match the frontend.
 
 ### Development & Testing
 ```bash

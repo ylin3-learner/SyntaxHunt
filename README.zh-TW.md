@@ -89,8 +89,6 @@ graph TD
     subgraph Supabase ["Supabase 雲端後端"]
         DB[("PostgreSQL<br>(題庫、軌跡、課堂狀態)")]
         Realtime[("Realtime WebSocket<br>(Postgres Changes & Presence)")]
-        Storage[("Storage<br>(圖片與音檔快取)")]
-        
         subgraph EdgeFunctions ["Edge Functions (Deno)"]
             Action_Proxy["🛡️ teacher-action<br>(安全驗證與設定)"]
             TTS_Proxy["🔊 deepgram-tts<br>(Deepgram TTS)"]
@@ -102,6 +100,8 @@ graph TD
     subgraph ThirdParty ["第三方 API"]
         Deepgram["Deepgram API"]
     end
+
+    BrowserTTS["瀏覽器 SpeechSynthesis"]
 
     %% 資料流
     AdminUI -- "1. 發送指令/設定 (帶密碼)" --> Action_Proxy
@@ -117,10 +117,9 @@ graph TD
     AdminUI -- "CRUD" --> DB
     StudentUI -- "CRUD & Logs" --> DB
     
-    StudentUI -- "語音合成請求" --> TTS_Proxy
+    StudentUI -- "原生語音 (可用時)" --> BrowserTTS
+    StudentUI -- "TTS 備援" --> TTS_Proxy
     TTS_Proxy --> Deepgram
-    TTS_Proxy -- "儲存快取" --> Storage
-    
     StudentUI -- "語音辨識請求" --> STT_Proxy
     STT_Proxy --> Deepgram
     StudentUI -- "進階文法檢查" --> LT_Proxy
@@ -135,10 +134,10 @@ graph TD
 
 ## 🎙️ 跨平台混合式語音架構 (Hybrid TTS & STT)
 
-為了確保在 iPad、一般電腦、以及**沒有語音包的智慧白板**上都能 100% 穩定運作，本專案實作了基於 Supabase Edge Functions 的降級備援機制。
+為了支援不同語音包環境，語音播放會優先使用可用的原生英文語音，並可透過 Supabase Edge Function 呼叫 Deepgram。
 
-- **文字轉語音 (TTS)**：優先偵測系統原生語音包。若無語音包（如 Windows 白板），則自動呼叫 `deepgram-tts` 代理。
-- **語音轉文字 (STT)**：完全繞過瀏覽器 Web Speech API 的限制（如 Safari 的 `service-not-allowed`），將錄音檔傳送至 `edge-stt` 代理，交由 **Deepgram** 進行精準辨識。
+- **文字轉語音 (TTS)**：若有可用的原生英文語音，優先使用；否則透過 `deepgram-tts` Edge Function 呼叫 **Deepgram TTS**。Deepgram 請求失敗時不會自動改用原生語音。
+- **語音轉文字 (STT)**：使用瀏覽器 `MediaRecorder` 錄音，再將錄音傳至 `edge-stt` Edge Function，由 **Deepgram STT** 轉錄。若辨識失敗，學生仍可播放自己的錄音並繼續；系統不會自動改用瀏覽器語音辨識。
 
 ---
 
@@ -203,7 +202,7 @@ sequenceDiagram
 5. 使用 `MORPH` 時，勾選可變形字塊並輸入逗號分隔的形式，例如 `go, goes, went`。切詞使用 compromise.js 與不規則動詞 JSON 表；必要時請手動補齊或修正形式。
 6. 點選 **加入題庫**。若要指定學生目前作答的題目，請在該題列按 **發送給全班**；或按 **完成備課** 儲存題庫並關閉編輯器（之後可重新開啟教師備課中心再發送）。學生以點選字磚作答：`BUILD` 組句、`REDUCE` 移除字塊、`MORPH` 選擇字形。
 
-> **教師登入提醒：**目前前端示範版固定以 `admin123` 驗證；Supabase 的 `TEACHER_PASSWORD` Secret 並未設定這項檢查。這不是安全的身分驗證，請勿將此教師介面直接公開部署至正式環境。
+> **教師登入提醒：**目前前端示範版固定以 `admin123` 驗證，並將相同密碼傳給 `teacher-action`。Edge Function 未設定 `TEACHER_PASSWORD` 時預設為 `admin123`；若將 Secret 設為其他值，遠端教師操作會因密碼不一致而失敗，除非同步修改前端。這不是安全的身分驗證，請勿將此教師介面直接公開部署至正式環境。
 
 ---
 
@@ -288,9 +287,9 @@ LanguageTool 遷移會在 `learning_logs` 新增 `source`、`category`、`rule_i
 
 - **前端**：Vue 3（Composition API）+ Vite + TypeScript
 - **本地 NLP**：compromise.js + `english-verbs-irregular`
-- **後端與資料庫**：Supabase（PostgreSQL、Storage、Edge Functions、Realtime Presence）
-- **語音 (TTS & STT)**：Deepgram API（透過 Edge Function 代理）+ Web Speech API 降級備援
-- **拖曳**：原生 Pointer Events 與 `vue-draggable-plus`
+- **後端與資料庫**：Supabase（PostgreSQL、Edge Functions、Realtime Presence）
+- **語音 (TTS & STT)**：可用的原生 `SpeechSynthesis` 語音；Deepgram TTS／STT 透過 Edge Functions 呼叫
+- **拖曳**：原生 Pointer Events 與瀏覽器 HTML Drag and Drop API
 
 ---
 
@@ -304,9 +303,13 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### Supabase 設定
-1. 建立名為 `tts-audio` 的 **Public** Storage bucket。
-2. 建立 `classroom_state` 資料表並開啟 Realtime (`supabase_realtime`)。
-3. 套用資料庫遷移並部署 Edge Functions：
+1. 請先建立應用程式使用的基礎資料表；此程式庫未包含建立這些資料表的遷移：
+   - `questions`：`id`、`data`、`created_at`。
+   - `learning_logs`：`id`、`student_name`、`question_id`、`error_code`、`created_at`。診斷相關欄位會由遷移新增。
+   - `classroom_state`：`id`、`current_question_id`、`timer_end_time`、`is_class_mode`、`target_count`、`updated_at`。新增 `id = 'current_state'` 的資料列，並為此表開啟 Realtime。
+
+   請依部署需求設定前端 Supabase anon key 所需的資料表存取政策。前端會直接讀寫題庫與學習紀錄；教師課堂狀態則透過 `teacher-action` Edge Function 更新。
+2. 套用資料庫遷移並部署 Edge Functions：
    ```bash
    npx supabase db push
    npx supabase functions deploy deepgram-tts
@@ -314,12 +317,12 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    npx supabase functions deploy teacher-action
    npx supabase functions deploy lt-proxy
    ```
-4. 設定 Secrets（API 金鑰與教師密碼）：
+3. 設定服務所需的 Secrets：
    ```bash
    npx supabase secrets set DEEPGRAM_API_KEY=your_deepgram_key
-   npx supabase secrets set TEACHER_PASSWORD=your_teacher_password
    npx supabase secrets set LANGUAGETOOL_URL=https://lt-proxy-xxx.run.app/v2/check
    ```
+   `LANGUAGETOOL_URL` 僅在啟用 LanguageTool 診斷時需要。示範版請勿設定 `TEACHER_PASSWORD`，以使用固定的 `admin123`；若設定其他值，會與前端密碼不符。
 
 ### 開發與測試
 ```bash
