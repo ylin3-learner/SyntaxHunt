@@ -78,28 +78,31 @@ graph TD
         StudentUI["👨‍🎓 Student Interface<br>(App.vue)"]
         
         subgraph Composables ["Core Logic (Composables)"]
-            Timer["⏱️ useQuizTimer<br>(Absolute Timestamp)"]
-            Focus["👁️ useFocusMonitor<br>(Anti-Cheat)"]
-            Sound["🔊 useSound<br>(Web Audio)"]
-            Speech["🗣️ useSpeech<br>(Cross-Platform)"]
-            Sync["📡 useClassroomSync<br>(State Sync & Presence)"]
+            Timer["⏱️ useQuizTimer"]
+            Focus["👁️ useFocusMonitor"]
+            Sound["🔊 useSound"]
+            Speech["🗣️ useSpeech"]
+            Sync["📡 useClassroomSync"]
         end
     end
 
     subgraph Supabase ["Supabase Cloud Backend"]
-        DB[("PostgreSQL<br>(Questions, Logs, State)")]
-        Realtime[("Realtime WebSocket<br>(Postgres Changes & Presence)")]
+        DB[("PostgreSQL")]
+        Realtime[("Realtime WebSocket")]
         subgraph EdgeFunctions ["Edge Functions (Deno)"]
-            Action_Proxy["teacher-action<br>(Validate & Update)"]
-            TTS_Proxy["deepgram-tts<br>(Deepgram TTS)"]
-            STT_Proxy["edge-stt<br>(Deepgram STT)"]
-            LT_Proxy["lt-proxy<br>(LanguageTool grammar diagnosis)"]
+            Action_Proxy["teacher-action"]
+            TTS_Proxy["deepgram-tts"]
+            STT_Proxy["edge-stt"]
+            LT_Proxy["lt-proxy<br>(LanguageTool Proxy)"]
         end
     end
 
-    subgraph ThirdParty ["Third-Party API"]
+    subgraph External ["External Services & Hosting"]
         Deepgram["Deepgram API"]
-        LanguageTool["Self-hosted LanguageTool<br>(Google Cloud Run)"]
+        subgraph Render ["Render (Free Tier)"]
+            LanguageTool["Self-hosted LanguageTool<br>(Docker)"]
+            KeepAlive["GitHub Actions<br>(Cron Job Ping)"]
+        end
     end
 
     BrowserTTS["Browser SpeechSynthesis"]
@@ -111,22 +114,17 @@ graph TD
     Realtime -- "4. Sync State" --> Sync
     Sync -- "5. Update UI & Timer" --> StudentUI
     
-    %% Presence Flow
-    StudentUI -- "Track Status (Presence)" --> Realtime
-    Realtime -- "Live Count Update" --> AdminUI
-    
-    AdminUI -- "CRUD" --> DB
-    StudentUI -- "CRUD & Logs" --> DB
-    
-    StudentUI -- "Native TTS (when available)" --> BrowserTTS
+    StudentUI -- "Native TTS" --> BrowserTTS
     StudentUI -- "Fallback TTS" --> TTS_Proxy
     TTS_Proxy --> Deepgram
+    
     StudentUI -- "STT Request" --> STT_Proxy
     STT_Proxy --> Deepgram
+    
     StudentUI -- "Advanced grammar check" --> LT_Proxy
     LT_Proxy --> LanguageTool
+    KeepAlive -. "Prevent Cold Start" .-> LanguageTool
 
-    %% Logic Dependencies
     StudentUI -.-> Composables
     AdminUI -.-> Speech
 ```
@@ -195,6 +193,8 @@ sequenceDiagram
 - **Presence Dashboard**: Input the target student count. Watch the live progress bar (`completed / target`) update in real-time as students finish.
 - **Class Mode Toggle**: Lock the entire class's progression instantly. Perfect for synchronized classroom teaching.
 - **Funnel-Based Authoring**: Wrap phrases in `[ ]`. Visualizes "Kept" and "Discarded" words. If a verb needs to become a preposition, edit the green box.
+- **Semantic Control (Person vs. Thing)**: A dedicated toggle in the authoring form allows teachers to explicitly define whether the antecedent is a "Person" or a "Thing". This eliminates fragile string-matching heuristics and ensures the local rule engine accurately diagnoses `who` vs. `which` errors.
+- **Local Deterministic Chunking**: Uses `compromise.js` and an irregular-verb JSON table to automatically generate interactive chunks and morphology options without calling an LLM.
 - **Visual Question Flow**: Open a full-screen node canvas to see the question sequence as connected steps. Drag nodes before or after other questions to reorder them; `Alt` + `←` / `→` also moves the focused node. Click **Finish prep** to save the order to the cloud so it persists after a refresh.
 - **Master Remote Control**: Push questions, force-reset timers, and add time (`+30s`) instantly.
 
@@ -223,7 +223,11 @@ sequenceDiagram
 | `O:*` | `O:WRONG_ORDER`, `O:INVERSION` | Words are out of order, including incorrect auxiliary placement in inversion. |
 | `UNKNOWN_ERROR` | — | Local rules cannot assign a specific error; LanguageTool is asked for additional suggestions. |
 
-Local diagnoses retain their K-12 error codes and SST category (`Omission`, `Addition`, `Misformation`, or `Misordering`). If local rules cannot classify an incorrect answer, the app requests LanguageTool through the `lt-proxy` Supabase Edge Function. The LanguageTool message, category, rule ID, replacements, and character range are retained as native diagnostics; character offsets are mapped back to visible chunks for highlighting. A three-second timeout or service failure displays a neutral notice and lets the student skip to the next question. In `BUILD` and `MORPH`, students can also check a partial answer before filling every slot.
+Local diagnoses retain their K-12 error codes and SST category (`Omission`, `Addition`, `Misformation`, or `Misordering`). If local rules cannot classify an incorrect answer, the app requests LanguageTool through the `lt-proxy` Supabase Edge Function. 
+
+To ensure accurate diagnostics, the system performs **Context Stitching**: it reconstructs the full sentence by concatenating the `contextCloze` prefix, the student's assembled chunks, and the suffix before sending it to LanguageTool. When LanguageTool returns errors, the system performs **Offset Mapping**: it subtracts the prefix length from the native character offset and maps it back to the visible chunks for precise UI highlighting. 
+
+An 8-second timeout (accommodating Render's cold starts) or service failure displays a neutral notice and lets the student skip to the next question. In `BUILD` and `MORPH`, students can also check a partial answer before filling every slot.
 
 Teacher-authored general grammar questions choose a concept and interaction mode. `autoChunk(sentence, concept)` uses compromise.js for deterministic tokenization and verb parsing, checks the irregular-verb table first, and preserves bracketed phrases as explicit chunks. It does not call an LLM. MORPH options are stored as strings with `current_index` identifying the initial selected form, while legacy `morph_options` remains supported. The canvas routes new concepts to a timeline, modal-strength gauge, shredder, or magnetic-slot interaction. Questions without a concept keep the legacy canvas.
 
@@ -325,9 +329,27 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 3. Set the service secrets:
    ```bash
    npx supabase secrets set DEEPGRAM_API_KEY=your_deepgram_key
-   npx supabase secrets set LANGUAGETOOL_URL=https://lt-proxy-xxx.run.app/v2/check
+   npx supabase secrets set LANGUAGETOOL_URL=https://your-render-url.onrender.com/v2/check
    ```
-   `LANGUAGETOOL_URL` is only needed for LanguageTool diagnosis. Leave `TEACHER_PASSWORD` unset for the demo's fixed `admin123` password; a different secret will not match the frontend.
+  `LANGUAGETOOL_URL` is required for LanguageTool diagnosis. Leave `TEACHER_PASSWORD` unset for the demo's fixed `admin123` password.
+
+### Self-Hosting LanguageTool on Render
+
+To maintain a zero-cost architecture, LanguageTool is deployed on Render's free tier.
+
+1. Create a new Web Service on Render and select Deploy an existing image. Use the image docker.io/erikvl87/languagetool:latest.
+
+2. Set the following Environment Variables to prevent Out-Of-Memory (OOM) crashes within Render's 512MB limit:
+
+- `Java_Xms=128m`
+
+- `Java_Xmx=320m`
+
+- `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=60.0 -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m`
+
+3. Deploy the service and copy the Render URL. Set it in your Supabase secrets (as shown above).
+
+4. Keep-Alive Mechanism: Render's free tier sleeps after 15 minutes of inactivity. The repository includes a GitHub Actions workflow (.`github/workflows/keep-alive.yml`) that automatically pings the Render endpoint every 10 minutes to prevent cold-start delays during classroom sessions.
 
 ### Development & Testing
 ```bash

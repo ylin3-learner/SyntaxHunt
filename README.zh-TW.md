@@ -72,60 +72,59 @@ flowchart TD
 
 ```mermaid
 graph TD
-    subgraph Client ["前端 (Vue 3 + TypeScript)"]
+    subgraph Client ["Frontend (Vue 3 + TypeScript)"]
         direction TB
-        AdminUI["👩‍🏫 教師備課中心<br>(TeacherAdmin.vue)"]
-        StudentUI["👨‍🎓 學生學習介面<br>(App.vue)"]
+        AdminUI["👩‍🏫 Teacher Admin<br>(TeacherAdmin.vue)"]
+        StudentUI["👨‍🎓 Student Interface<br>(App.vue)"]
         
-        subgraph Composables ["核心邏輯 (Composables)"]
-            Timer["⏱️ useQuizTimer<br>(絕對時間戳倒數)"]
-            Focus["👁️ useFocusMonitor<br>(防切屏監控)"]
-            Sound["🔊 useSound<br>(Web Audio 音效)"]
-            Speech["🗣️ useSpeech<br>(跨平台語音代理)"]
-            Sync["📡 useClassroomSync<br>(狀態同步 & Presence)"]
+        subgraph Composables ["Core Logic (Composables)"]
+            Timer["⏱️ useQuizTimer"]
+            Focus["👁️ useFocusMonitor"]
+            Sound["🔊 useSound"]
+            Speech["🗣️ useSpeech"]
+            Sync["📡 useClassroomSync"]
         end
     end
 
-    subgraph Supabase ["Supabase 雲端後端"]
-        DB[("PostgreSQL<br>(題庫、軌跡、課堂狀態)")]
-        Realtime[("Realtime WebSocket<br>(Postgres Changes & Presence)")]
+    subgraph Supabase ["Supabase Cloud Backend"]
+        DB[("PostgreSQL")]
+        Realtime[("Realtime WebSocket")]
         subgraph EdgeFunctions ["Edge Functions (Deno)"]
-            Action_Proxy["🛡️ teacher-action<br>(安全驗證與設定)"]
-            TTS_Proxy["🔊 deepgram-tts<br>(Deepgram TTS)"]
-            STT_Proxy["🎤 edge-stt<br>(Deepgram STT)"]
-            LT_Proxy["🧩 lt-proxy<br>(LanguageTool 文法診斷)"]
+            Action_Proxy["teacher-action"]
+            TTS_Proxy["deepgram-tts"]
+            STT_Proxy["edge-stt"]
+            LT_Proxy["lt-proxy<br>(LanguageTool Proxy)"]
         end
     end
 
-    subgraph ThirdParty ["第三方 API"]
+    subgraph External ["External Services & Hosting"]
         Deepgram["Deepgram API"]
+        subgraph Render ["Render (Free Tier)"]
+            LanguageTool["Self-hosted LanguageTool<br>(Docker)"]
+            KeepAlive["GitHub Actions<br>(Cron Job Ping)"]
+        end
     end
 
-    BrowserTTS["瀏覽器 SpeechSynthesis"]
+    BrowserTTS["Browser SpeechSynthesis"]
 
-    %% 資料流
-    AdminUI -- "1. 發送指令/設定 (帶密碼)" --> Action_Proxy
-    Action_Proxy -- "2. 更新狀態" --> DB
-    DB -- "3. 觸發 Postgres Changes" --> Realtime
-    Realtime -- "4. 推送跳題/鎖定狀態" --> Sync
-    Sync -- "5. 更新 UI 與計時器" --> StudentUI
+    %% Data Flow
+    AdminUI -- "1. Action Request (with Pwd)" --> Action_Proxy
+    Action_Proxy -- "2. Update State" --> DB
+    DB -- "3. Postgres Changes" --> Realtime
+    Realtime -- "4. Sync State" --> Sync
+    Sync -- "5. Update UI & Timer" --> StudentUI
     
-    %% Presence 流
-    StudentUI -- "作答進度 (Presence)" --> Realtime
-    Realtime -- "即時人數統計" --> AdminUI
-    
-    AdminUI -- "CRUD" --> DB
-    StudentUI -- "CRUD & Logs" --> DB
-    
-    StudentUI -- "原生語音 (可用時)" --> BrowserTTS
-    StudentUI -- "TTS 備援" --> TTS_Proxy
+    StudentUI -- "Native TTS" --> BrowserTTS
+    StudentUI -- "Fallback TTS" --> TTS_Proxy
     TTS_Proxy --> Deepgram
-    StudentUI -- "語音辨識請求" --> STT_Proxy
+    
+    StudentUI -- "STT Request" --> STT_Proxy
     STT_Proxy --> Deepgram
-    StudentUI -- "進階文法檢查" --> LT_Proxy
-    LT_Proxy --> LanguageTool["自架 LanguageTool<br>(Google Cloud Run)"]
+    
+    StudentUI -- "Advanced grammar check" --> LT_Proxy
+    LT_Proxy --> LanguageTool
+    KeepAlive -. "Prevent Cold Start" .-> LanguageTool
 
-    %% 邏輯依賴
     StudentUI -.-> Composables
     AdminUI -.-> Speech
 ```
@@ -190,6 +189,7 @@ sequenceDiagram
 - **進度監控面板 (Presence Dashboard)**：輸入目標人數，系統會即時統計「已完成人數」，並顯示高亮進度條（如 `5 / 30 人`），讓老師一眼掌握全班狀況。
 - **上課模式開關 (Class Mode Toggle)**：一鍵鎖定全班進度，禁止學生偷跑。
 - **漏斗式出題（Funnel Authoring）**：用 `[ ]` 框出要保留的片語，系統自動視覺化「保留」與「丟棄」的字。
+- **語意控制 (Person vs. Thing)**：在出題表單中提供專屬切換鈕，讓老師明確指定先行詞是「人」或「物」。這徹底移除了過去脆弱的字串比對，確保本地規則引擎能精準判斷 `who` 與 `which` 的錯誤。
 - **視覺化題目流程**：開啟全螢幕節點畫布，以連線檢視題目順序；拖曳節點到其他題目前後即可重新排序，也可選取節點後按 `Alt` + `←` / `→` 微調。完成編排後按 **完成備課**，順序會儲存至雲端並在重整後保留。
 - **主從遠端控制**：老師可一鍵推送題目、強制重置計時器，或隨時點擊 `+30s` 為全班加時。
 
@@ -218,9 +218,14 @@ sequenceDiagram
 | `O:*` | `O:WRONG_ORDER`、`O:INVERSION` | 字詞順序錯誤，包含倒裝句助動詞位置不正確。 |
 | `UNKNOWN_ERROR` | — | 本地規則無法判定特定錯誤，接續請 LanguageTool 提供建議。 |
 
-本地診斷保留 K-12 迷思錯誤碼及 SST 類別：`Omission`（遺漏）、`Addition`（多加）、`Misformation`（形式錯誤）或 `Misordering`（語序錯誤）。若本地規則無法分類錯誤答案，系統會透過 `lt-proxy` Supabase Edge Function 呼叫 LanguageTool，保留原生訊息、分類、Rule ID、替換建議及字元範圍，並將字元偏移映射回畫面字塊以供高亮。服務逾時（3 秒）或失敗時會顯示中性提示，並允許學生略過到下一題。`BUILD` 與 `MORPH` 模式也可在尚未填滿所有字塊前檢查目前答案。
+本地診斷保留 K-12 迷思錯誤碼及 SST 類別：`Omission`（遺漏）、`Addition`（多加）、`Misformation`（形式錯誤）或 `Misordering`（語序錯誤）。若本地規則無法分類錯誤答案，系統會透過 `lt-proxy` Supabase Edge Function 呼叫 LanguageTool，保留原生訊息、分類、Rule ID、替換建議及字元範圍，並將字元偏移映射回畫面字塊以供高亮。服務逾時（8 秒，以因應 Render 冷啟動）或失敗時會顯示中性提示，並允許學生略過到下一題。`BUILD` 與 `MORPH` 模式也可在尚未填滿所有字塊前檢查目前答案。
 
 教師建立通用文法題時可選擇概念與互動模式。`autoChunk(sentence, concept)` 使用 compromise.js 確定性切詞與動詞辨識，優先查詢不規則動詞表，並將中括號片語保留為明確字塊；不呼叫 LLM。MORPH 選項以字串陣列儲存，`current_index` 表示初始選取形式，並保留 `morph_options` 舊欄位相容。新概念會路由至時間軸、情態語氣計、碎紙機或磁吸卡槽；未設定概念的舊題仍使用既有畫布。
+
+### 2026-11-5:
+
+*   **上下文拼接 (Context Stitching)**：送出語言檢查時，系統會自動將 `contextCloze` 的前綴（prefix）與後綴（suffix）與學生的作答組合，還原成完整的句子，避免 LanguageTool 誤判（如首字大寫錯誤）。
+*   **精準偏移映射 (Offset Mapping)**：LanguageTool 回傳的字元偏移量（offset）會先扣除前綴長度，再透過 `mapOffsetToChunkIndex` 精準映射回學生的字塊陣列，確保紅字提示標示在正確的字塊上。
 
 ### RuleRegistry 如何串起出題、遊戲介面與診斷
 
@@ -267,19 +272,21 @@ RuleRegistry 是**本地診斷規則的插件註冊點**，不是出題表單或
 
 ### 實作與部署進度（2026-11-05）
 
-自適應畫布、舊題轉接器、compromise.js 本地切詞、本地規則引擎及 LanguageTool 診斷鏈路均已實作。錯誤答案若沒有明確的本地診斷，瀏覽器會呼叫 Supabase `lt-proxy` Edge Function，再由代理轉送文字至已設定的 Cloud Run LanguageTool，並回傳原生診斷供畫面顯示與紀錄。代理已處理瀏覽器 `POST` 預檢；若未設定 `LANGUAGETOOL_URL`，會明確回傳設定錯誤。舊題載入畫布時才轉接，不會改寫 `questions` 資料表。
+自適應畫布、舊題轉接器、compromise.js 本地切詞、本地規則引擎及 LanguageTool 診斷鏈路均已實作。錯誤答案若沒有明確的本地診斷，瀏覽器會呼叫 Supabase `lt-proxy` Edge Function，再由代理轉送文字至已設定的 Render  LanguageTool，並回傳原生診斷供畫面顯示與紀錄。代理已處理瀏覽器 `POST` 預檢；若未設定 `LANGUAGETOOL_URL`，會明確回傳設定錯誤。舊題載入畫布時才轉接，不會改寫 `questions` 資料表。
 
 教師密碼驗證成功後，系統會自動透過相同代理送出一段有效短句，預熱 LanguageTool 服務。此請求不會建立學習紀錄；即使預熱失敗，也不會阻擋教師進入系統。
 
-程式中的串接鏈路已完成，但無法僅從此程式庫確認線上 Supabase 專案與 Cloud Run 服務是否已正確設定且可連線。部署時需套用資料庫遷移，將 `LANGUAGETOOL_URL` 設為實際 Cloud Run LanguageTool `/v2/check` 端點，再部署代理：
-
-```bash
-npx supabase db push
-npx supabase secrets set LANGUAGETOOL_URL=https://lt-proxy-xxx.run.app/v2/check
-npx supabase functions deploy lt-proxy
-```
-
-LanguageTool 遷移會在 `learning_logs` 新增 `source`、`category`、`rule_id`，並刪除已不使用的診斷快取資料表。前端只呼叫 Supabase 代理，不會直接連接 Cloud Run。請將上述範例中的 `lt-proxy-xxx.run.app` 換成實際服務網址。
+### 自架 LanguageTool (Render)
+1. 在 Render 建立一個新的 Web Service，選擇 **Deploy an existing image**，填入 `docker.io/erikvl87/languagetool:latest`。
+2. 設定環境變數以防 OOM：
+   - `Java_Xms=128m`
+   - `Java_Xmx=320m`
+   - `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=60.0 -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m`
+3. 部署成功後，將 Render 提供的 URL（加上 `/v2/check`）設定到 Supabase Secrets：
+   ```bash
+   npx supabase secrets set LANGUAGETOOL_URL=https://your-render-url.onrender.com/v2/check
+   npx supabase functions deploy lt-proxy
+   ```
 
 ---
 
@@ -287,9 +294,14 @@ LanguageTool 遷移會在 `learning_logs` 新增 `source`、`category`、`rule_i
 
 - **前端**：Vue 3（Composition API）+ Vite + TypeScript
 - **本地 NLP**：compromise.js + `english-verbs-irregular`
+- **診斷引擎**：Local Rule Registry + LCS algorithm + LanguageTool (Deep Semantic Check)
 - **後端與資料庫**：Supabase（PostgreSQL、Edge Functions、Realtime Presence）
+- **基礎設施**: Render (Docker / LanguageTool) + GitHub Actions (Keep-Alive)
 - **語音 (TTS & STT)**：可用的原生 `SpeechSynthesis` 語音；Deepgram TTS／STT 透過 Edge Functions 呼叫
 - **拖曳**：原生 Pointer Events 與瀏覽器 HTML Drag and Drop API
+
+### 🛡️ 基礎設施與防冷啟動 (Infrastructure & Keep-Alive)
+為達成零營運成本，本系統將 LanguageTool 部署於 Render 免費方案，並透過 GitHub Actions (`keep-alive.yml`) 每 10 分鐘發送一次 `POST` 請求進行保活。此機制確保課堂上的文法診斷請求不會遭遇 30-60 秒的冷啟動延遲
 
 ---
 
