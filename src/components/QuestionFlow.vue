@@ -121,7 +121,12 @@ const clearQuestionDrag = () => {
           <span class="node-port node-input" aria-hidden="true"></span>
           <div class="node-topline">
             <span class="node-step">STEP {{ String(index + 1).padStart(2, '0') }}</span>
-            <span class="node-kind">{{ q.type === 'grammar' ? '文法題' : q.type === 'contrast' ? '對比題' : q.type === 'chunk' ? '片語題' : '標準題' }}</span>
+            <div class="node-badges">
+              <span class="node-kind">{{ q.type === 'grammar' ? '文法題' : q.type === 'contrast' ? '對比題' : q.type === 'chunk' ? '片語題' : '標準題' }}</span>
+              <span v-if="q.type === 'standard'" class="node-mode" :class="q.mode || 'build'">
+                {{ (q.mode || 'build') === 'reduce' ? 'Reduce' : 'Build' }}
+              </span>
+            </div>
           </div>
           <h2>{{ q.targetNoun || '未命名題目' }}</h2>
           <p class="node-prompt">
@@ -327,6 +332,12 @@ const clearQuestionDrag = () => {
   gap: 8px;
 }
 
+.node-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .node-step {
   color: #0284c7;
   font-size: 0.67rem;
@@ -341,6 +352,23 @@ const clearQuestionDrag = () => {
   color: #475569;
   font-size: 0.68rem;
   font-weight: 700;
+}
+
+.node-mode {
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.node-mode.build {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.node-mode.reduce {
+  background: #f3e8ff;
+  color: #7e22ce;
 }
 
 .flow-node h2 {
