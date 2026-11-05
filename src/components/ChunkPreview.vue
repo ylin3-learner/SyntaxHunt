@@ -11,7 +11,10 @@ const props = defineProps<{
     speechRate?: number; // 👈 接收語速
 }>();
 
-const emit = defineEmits<{ (e: 'success'): void; }>();
+const emit = defineEmits<{
+    (e: 'success'): void;
+    (e: 'wrong-answer', option: string): void;
+}>();
 const { speak } = useTTS();
 
 const cleanChunk = props.chunk.replace(/[\[\]]/g, '');
@@ -35,6 +38,7 @@ const handleSelect = (opt: { text: string; isCorrect: boolean }, index: number) 
         setTimeout(() => { emit('success'); }, 1500);
     } else {
         isWrong.value = true;
+        emit('wrong-answer', opt.text);
         setTimeout(() => { isWrong.value = false; selectedIndex.value = null; }, 800);
     }
 };

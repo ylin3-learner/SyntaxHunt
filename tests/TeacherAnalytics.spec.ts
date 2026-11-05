@@ -20,10 +20,30 @@ const languageToolLog = {
   category: 'Grammar',
   rule_id: 'HE_VERB_AGR',
 };
+const chunkDistractorLogs = [
+  {
+    id: 9,
+    student_name: '匿名學生',
+    question_id: 'q-chunk',
+    error_code: 'CHUNK_DISTRACTOR',
+    source: 'local' as const,
+    category: 'chunk_distractor',
+    rule_id: 'look after',
+  },
+  {
+    id: 10,
+    student_name: '匿名學生',
+    question_id: 'q-chunk',
+    error_code: 'CHUNK_DISTRACTOR',
+    source: 'local' as const,
+    category: 'chunk_distractor',
+    rule_id: 'look after',
+  },
+];
 
 vi.mock('../src/services/CloudDatabase', () => ({
   CloudDatabase: {
-    fetchLogs: vi.fn(async () => [localLog, languageToolLog]),
+    fetchLogs: vi.fn(async () => [localLog, languageToolLog, ...chunkDistractorLogs]),
     clearAllLogs: vi.fn(async () => true),
   },
 }));
@@ -56,6 +76,9 @@ describe('TeacherAnalytics realtime diagnosis updates', () => {
     expect(wrapper.text()).toContain('動詞形式錯誤');
     expect(wrapper.text()).toContain('HE_VERB_AGR');
     expect(wrapper.text()).toContain('Grammar');
+    expect(wrapper.text()).toContain('片語題錯誤選項');
+    expect(wrapper.text()).toContain('look after');
+    expect(wrapper.text()).toContain('2 次');
     expect(wrapper.text()).toContain('1 次（100%）');
 
     const receive = realtime.callback as (payload: {

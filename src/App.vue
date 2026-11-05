@@ -219,6 +219,17 @@ const checkAndSetInitialStage = () => {
 
 const handlePreviewSuccess = () => { currentQuestion.value.type === 'chunk' ? handleSuccess() : currentStage.value = 'input'; };
 
+const handleChunkWrongAnswer = (option: string) => {
+  CloudDatabase.logEvent({
+    student_name: '匿名學生',
+    question_id: currentQuestion.value.id,
+    error_code: 'CHUNK_DISTRACTOR',
+    source: 'local',
+    category: 'chunk_distractor',
+    rule_id: option,
+  });
+};
+
 const fullSentenceData = computed(() => {
   const noun = currentQuestion.value.targetNoun;
   const modifier = getQuestionUiMode(currentQuestion.value) === 'REDUCE'
@@ -469,7 +480,7 @@ const logoutAdmin = () => {
         <ChunkPreview :image="currentQuestion.previewData.targetImage" :noun="currentQuestion.previewData.targetNoun"
           :chunk="currentQuestion.previewData.chunkText" :zhMeaning="currentQuestion.previewData.chunkZh"
           :quizOptions="currentQuestion.previewData.quizOptions" :speechRate="currentQuestion.speechRate || 0.8"
-          @success="handlePreviewSuccess" />
+          @success="handlePreviewSuccess" @wrong-answer="handleChunkWrongAnswer" />
       </div>
 
       <div v-else-if="currentStage === 'input' && currentQuestion.inputData" class="stage-content">

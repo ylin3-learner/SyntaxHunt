@@ -174,6 +174,7 @@ const sstDistribution = computed(() => {
         label: sstLabels[category],
         count: logs.value.filter(log =>
             log.source !== 'languagetool'
+            && log.error_code !== 'CHUNK_DISTRACTOR'
             &&
             log.error_code !== 'SUCCESS'
             && log.status !== 'PENDING'
@@ -220,6 +221,28 @@ const languageToolStats = computed(() => {
     return [...grouped.values()].sort((left, right) => right.count - left.count);
 });
 
+const chunkDistractorStats = computed(() => {
+    const grouped = new Map<string, { questionId: string; questionText: string; option: string; count: number }>();
+    logs.value.filter(log => log.error_code === 'CHUNK_DISTRACTOR').forEach(log => {
+        const option = log.rule_id || '未記錄選項';
+        const key = `${log.question_id}\u0000${option}`;
+        const item = grouped.get(key);
+        if (item) item.count += 1;
+        else {
+            const question = props.questionBank.find(candidate => candidate.id === log.question_id);
+            grouped.set(key, {
+                questionId: log.question_id,
+                questionText: question?.previewData
+                    ? `${question.previewData.targetNoun} [ ${question.previewData.chunkText} ]`
+                    : log.question_id,
+                option,
+                count: 1,
+            });
+        }
+    });
+    return [...grouped.values()].sort((left, right) => right.count - left.count);
+});
+
 interface SubNode {
     questionId: string;
     questionText: string;
@@ -238,6 +261,8 @@ interface ErrorNode {
 const errorTree = computed<ErrorNode[]>(() => {
     const errorLogs = logs.value.filter(log =>
         log.source !== 'languagetool'
+        &&
+        log.error_code !== 'CHUNK_DISTRACTOR'
         &&
         log.error_code !== 'SUCCESS' && log.status !== 'PENDING'
     );
@@ -340,6 +365,21 @@ const errorTree = computed<ErrorNode[]>(() => {
                             :key="`${item.category}-${item.ruleId}`" class="language-tool-row">
                             <span>{{ item.category }}</span>
                             <code>{{ item.ruleId }}</code>
+                            <strong>{{ item.count }} 次</strong>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="phrase-distractor-chart" aria-label="片語題錯誤選項統計">
+                    <h3>片語題錯誤選項</h3>
+                    <p v-if="chunkDistractorStats.length === 0" class="language-tool-empty">
+                        尚無片語題錯誤選項紀錄。
+                    </p>
+                    <div v-else class="phrase-distractor-list">
+                        <div v-for="item in chunkDistractorStats"
+                            :key="`${item.questionId}-${item.option}`" class="phrase-distractor-row">
+                            <span>{{ item.questionText }}</span>
+                            <code>{{ item.option }}</code>
                             <strong>{{ item.count }} 次</strong>
                         </div>
                     </div>
@@ -544,6 +584,39 @@ const errorTree = computed<ErrorNode[]>(() => {
 
 .language-tool-row code {
     color: #155e87;
+    overflow-wrap: anywhere;
+}
+
+.phrase-distractor-chart {
+    margin-bottom: 28px;
+    padding: 18px;
+    border: 1px solid #f1dfbd;
+    border-radius: 14px;
+    background: #fffcf6;
+}
+
+.phrase-distractor-chart h3 {
+    margin: 0 0 14px;
+    color: #333;
+}
+
+.phrase-distractor-list {
+    display: grid;
+    gap: 8px;
+}
+
+.phrase-distractor-row {
+    display: grid;
+    grid-template-columns: minmax(100px, 1fr) minmax(120px, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.phrase-distractor-row code {
+    color: #9a5c00;
     overflow-wrap: anywhere;
 }
 
