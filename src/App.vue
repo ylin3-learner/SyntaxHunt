@@ -306,7 +306,10 @@ const updateQuestionBank = async (updatedQuestions: QuestionData[]) => {
   const currentIdx = currentIndex.value;
   questionBank.value = updatedQuestions;
 
-  console.log('📥 App.vue 收到本地同步題庫:', JSON.parse(JSON.stringify(updatedQuestions)));
+  console.log('📥 App.vue 收到待儲存題目順序:', updatedQuestions.map((question, sortOrder) => ({
+    id: question.id,
+    sortOrder,
+  })));
 
   fixAntecedentNumbers();
   showAdmin.value = false;

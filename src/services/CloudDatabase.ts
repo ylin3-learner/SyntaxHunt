@@ -29,13 +29,25 @@ export const CloudDatabase = {
     try {
       const { data, error } = await supabase
         .from('questions')
-        .select('data')
+        .select('data, created_at')
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       if (!data || data.length === 0) return null;
 
-      return data.map((row: any) => row.data) as QuestionData[];
+      const questions = data.map((row, index) => {
+        const question = row.data as QuestionData;
+        return {
+          ...question,
+          sortOrder: Number.isFinite(question.sortOrder) ? question.sortOrder : index,
+        };
+      });
+      questions.sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
+      console.log('☁️ 雲端題庫讀取順序:', questions.map(question => ({
+        id: question.id,
+        sortOrder: question.sortOrder,
+      })));
+      return questions;
     } catch (error) {
       console.error('無法連線到雲端資料庫:', error);
       return null;
@@ -54,6 +66,15 @@ export const CloudDatabase = {
 
       const cloudIds = cloudData?.map(d => d.id) || [];
       const localIds = questions.map(q => q.id);
+      const rows = questions.map((question, sortOrder) => ({
+        id: question.id,
+        data: { ...question, sortOrder },
+      }));
+
+      console.log('☁️ 準備儲存題庫順序:', rows.map(row => ({
+        id: row.id,
+        sortOrder: row.data.sortOrder,
+      })));
 
       // 2. 找出「雲端有，但本地已經被刪除」的 ID
       const idsToDelete = cloudIds.filter(id => !localIds.includes(id));
@@ -70,11 +91,6 @@ export const CloudDatabase = {
 
       // 4. 執行 upsert（更新既有的，插入新的）
       if (questions.length > 0) {
-        const rows = questions.map(q => ({
-          id: q.id,
-          data: q
-        }));
-
         const { error: upsertError } = await supabase
           .from('questions')
           .upsert(rows, { onConflict: 'id' });
@@ -82,6 +98,10 @@ export const CloudDatabase = {
         if (upsertError) throw upsertError;
       }
 
+      console.log('☁️ 題庫順序儲存完成:', rows.map(row => ({
+        id: row.id,
+        sortOrder: row.data.sortOrder,
+      })));
       return true;
     } catch (error) {
       console.error('儲存到雲端失敗:', error);

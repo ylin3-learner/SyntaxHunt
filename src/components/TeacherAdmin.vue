@@ -463,6 +463,14 @@ const saveAllAndClose = () => {
   emit('close');
 };
 
+const handleQuestionReorder = (questions: QuestionData[]) => {
+  localQuestions.value = questions;
+  console.log('🧩 題目流程順序已更新:', questions.map((question, index) => ({
+    id: question.id,
+    sortOrder: index,
+  })));
+};
+
 const openQuestionEdit = (id: string) => {
   const question = localQuestions.value.find(item => item.id === id);
   if (question) editQuestion(question);
@@ -472,7 +480,7 @@ const openQuestionEdit = (id: string) => {
 <template>
   <Teleport to="body">
     <QuestionFlow v-if="showQuestionFlow" :questions="localQuestions" :selected-id="editingId"
-      @reorder="localQuestions = $event" @edit="openQuestionEdit" @back="showQuestionFlow = false" />
+      @reorder="handleQuestionReorder" @edit="openQuestionEdit" @back="showQuestionFlow = false" />
     <div v-else class="admin-modal">
       <div class="admin-layout">
         <!-- 左側邊欄 -->
