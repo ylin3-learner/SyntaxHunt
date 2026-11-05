@@ -197,13 +197,27 @@ const checkAnswer = async (force = false) => {
   isCheckingLanguageTool.value = true;
   let timedOut = false;
   let requestTimeout: ReturnType<typeof setTimeout> | undefined;
-  const submittedText = studentTokens.map(token => token.replace(/[\[\]]/g, '')).join(' ');
+
+  // 1. 先把作答區的字塊拼起來 (去除中括號)
+  const answerText = studentTokens.map(token => token.replace(/[\[\]]/g, '')).join(' ');
+
+  // 2. 從 props 裡拿出克漏字上下文，拼接成完整句子
+  let submittedText = answerText;
+  const cloze = props.question?.contextCloze;
+
+  if (cloze) {
+    const prefix = cloze.prefix || '';
+    const suffix = cloze.suffix || '';
+    // 組合前綴、作答、後綴，並清除多餘的連續空白
+    submittedText = `${prefix} ${answerText} ${suffix}`.replace(/\s+/g, ' ').trim();
+  }
+
   const timeout = new Promise<never>((_, reject) => {
     requestTimeout = setTimeout(() => {
       timedOut = true;
       controller.abort();
       reject(new Error('LanguageTool request timed out.'));
-    }, 3000);
+    }, 8000);
     diagnosisTimeout = requestTimeout;
   });
 
@@ -214,8 +228,11 @@ const checkAnswer = async (force = false) => {
     ]);
     if (requestId !== diagnosisRequest) return;
 
+    // 在呼叫前計算前綴長度 (包含那個空白)
+    const prefixLength = cloze && cloze.prefix ? cloze.prefix.length + 1 : 0;
+
     const languageToolSignals = matches.map(match =>
-      toLanguageToolSignal(match, submittedText, studentTokens)
+      toLanguageToolSignal(match, submittedText, studentTokens, prefixLength)
     );
     const displayedLanguageToolSignals = props.question.ui_mode === 'REDUCE'
       ? languageToolSignals.slice(0, 1)
@@ -257,24 +274,32 @@ const checkAnswer = async (force = false) => {
 const toLanguageToolSignal = (
   match: LanguageToolMatch,
   submittedText: string,
-  submittedChunks: string[]
-): DiagnosticSignal => ({
-  code: match.rule.id,
-  source: 'languagetool',
-  ruleId: match.rule.id,
-  category: match.rule.category?.name,
-  offset: match.offset,
-  length: match.length,
-  index: mapOffsetToChunkIndex(
-    submittedText,
-    match.offset,
-    match.length,
-    submittedChunks.map(token => token.replace(/[\[\]]/g, ''))
-  ),
-  message: match.message,
-  replacements: match.replacements,
-  nativeMatch: match,
-});
+  submittedChunks: string[],
+  prefixLength: number
+): DiagnosticSignal => {
+  // 核心修正：計算相對於作答區的偏移量
+  // 使用 Math.max(0, ...) 避免因為前綴的錯誤導致負數
+  const relativeOffset = Math.max(0, match.offset - prefixLength);
+
+  // 這裡才是回傳物件
+  return {
+    code: match.rule.id,
+    source: 'languagetool',
+    ruleId: match.rule.id,
+    category: match.rule.category?.name,
+    offset: relativeOffset,
+    length: match.length,
+    index: mapOffsetToChunkIndex(
+      submittedText,
+      relativeOffset,
+      match.length,
+      submittedChunks.map(token => token.replace(/[\[\]]/g, ''))
+    ),
+    message: match.message,
+    replacements: match.replacements,
+    nativeMatch: match,
+  };
+};
 
 const isError = (index: number) => signals.value.some(s => s.index === index);
 
@@ -322,8 +347,8 @@ const handleOutsideClick = () => {
               @click.stop="answerArea[index].can_morph ? toggleMorphMenu(answerArea[index]) : unselectTile(answerArea[index])">
               {{ answerArea[index].text.replace(/[\[\]]/g, '') }}
             </div>
-            <button v-if="answerArea[index].can_morph" type="button"
-              class="tile-remove" aria-label="移除字塊" @click.stop="unselectTile(answerArea[index])">×</button>
+            <button v-if="answerArea[index].can_morph" type="button" class="tile-remove" aria-label="移除字塊"
+              @click.stop="unselectTile(answerArea[index])">×</button>
             <!-- 變形下拉選單 -->
             <div v-if="activeMorphId === answerArea[index].id" class="morph-menu">
               <div v-for="opt in (answerArea[index].options ?? answerArea[index].morph_options)" :key="opt"
@@ -345,23 +370,18 @@ const handleOutsideClick = () => {
           <span class="reduce-tile-text">{{ tile.text.replace(/[\[\]]/g, '') }}</span>
           <div class="reduce-tile-actions">
             <button type="button" class="reduce-reorder-button" :disabled="index === 0 || isSuccess"
-              :aria-label="`將「${tile.text.replace(/[\[\]]/g, '')}」往左移`"
-              @click="moveReducedTile(tile, -1)">←</button>
-            <button type="button" class="reduce-reorder-button"
-              :disabled="index === answerArea.length - 1 || isSuccess"
-              :aria-label="`將「${tile.text.replace(/[\[\]]/g, '')}」往右移`"
-              @click="moveReducedTile(tile, 1)">→</button>
+              :aria-label="`將「${tile.text.replace(/[\[\]]/g, '')}」往左移`" @click="moveReducedTile(tile, -1)">←</button>
+            <button type="button" class="reduce-reorder-button" :disabled="index === answerArea.length - 1 || isSuccess"
+              :aria-label="`將「${tile.text.replace(/[\[\]]/g, '')}」往右移`" @click="moveReducedTile(tile, 1)">→</button>
             <button type="button" class="reduce-discard-button" :disabled="isSuccess"
-              :aria-label="`移除「${tile.text.replace(/[\[\]]/g, '')}」`"
-              @click="discardTile(tile)">移除</button>
+              :aria-label="`移除「${tile.text.replace(/[\[\]]/g, '')}」`" @click="discardTile(tile)">移除</button>
           </div>
         </div>
       </template>
     </div>
     <button v-if="question.ui_mode !== 'REDUCE' && answerArea.length > 0
       && answerArea.length < question.correctAnswer.length && signals.length === 0
-      && !isCheckingLanguageTool"
-      type="button" class="check-answer-button" @click.stop="checkAnswer(true)">
+      && !isCheckingLanguageTool" type="button" class="check-answer-button" @click.stop="checkAnswer(true)">
       檢查目前答案
     </button>
 
@@ -404,8 +424,7 @@ const handleOutsideClick = () => {
       <div class="trash-area">
         <div v-for="tile in trashArea" :key="tile.id" class="trash-tile">
           <span>{{ tile.text.replace(/[\[\]]/g, '') }}</span>
-          <button type="button" class="trash-restore-button"
-            :aria-label="`還原「${tile.text.replace(/[\[\]]/g, '')}」`"
+          <button type="button" class="trash-restore-button" :aria-label="`還原「${tile.text.replace(/[\[\]]/g, '')}」`"
             @click="restoreTile(tile)">還原 ↶</button>
         </div>
         <div v-if="trashArea.length === 0" class="trash-placeholder">
@@ -417,8 +436,7 @@ const handleOutsideClick = () => {
     <!-- 字庫 (Build/Morph) -->
     <div v-if="question.ui_mode !== 'REDUCE'" class="word-bank">
       <div v-for="tile in wordBank" :key="tile.id" class="tile"
-        :class="{ 'tile-chunk': tile.text.startsWith('['), 'can-morph': tile.can_morph }"
-        @click="selectTile(tile)">
+        :class="{ 'tile-chunk': tile.text.startsWith('['), 'can-morph': tile.can_morph }" @click="selectTile(tile)">
         {{ tile.text.replace(/[\[\]]/g, '') }}
       </div>
     </div>

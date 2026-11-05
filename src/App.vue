@@ -238,7 +238,7 @@ const fullSentenceData = computed(() => {
     ? currentQuestion.value.type === 'contrast'
       ? currentQuestion.value.grammarFeature.relative.label
       : currentQuestion.value.grammarFeature[currentMode.value].label
-    : getQuestionAnswer(currentQuestion.value).join(' ');
+    : formatAnswerForDisplay(microQuestion.value.correctAnswer);
   return { target: `${noun} ${modifier} is my favorite.`, display: `${noun} | ${modifier} | is my favorite.`, modifier };
 });
 
@@ -462,7 +462,7 @@ const logoutAdmin = () => {
           @skip="nextQuestion" />
         <p v-else class="skip-hint">已略過語音練習。</p>
 
-        <button class="btn-primary mt-4" @click="nextQuestion" :disabled="isClassMode">
+        <button class="btn-primary mt-4" @click="nextQuestion()" :disabled="isClassMode">
           {{ isClassMode ? '等待老師解鎖...' : (currentIndex < questionBank.length - 1 ? '下一關 ➔' : '完成練習 🏁') }} </button>
             <p v-if="isClassMode" style="color: #ff9800; margin-top: 10px; font-weight: bold;">
               ⚠️ 上課模式已啟動，請等待老師統一發送下一題。
