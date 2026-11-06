@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import type { QuestionData } from '../rules/types';
 
 const props = defineProps<{
@@ -10,14 +10,43 @@ const props = defineProps<{
 const emit = defineEmits<{
   (event: 'reorder', questions: QuestionData[]): void;
   (event: 'edit', id: string): void;
+  (event: 'batch-import', questions: QuestionData[], unit: string): void;
+  (event: 'create-question-in-unit', unit: string): void;
   (event: 'back'): void;
 }>();
 
 const draggedQuestionId = ref<string | null>(null);
 const dragOverQuestionId = ref<string | null>(null);
 const dragPlacement = ref<'before' | 'after'>('before');
+const dragOverUnit = ref<string | null>(null);
+const selectedQuestionIds = ref(new Set<string>());
+const unitDraft = ref('');
+const createdUnits = ref<string[]>([]);
+const activeUnit = ref('');
 const flowCanvas = ref<HTMLElement | null>(null);
 let originalDocumentOverflow = '';
+
+const getUnitCopyId = (questionId: string, unit: string) =>
+  `unit:${encodeURIComponent(unit)}:from:${encodeURIComponent(questionId)}`;
+const availableUnits = computed(() => [...new Set([
+  ...props.questions.map(question => question.unit?.trim()).filter((unit): unit is string => !!unit),
+  ...createdUnits.value,
+])].sort((a, b) => a.localeCompare(b)));
+const selectedQuestions = computed(() =>
+  props.questions.filter(question => selectedQuestionIds.value.has(question.id))
+);
+const movableQuestions = computed(() =>
+  selectedQuestions.value.filter(question => (question.unit?.trim() || '') !== activeUnit.value)
+);
+const copyableQuestions = computed(() => selectedQuestions.value.filter(question => {
+  if (!activeUnit.value || question.unit?.trim() === activeUnit.value) return false;
+  const copyId = getUnitCopyId(question.id, activeUnit.value);
+  return !props.questions.some(existing => existing.id === copyId);
+}));
+
+const questionCountForUnit = (unit: string) => props.questions.filter(question =>
+  (question.unit?.trim() || '') === unit
+).length;
 
 onMounted(() => {
   originalDocumentOverflow = document.documentElement.style.overflow;
@@ -49,7 +78,7 @@ const moveQuestionTo = (sourceId: string, targetId: string, placement: 'before' 
 const startQuestionDrag = (questionId: string, event: DragEvent) => {
   draggedQuestionId.value = questionId;
   if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.effectAllowed = 'copyMove';
     event.dataTransfer.setData('text/plain', questionId);
   }
 };
@@ -72,6 +101,29 @@ const dropQuestion = (targetId: string, event: DragEvent) => {
   clearQuestionDrag();
 };
 
+const dropQuestionInUnit = (unit: string, event: DragEvent) => {
+  event.preventDefault();
+  const sourceId = event.dataTransfer?.getData('text/plain') || draggedQuestionId.value;
+  const question = props.questions.find(item => item.id === sourceId);
+  if (question && (question.unit?.trim() || '') !== unit) {
+    const updated = props.questions.map(item => item.id === sourceId
+      ? { ...item, unit: unit || undefined }
+      : item);
+    emit('batch-import', updated, unit);
+  }
+  activeUnit.value = unit;
+  clearQuestionDrag();
+  dragOverUnit.value = null;
+};
+
+const addUnit = () => {
+  const unit = unitDraft.value.trim();
+  if (!unit) return;
+  if (!availableUnits.value.includes(unit)) createdUnits.value = [...createdUnits.value, unit];
+  activeUnit.value = unit;
+  unitDraft.value = '';
+};
+
 const moveQuestionWithKeyboard = (questionId: string, event: KeyboardEvent) => {
   if (!event.altKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
   event.preventDefault();
@@ -86,6 +138,37 @@ const moveQuestionWithKeyboard = (questionId: string, event: KeyboardEvent) => {
 const clearQuestionDrag = () => {
   draggedQuestionId.value = null;
   dragOverQuestionId.value = null;
+  dragOverUnit.value = null;
+};
+
+const toggleQuestionSelection = (questionId: string) => {
+  const selected = new Set(selectedQuestionIds.value);
+  if (selected.has(questionId)) selected.delete(questionId);
+  else selected.add(questionId);
+  selectedQuestionIds.value = selected;
+};
+
+const moveSelectedToUnit = () => {
+  if (movableQuestions.value.length === 0) return;
+  const movedIds = new Set(movableQuestions.value.map(question => question.id));
+  const updated = props.questions.map(question => movedIds.has(question.id)
+    ? { ...question, unit: activeUnit.value || undefined }
+    : question);
+  emit('batch-import', updated, activeUnit.value);
+};
+
+const copySelectedToUnit = () => {
+  if (copyableQuestions.value.length === 0 || !activeUnit.value) return;
+  const copies = copyableQuestions.value.map(question => ({
+    ...question,
+    id: getUnitCopyId(question.id, activeUnit.value),
+    unit: activeUnit.value,
+  }));
+  const updated = [...props.questions, ...copies].map((question, sortOrder) => ({
+    ...question,
+    sortOrder,
+  }));
+  emit('batch-import', updated, activeUnit.value);
 };
 </script>
 
@@ -98,10 +181,62 @@ const clearQuestionDrag = () => {
       <div class="flow-title">
         <p class="flow-eyebrow">QUESTION FLOW</p>
         <h1>題目流程編排</h1>
-        <p>拖曳節點移動到另一題前後，學生會依照連線順序逐關作答。</p>
+        <p>建立單元資料夾，再把題目拖進資料夾；未分類題目會留在收件匣。</p>
       </div>
       <span class="flow-count">{{ props.questions.length }} 個節點</span>
     </header>
+
+    <section class="unit-workspace" aria-label="單元資料夾">
+      <div class="unit-toolbar">
+        <div class="unit-heading">
+          <strong>單元資料夾</strong>
+          <span>拖曳題目到資料夾，或勾選多題後批次移入</span>
+        </div>
+        <form class="new-unit-form" @submit.prevent="addUnit">
+          <input v-model="unitDraft" aria-label="新單元名稱" type="text" placeholder="新增單元，例如 Unit 1" />
+          <button type="submit" :disabled="!unitDraft.trim()">＋ 建立單元</button>
+        </form>
+      </div>
+      <div class="unit-folders">
+        <button type="button" class="unit-folder inbox-folder"
+          :class="{ active: activeUnit === '', 'is-drop-target': dragOverUnit === '' }"
+          @click="activeUnit = ''"
+          @dragover.prevent="dragOverUnit = ''"
+          @dragleave="dragOverUnit = null"
+          @drop="dropQuestionInUnit('', $event)">
+          <span class="folder-icon">▱</span>
+          <span class="folder-name">未分類</span>
+          <span class="folder-count">{{ questionCountForUnit('') }}</span>
+        </button>
+        <button v-for="unit in availableUnits" :key="unit" type="button" class="unit-folder"
+          :class="{ active: activeUnit === unit, 'is-drop-target': dragOverUnit === unit }"
+          @click="activeUnit = unit"
+          @dragover.prevent="dragOverUnit = unit"
+          @dragleave="dragOverUnit = null"
+          @drop="dropQuestionInUnit(unit, $event)">
+          <span class="folder-icon">▱</span>
+          <span class="folder-name">{{ unit }}</span>
+          <span class="folder-count">{{ questionCountForUnit(unit) }}</span>
+        </button>
+        <span v-if="availableUnits.length === 0" class="unit-empty-hint">建立單元後，拖曳題目到資料夾即可分類。</span>
+      </div>
+      <div class="batch-actions">
+        <span aria-live="polite">已選 {{ selectedQuestionIds.size }} 題</span>
+        <span class="batch-target">{{ activeUnit ? `目標：${activeUnit}` : '目標：未分類收件匣' }}</span>
+        <button type="button" class="move-button" :disabled="movableQuestions.length === 0"
+          @click="moveSelectedToUnit">
+          移入{{ activeUnit || '未分類' }}（{{ movableQuestions.length }}）
+        </button>
+        <button type="button" class="copy-button" :disabled="copyableQuestions.length === 0"
+          @click="copySelectedToUnit">
+          複製到{{ activeUnit || '單元' }}（{{ copyableQuestions.length }}）
+        </button>
+        <button v-if="activeUnit" type="button" class="add-question-button"
+          @click="emit('create-question-in-unit', activeUnit)">
+          在此單元新增題目
+        </button>
+      </div>
+    </section>
 
     <section ref="flowCanvas" class="flow-canvas" role="list" aria-label="題目作答流程">
       <div v-for="(q, index) in props.questions" :key="q.id" class="flow-node-wrap">
@@ -122,12 +257,19 @@ const clearQuestionDrag = () => {
           <div class="node-topline">
             <span class="node-step">STEP {{ String(index + 1).padStart(2, '0') }}</span>
             <div class="node-badges">
+              <span v-if="q.unit?.trim()" class="node-unit">{{ q.unit?.trim() }}</span>
+              <span v-else class="node-unit unclassified-badge">未分類</span>
               <span class="node-kind">{{ q.type === 'grammar' ? '文法題' : q.type === 'contrast' ? '對比題' : q.type === 'chunk' ? '片語題' : '標準題' }}</span>
               <span v-if="q.type === 'standard'" class="node-mode" :class="q.mode || 'build'">
                 {{ (q.mode || 'build') === 'reduce' ? 'Reduce' : 'Build' }}
               </span>
             </div>
           </div>
+          <label class="node-select" @click.stop>
+            <input type="checkbox" :checked="selectedQuestionIds.has(q.id)"
+              :aria-label="`選取第 ${index + 1} 關以批次移動`" @change="toggleQuestionSelection(q.id)" />
+            選取
+          </label>
           <h2>{{ q.targetNoun || '未命名題目' }}</h2>
           <p class="node-prompt">
             {{ q.type === 'grammar' ? (q.correctAnswer || []).join(' ') || '尚未設定答案' : q.grammarFeature?.relative?.label || '尚未設定句型' }}
@@ -238,6 +380,194 @@ const clearQuestionDrag = () => {
   color: #0369a1;
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.unit-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 32px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.unit-toolbar,
+.unit-heading,
+.new-unit-form,
+.unit-folders,
+.batch-actions {
+  display: flex;
+  align-items: center;
+}
+
+.unit-toolbar {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.unit-heading {
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.unit-heading strong {
+  color: #0f172a;
+  font-size: 0.92rem;
+}
+
+.unit-heading span,
+.unit-empty-hint {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.new-unit-form {
+  gap: 7px;
+}
+
+.new-unit-form input {
+  width: 190px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.new-unit-form input:focus {
+  border-color: #0ea5e9;
+  outline: 2px solid rgba(14, 165, 233, 0.15);
+}
+
+.new-unit-form button,
+.move-button,
+.copy-button,
+.add-question-button {
+  padding: 8px 11px;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  background: #f0f9ff;
+  color: #0369a1;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.new-unit-form button:disabled,
+.move-button:disabled,
+.copy-button:disabled {
+  border-color: #e2e8f0;
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.unit-folders {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.unit-folder {
+  display: inline-flex;
+  max-width: 240px;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid #dbe3ec;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #475569;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.unit-folder:hover {
+  border-color: #7dd3fc;
+  background: #f0f9ff;
+}
+
+.unit-folder.active {
+  border-color: #38bdf8;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.unit-folder.is-drop-target {
+  border-color: #0284c7;
+  background: #bae6fd;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.16);
+}
+
+.folder-icon {
+  color: #f59e0b;
+  font-size: 1rem;
+}
+
+.folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-count {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.unit-empty-hint {
+  padding: 5px 2px;
+}
+
+.batch-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.batch-target {
+  margin-right: auto;
+  color: #334155;
+  font-weight: 700;
+}
+
+.move-button {
+  border-color: #0284c7;
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.move-button:hover:not(:disabled) {
+  background: #0369a1;
+}
+
+.copy-button {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.copy-button:hover:not(:disabled) {
+  background: #ede9fe;
+}
+
+.add-question-button {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
 }
 
 .flow-canvas {
@@ -354,6 +684,24 @@ const clearQuestionDrag = () => {
   font-weight: 700;
 }
 
+.node-unit {
+  max-width: 90px;
+  overflow: hidden;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-unit.unclassified-badge {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
 .node-mode {
   padding: 3px 7px;
   border-radius: 5px;
@@ -390,6 +738,22 @@ const clearQuestionDrag = () => {
   line-height: 1.4;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.node-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.node-select input {
+  margin: 0;
+  accent-color: #0284c7;
 }
 
 .node-meta {
@@ -558,6 +922,28 @@ const clearQuestionDrag = () => {
 
   .flow-canvas {
     padding: 24px 18px;
+  }
+
+  .unit-workspace {
+    gap: 10px;
+    padding: 12px 18px;
+  }
+
+  .new-unit-form {
+    width: 100%;
+  }
+
+  .new-unit-form input {
+    flex: 1;
+    width: auto;
+  }
+
+  .batch-actions {
+    align-items: stretch;
+  }
+
+  .batch-target {
+    flex-basis: 100%;
   }
 
   .flow-footer {

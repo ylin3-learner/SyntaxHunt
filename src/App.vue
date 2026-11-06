@@ -320,9 +320,20 @@ const updateQuestionBank = async (updatedQuestions: QuestionData[]) => {
     currentIndex.value = currentIdx;
   }
 
-  localStorage.setItem('custom_questions', JSON.stringify(updatedQuestions));
-  const success = await CloudDatabase.saveQuestions(updatedQuestions);
+  const success = await persistQuestionBank(updatedQuestions);
   if (!success) alert('注意：題庫已存在本機，但「雲端同步失敗」，請確認網路連線。');
+};
+
+const persistQuestionBank = async (questions: QuestionData[]) => {
+  localStorage.setItem('custom_questions', JSON.stringify(questions));
+  return CloudDatabase.saveQuestions(questions);
+};
+
+const handleBatchQuestionImport = async (questions: QuestionData[]) => {
+  questionBank.value = questions;
+  fixAntecedentNumbers();
+  const success = await persistQuestionBank(questions);
+  if (!success) alert('注意：批次題目已存在本機，但「雲端同步失敗」，請確認網路連線。');
 };
 
 const handleLocalSync = (updatedQuestions: QuestionData[]) => {
@@ -527,7 +538,8 @@ const logoutAdmin = () => {
     </div>
 
     <TeacherAdmin v-if="showAdmin" :currentQuestions="questionBank" @update="updateQuestionBank"
-      @sync-local="handleLocalSync" @push="handlePushQuestion" @close="showAdmin = false" />
+      @batch-import="handleBatchQuestionImport" @sync-local="handleLocalSync" @push="handlePushQuestion"
+      @close="showAdmin = false" />
 
     <DebugConsole v-if="isDebugMode" />
   </div>

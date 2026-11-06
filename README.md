@@ -195,7 +195,7 @@ sequenceDiagram
 - **Funnel-Based Authoring**: Wrap phrases in `[ ]`. Visualizes "Kept" and "Discarded" words. If a verb needs to become a preposition, edit the green box.
 - **Semantic Control (Person vs. Thing)**: A dedicated toggle in the authoring form allows teachers to explicitly define whether the antecedent is a "Person" or a "Thing". This eliminates fragile string-matching heuristics and ensures the local rule engine accurately diagnoses `who` vs. `which` errors.
 - **Local Deterministic Chunking**: Uses `compromise.js` and an irregular-verb JSON table to automatically generate interactive chunks and morphology options without calling an LLM.
-- **Visual Question Flow**: Open a full-screen node canvas to see the question sequence as connected steps. Drag nodes before or after other questions to reorder them; `Alt` + `←` / `→` also moves the focused node. Click **Finish prep** to save the order to the cloud so it persists after a refresh.
+- **Visual Question Flow and Unit Folders**: Open the full-screen node canvas to reorder questions by dragging nodes or using `Alt` + `←` / `→`. Create unit folders, then drag a question into a folder or select multiple questions and move them together. Unselected questions remain in the Unclassified inbox. Use **Copy to** to reuse a question in another unit without changing the original, or create a new question directly in the selected unit. Changes are saved to local storage and the cloud immediately; **Finish prep** saves the final question order.
 - **Master Remote Control**: Push questions, force-reset timers, and add time (`+30s`) instantly.
 
 ### Using general grammar questions

@@ -109,6 +109,7 @@ export type UIMode =
 export interface QuestionData {
   id: string;
   sortOrder?: number;
+  unit?: string;
 
   /**
    * 題型分類

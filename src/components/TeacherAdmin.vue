@@ -41,6 +41,7 @@ watch(questionMode, (newMode) => {
 
 const emit = defineEmits<{
   (e: 'update', questions: QuestionData[]): void;
+  (e: 'batch-import', questions: QuestionData[]): void;
   (e: 'sync-local', questions: QuestionData[]): void;
   (e: 'push', id: string): void;
   (e: 'close'): void;
@@ -52,6 +53,24 @@ watch(() => props.currentQuestions, (questions) => {
     localQuestions.value = JSON.parse(JSON.stringify(questions));
   }
 }, { deep: true });
+
+const unitFilter = ref('all');
+const unitName = ref('');
+const availableUnits = computed(() => [...new Set(
+  localQuestions.value
+    .map(question => typeof question.unit === 'string' ? question.unit.trim() : '')
+    .filter(Boolean)
+)].sort((a, b) => a.localeCompare(b)));
+const filteredQuestions = computed(() => {
+  if (unitFilter.value === 'all') return localQuestions.value;
+  if (unitFilter.value === 'unclassified') {
+    return localQuestions.value.filter(question => typeof question.unit !== 'string' || !question.unit.trim());
+  }
+  const selectedUnit = unitFilter.value.slice('unit:'.length);
+  return localQuestions.value.filter(question =>
+    typeof question.unit === 'string' && question.unit.trim() === selectedUnit
+  );
+});
 
 const editingId = ref<string | null>(null);
 const questionType = ref<'standard' | 'contrast' | 'chunk' | 'grammar'>('standard');
@@ -100,6 +119,7 @@ const handleGrammarConceptChange = () => {
 
 const resetForm = () => {
   grammarSentence.value = ''; grammarAnswer.value = ''; grammarChunks.value = [];
+  unitName.value = '';
   uiMode.value = 'BUILD'; grammarConcept.value = 'SENTENCE_PATTERN'; grammarError.value = '';
   chunkZhInput.value = ''; chunkQuizInput.value = ''; distractorImageUrl.value = '';
   correctLabel.value = ''; distractorLabel.value = '';
@@ -118,6 +138,7 @@ const resetForm = () => {
 
 const editQuestion = (q: QuestionData) => {
   showQuestionFlow.value = false;
+  unitName.value = q.unit || '';
   if (q.type === 'grammar') {
     editingId.value = q.id;
     questionType.value = 'grammar';
@@ -305,6 +326,7 @@ const saveQuestion = () => {
     const question: QuestionData = {
       id: editingId.value || `q_${Date.now()}`,
       type: 'grammar',
+      unit: unitName.value.trim() || undefined,
       ui_mode: uiMode.value,
       concept: grammarConcept.value,
       targetNoun: targetNoun.value.trim() || source.split(/\s+/)[0],
@@ -370,6 +392,7 @@ const saveQuestion = () => {
 
   const newQuestion: QuestionData = {
     id: editingId.value || `q_${Date.now()}`,
+    unit: unitName.value.trim() || undefined,
     type: questionType.value, mode: questionMode.value, enabledStages: enabledStages.value,
     targetNoun: targetNoun.value,
     antecedent: { noun: targetNoun.value, number: antecedentNumber.value, person: antecedentPerson.value },
@@ -475,6 +498,18 @@ const handleQuestionReorder = (questions: QuestionData[]) => {
   })));
 };
 
+const handleBatchImport = (questions: QuestionData[], unit: string) => {
+  localQuestions.value = questions;
+  unitFilter.value = unit ? `unit:${unit}` : 'unclassified';
+  emit('batch-import', questions);
+};
+
+const startQuestionInUnit = (unit: string) => {
+  showQuestionFlow.value = false;
+  resetForm();
+  unitName.value = unit;
+};
+
 const openQuestionEdit = (id: string) => {
   const question = localQuestions.value.find(item => item.id === id);
   if (question) editQuestion(question);
@@ -484,7 +519,9 @@ const openQuestionEdit = (id: string) => {
 <template>
   <Teleport to="body">
     <QuestionFlow v-if="showQuestionFlow" :questions="localQuestions" :selected-id="editingId"
-      @reorder="handleQuestionReorder" @edit="openQuestionEdit" @back="showQuestionFlow = false" />
+      @reorder="handleQuestionReorder" @edit="openQuestionEdit" @batch-import="handleBatchImport"
+      @create-question-in-unit="startQuestionInUnit"
+      @back="showQuestionFlow = false" />
     <div v-else class="admin-modal">
       <div class="admin-layout">
         <!-- 左側邊欄 -->
@@ -529,9 +566,17 @@ const openQuestionEdit = (id: string) => {
               <span class="toggle-icon">{{ isQuestionsExpanded ? '▲' : '▼' }}</span>
             </div>
             <div class="list-wrapper" v-show="isQuestionsExpanded">
+              <div class="unit-filter">
+                <label for="unit-filter">顯示單元</label>
+                <select id="unit-filter" v-model="unitFilter" class="grammar-select">
+                  <option value="all">全部單元</option>
+                  <option value="unclassified">未分類</option>
+                  <option v-for="unit in availableUnits" :key="unit" :value="`unit:${unit}`">{{ unit }}</option>
+                </select>
+              </div>
               <div class="question-list">
                 <div class="question-list-inner">
-                  <div v-for="(q, index) in localQuestions" :key="q.id" class="question-item"
+                  <div v-for="(q, index) in filteredQuestions" :key="q.id" class="question-item"
                     :class="{ active: editingId === q.id }" @click="editQuestion(q)">
 
                     <div class="q-index">
@@ -581,6 +626,10 @@ const openQuestionEdit = (id: string) => {
           </div>
 
           <div class="editor-body">
+            <div class="form-group">
+              <label for="question-unit">單元名稱</label>
+              <input id="question-unit" v-model="unitName" type="text" placeholder="例如：Unit 1" />
+            </div>
             <template v-if="questionType === 'grammar'">
               <div class="form-group">
                 <label for="grammar-concept">文法概念</label>
@@ -1168,8 +1217,29 @@ const openQuestionEdit = (id: string) => {
   min-height: 0;
 }
 
+.unit-filter {
+  padding: 12px 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.unit-filter label {
+  flex-shrink: 0;
+  color: #555;
+  font-size: 0.9rem;
+  font-weight: bold;
+}
+
+.unit-filter .grammar-select {
+  flex: 1;
+  min-width: 0;
+}
+
 .question-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 16px;
   display: flex;
