@@ -205,9 +205,33 @@ sequenceDiagram
 3. Enter the source sentence and the exact target answer. For `REDUCE`, enter the complete sentence as the source and the reduced sentence as the answer.
 4. Click **Local chunking** or split the sentence manually. Bracket a multi-word chunk in the source, e.g. `[in a blue uniform]`. Review the generated chips and edit the chunks before using them.
 5. For a `MORPH` topic, mark exactly one changeable chunk and provide its comma-separated forms (e.g. `go, goes, went`). Students see the fixed sentence and click that word to choose a form. Chunking uses compromise.js and an irregular-verb JSON table; add or correct forms manually when needed.
-6. Click **Add to question bank**. Click **Send to class** on that question to make it active, or click **Finish prep** to save the bank and close the editor (reopen Teacher Admin to push it later). Students answer by clicking tiles: assemble in `BUILD`, remove tiles in `REDUCE`, and select forms in `MORPH`.
+6. Click **Add to question bank**. Click **Send to class** on that question to make it active, or click **Finish prep** to save the bank and close the editor (reopen Teacher Admin to push it later). `BUILD` shuffles assembly tiles, `PRAGMATIC_HP` shuffles the phrase bank, and `MATRIX_GATE` shuffles only its candidate cards. `MORPH` and `GRAVITY_SWITCH` keep the sentence fixed; `REDUCE` preserves the source order so students focus on deletion and simplification.
 
 > **Teacher access note:** The frontend demo uses the fixed password `admin123` and sends that same value to `teacher-action`. The Edge Function defaults to `admin123` when `TEACHER_PASSWORD` is unset; setting that secret to a different value will break remote teacher actions until the frontend is updated too. This is not secure authentication—do not expose the demo as a public or production teacher console.
+
+## 📷 UI Screenshots
+
+These are screenshots of the running Vue UI with representative lesson data. The grammar canvases are captured from their actual components; the teacher screens are captured from the application.
+
+| Student lesson | Teacher sign-in |
+| :---: | :---: |
+| ![Student lesson UI](docs/images/student-ui.png) | ![Teacher sign-in dialog](docs/images/teacher-auth.png) |
+
+| Teacher question editor | Question flow and unit folders | Teacher analytics |
+| :---: | :---: | :---: |
+| ![Teacher question editor](docs/images/teacher-admin.png) | ![Question flow canvas](docs/images/teacher-flow.png) | ![Teacher analytics dashboard](docs/images/teacher-analytics.png) |
+
+| `BUILD` — shuffled sentence assembly | `REDUCE` — preserve source order and remove chunks |
+| :---: | :---: |
+| ![BUILD canvas with shuffled word cards](docs/images/canvas-build.png) | ![REDUCE canvas with the original sentence order](docs/images/canvas-reduce.png) |
+
+| `MORPH` — fixed sentence and form selection | `GRAVITY_SWITCH` — fixed conditional sentence |
+| :---: | :---: |
+| ![MORPH fixed-sentence canvas](docs/images/canvas-morph.png) | ![GRAVITY_SWITCH conditional canvas](docs/images/canvas-gravity-switch.png) |
+
+| `MATRIX_GATE` — shuffled candidate cards | `PRAGMATIC_HP` — shuffled phrase bank |
+| :---: | :---: |
+| ![MATRIX_GATE feature selection](docs/images/canvas-matrix-gate.png) | ![PRAGMATIC_HP interaction](docs/images/canvas-pragmatic-hp.png) |
 
 ---
 
@@ -229,7 +253,7 @@ To ensure accurate diagnostics, the system performs **Context Stitching**: it re
 
 An 8-second timeout (accommodating Render's cold starts) or service failure displays a neutral notice and lets the student skip to the next question. In `BUILD` and `MORPH`, students can also check a partial answer before filling every slot.
 
-Teacher-authored general grammar questions select a curriculum chapter and a specific topic. Each topic supplies a single recommended interaction, a learning focus, and a short rationale; teachers no longer freely combine incompatible concepts and UI modes. Morphology topics show the fixed sentence and let students click the single configured target word to choose a form, without a tile bank or sentence slots. `autoChunk(sentence, concept)` uses compromise.js for deterministic tokenization and verb parsing, checks the irregular-verb table first, and preserves bracketed phrases as explicit chunks. It does not call an LLM. MORPH options are stored as strings with `current_index` identifying the initial selected form, while legacy `morph_options` remains supported. Modal questions use a strength gauge, REDUCE uses the shredder, and BUILD uses magnetic sentence slots. Questions without a saved curriculum topic keep their existing settings and canvas.
+Teacher-authored general grammar questions select a curriculum chapter and a specific topic. Each topic supplies a recommended interaction, learning focus, and rationale. `BUILD` randomizes the authored word bank without changing the saved answer; `MORPH` and `GRAVITY_SWITCH` keep sentence order fixed; `REDUCE` starts from the original sentence order; `MATRIX_GATE` randomizes its candidate cards only; and `PRAGMATIC_HP` randomizes its phrase bank. The topic catalog maps five sentence patterns to BUILD, tense/comparison/gerund/passive forms to MORPH, participle and relative-clause simplification plus pronoun substitution to REDUCE, special and sense/causative verb contrasts to MATRIX_GATE, modal/emotion contexts to PRAGMATIC_HP, and unreal conditionals to GRAVITY_SWITCH. Morphology topics show the fixed sentence and let students click the configured target word, without a tile bank or sentence slots. `autoChunk(sentence, concept)` uses compromise.js for deterministic tokenization and verb parsing, checks the irregular-verb table first, and preserves bracketed phrases as explicit chunks. It does not call an LLM. MORPH options are stored as strings with `current_index` identifying the initial selected form, while legacy `morph_options` remains supported. Questions without a saved curriculum topic keep their existing settings and canvas.
 
 ### How the Rule Registry connects authoring, gameplay, and diagnosis
 
@@ -246,7 +270,7 @@ The registry is the **local diagnosis plugin point**, not the question authoring
    | `BUILD` | Magnetic sentence slots |
    | No concept or an unmatched combination | Legacy canvas |
 
-   The gallery shows **illustrative UI mockups, not live application screenshots**. The student's actual canvas is routed as above; tiles are selected by clicking rather than dragging, and retained `REDUCE` tiles can be reordered with their arrow controls. A `MORPH` topic keeps the sentence fixed and exposes one configured target word, rather than asking students to also assemble sentence tiles.
+   The SVG gallery below shows **illustrative UI mockups**. For live component screenshots and the student/teacher screens, see [UI Screenshots](#-ui-screenshots). The student's actual canvas is routed as above; tiles are selected by clicking rather than dragging, and retained `REDUCE` tiles can be reordered with their arrow controls. A `MORPH` topic keeps the sentence fixed and exposes one configured target word, rather than asking students to also assemble sentence tiles.
 
    | `BUILD` — assemble sentence chunks | `REDUCE` — remove unnecessary chunks |
    | :---: | :---: |

@@ -62,7 +62,7 @@ flowchart TD
 1. **片語預習與測驗 (Chunk Phrase Quiz)**：學生看圖聽發音，從相似片語中選出正確的。
 2. **空間建構 (Macro Drag)**：學生親手把「無文字標籤」的圖片塊拖過中線，建立英文後位修飾的空間語序感。
 3. **標準題與轉換題 (Standard & Reduce)**：包含聽力輸入、聚焦形式（使用獨創的**減法垃圾桶**機制）、語音輸出與意識提升。
-4. **通用文法畫布 (General Grammar Canvas)**：教師可另建 `BUILD`（組合字塊）、`REDUCE`（刪除多餘字塊）及 `MORPH`（切換字形）題型。
+4. **通用文法畫布 (General Grammar Canvas)**：20 個課綱章節共用 `BUILD`（語序結構）、`MORPH`（字形變化）、`REDUCE`（刪減合併）、`MATRIX_GATE`（句法特徵）、`PRAGMATIC_HP`（語情互動）及 `GRAVITY_SWITCH`（假設語氣）六種畫布。章節／考點提供預設畫布，教師可逐題覆寫；題目設定儲存在既有 JSONB，不需新增資料表或 AI 模型。
 
 ---
 
@@ -201,9 +201,33 @@ sequenceDiagram
 3. 輸入來源句與精確的正確答案。`REDUCE` 的來源句填完整句，答案填刪減後的句子。
 4. 點選 **本地切詞**，或手動拆解句子。若要將多個字詞視為一塊，請在來源句用中括號標示，例如 `[in a blue uniform]`。在膠囊預覽中檢查並編輯拆解結果。
 5. 使用 `MORPH` 考點時，只勾選一個可變形目標字塊，並輸入逗號分隔的形式，例如 `go, goes, went`。學生會看到固定句子，點擊該字詞選擇形式。切詞使用 compromise.js 與不規則動詞 JSON 表；必要時請手動補齊或修正形式。
-6. 點選 **加入題庫**。若要指定學生目前作答的題目，請在該題列按 **發送給全班**；或按 **完成備課** 儲存題庫並關閉編輯器（之後可重新開啟教師備課中心再發送）。學生以點選字磚作答：`BUILD` 組句、`REDUCE` 移除字塊、`MORPH` 選擇字形。
+6. 點選 **加入題庫**。若要指定學生目前作答的題目，請在該題列按 **發送給全班**；或按 **完成備課** 儲存題庫並關閉編輯器（之後可重新開啟教師備課中心再發送）。`BUILD` 會打亂組句字磚，`PRAGMATIC_HP` 會打亂語情題字庫，`MATRIX_GATE` 只打亂候選動詞。`MORPH` 與 `GRAVITY_SWITCH` 固定句子；`REDUCE` 保留來源句順序，讓學生聚焦刪減與簡化。
 
 > **教師登入提醒：**目前前端示範版固定以 `admin123` 驗證，並將相同密碼傳給 `teacher-action`。Edge Function 未設定 `TEACHER_PASSWORD` 時預設為 `admin123`；若將 Secret 設為其他值，遠端教師操作會因密碼不一致而失敗，除非同步修改前端。這不是安全的身分驗證，請勿將此教師介面直接公開部署至正式環境。
+
+## 📷 UI 畫面截圖
+
+以下是使用代表性課程資料，從實際 Vue UI 擷取的畫面。文法畫布為實際元件，教師介面則由應用程式直接擷取。
+
+| 學生課程畫面 | 教師登入 |
+| :---: | :---: |
+| ![學生課程介面](docs/images/student-ui.png) | ![教師登入對話框](docs/images/teacher-auth.png) |
+
+| 教師出題編輯器 | 題目流程與單元資料夾 | 教師數據分析 |
+| :---: | :---: | :---: |
+| ![教師出題編輯器](docs/images/teacher-admin.png) | ![題目流程畫布](docs/images/teacher-flow.png) | ![教師分析儀表板](docs/images/teacher-analytics.png) |
+
+| `BUILD` — 打亂字磚組句 | `REDUCE` — 保留來源語序並移除字塊 |
+| :---: | :---: |
+| ![BUILD 畫布：字磚已打亂](docs/images/canvas-build.png) | ![REDUCE 畫布：來源句保留原順序](docs/images/canvas-reduce.png) |
+
+| `MORPH` — 固定句子並選擇字形 | `GRAVITY_SWITCH` — 固定條件句 |
+| :---: | :---: |
+| ![MORPH 固定句型畫布](docs/images/canvas-morph.png) | ![GRAVITY_SWITCH 條件句畫布](docs/images/canvas-gravity-switch.png) |
+
+| `MATRIX_GATE` — 打亂候選字卡 | `PRAGMATIC_HP` — 打亂語情字庫 |
+| :---: | :---: |
+| ![MATRIX_GATE 特徵選擇介面](docs/images/canvas-matrix-gate.png) | ![PRAGMATIC_HP 語情互動介面](docs/images/canvas-pragmatic-hp.png) |
 
 ---
 
@@ -221,7 +245,7 @@ sequenceDiagram
 
 本地診斷保留 K-12 迷思錯誤碼及 SST 類別：`Omission`（遺漏）、`Addition`（多加）、`Misformation`（形式錯誤）或 `Misordering`（語序錯誤）。若本地規則無法分類錯誤答案，系統會透過 `lt-proxy` Supabase Edge Function 呼叫 LanguageTool，保留原生訊息、分類、Rule ID、替換建議及字元範圍，並將字元偏移映射回畫面字塊以供高亮。服務逾時（8 秒，以因應 Render 冷啟動）或失敗時會顯示中性提示，並允許學生略過到下一題。`BUILD` 與 `MORPH` 模式也可在尚未填滿所有字塊前檢查目前答案。
 
-教師建立通用文法題時先選課綱章節，再選具體考點；系統依考點提供唯一推薦互動、學習焦點與推薦理由，不再讓老師自由組合不相容的概念與 UI 模式。MORPH 題以固定句子呈現，並要求只設定一個目標變形字詞，學生點擊選擇形式，不需要字塊庫、空格或時間軸。`autoChunk(sentence, concept)` 使用 compromise.js 確定性切詞與動詞辨識，優先查詢不規則動詞表，並將中括號片語保留為明確字塊；不呼叫 LLM。MORPH 選項以字串陣列儲存，`current_index` 表示初始選取形式，並保留 `morph_options` 舊欄位相容。情態題使用語氣壓力計、REDUCE 使用碎紙機、BUILD 使用磁吸卡槽；未標註課綱考點的舊題會保留原本設定與畫布。
+教師建立通用文法題時先選課綱章節，再選具體考點；系統依考點提供推薦互動、學習焦點與推薦理由。`BUILD` 只打亂出題字庫、不改儲存的正解；`MORPH` 與 `GRAVITY_SWITCH` 固定句子；`REDUCE` 從來源句原順序開始；`MATRIX_GATE` 只打亂候選字卡；`PRAGMATIC_HP` 打亂語情題字庫。考點目錄將五大句型編到 BUILD，時態／比較級／動名詞／被動形式編到 MORPH，分詞與關係子句簡化及代名詞替換編到 REDUCE，特殊動詞與感官／使役動詞對比編到 MATRIX_GATE，助動詞及情緒語境編到 PRAGMATIC_HP，假設條件句則使用 GRAVITY_SWITCH。MORPH 題以固定句子呈現，學生點擊設定的目標字詞選擇形式，不需要字塊庫或句子卡槽。`autoChunk(sentence, concept)` 使用 compromise.js 確定性切詞與動詞辨識，優先查詢不規則動詞表，並將中括號片語保留為明確字塊；不呼叫 LLM。MORPH 選項以字串陣列儲存，`current_index` 表示初始選取形式，並保留 `morph_options` 舊欄位相容。未標註課綱考點的舊題會保留原本設定與畫布。
 
 ### 2026-11-5:
 
@@ -243,7 +267,7 @@ RuleRegistry 是**本地診斷規則的插件註冊點**，不是出題表單或
    | `BUILD` | 磁吸式句子卡槽 |
    | 沒有概念或未符合以上組合 | 舊版畫布 |
 
-   下方均為**介面示意圖，並非即時應用程式截圖**。學生實際看到的畫布依上表路由；一般字磚以點選操作而非拖曳，`REDUCE` 保留的字磚可使用左右箭頭調整詞序。`MORPH` 考點會固定句子，只呈現一個設定好的變形目標，不會同時要求學生排列句子字塊。
+   下方 SVG 為**介面示意圖**。即時元件及學生／教師介面截圖請見[UI 畫面截圖](#-ui-畫面截圖)。學生實際看到的畫布依上表路由；一般字磚以點選操作而非拖曳，`REDUCE` 保留的字磚可使用左右箭頭調整詞序。`MORPH` 考點會固定句子，只呈現一個設定好的變形目標，不會同時要求學生排列句子字塊。
 
    | `BUILD` — 組合句子字塊 | `REDUCE` — 移除多餘字塊 |
    | :---: | :---: |
