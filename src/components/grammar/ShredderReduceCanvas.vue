@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Chunk, GrammarQuestionData } from '../../rules/types';
-import LegacyGrammarCanvas from '../LegacyGrammarCanvas.vue';
+import TileSentenceCanvas from './TileSentenceCanvas.vue';
 
 defineProps<{
   question: GrammarQuestionData;
@@ -20,7 +20,7 @@ const emit = defineEmits<{
     <div class="shredder-prompt" aria-hidden="true">
       <span>保留必要結構</span><span class="shredder-icon">▤</span><span>移除多餘片語並調整詞序</span>
     </div>
-    <LegacyGrammarCanvas :question="question" :initial-chunks="initialChunks" :speech-rate="speechRate"
+    <TileSentenceCanvas :question="question" :initial-chunks="initialChunks" :speech-rate="speechRate"
       @success="emit('success')" @misconception="emit('misconception', $event)"
       @continue="emit('continue')" />
   </section>

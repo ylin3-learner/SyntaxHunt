@@ -14,7 +14,7 @@ import DebugConsole from './components/DebugConsole.vue';
 import { defaultQuestions } from './data/questions';
 import type { GrammarQuestionData, QuestionData, SSTCategory } from './rules/types';
 import { convertLegacyQuestion, formatAnswerForDisplay } from './rules/adapter';
-import { getQuestionUiMode } from './rules/types';
+import { getQuestionCanvasMode, getQuestionUiMode } from './rules/types';
 import { useSound, unlockAudioContext } from './utils/useSound';
 import { unlockTTS } from './utils/useSpeech';
 import { CloudDatabase } from './services/CloudDatabase';
@@ -176,6 +176,10 @@ const instructionText = computed(() => {
   if (currentStage.value === 'input') return '請點擊喇叭聽發音，並選出符合描述的角色圖片。';
   if (currentStage.value === 'macro') return '請將角色圖塊拖曳到名詞的「後方」。';
   if (currentStage.value === 'micro') {
+    const canvasMode = getQuestionCanvasMode(currentQuestion.value);
+    if (canvasMode === 'MATRIX_GATE') return '先解碼句子的兩項特徵，再選擇符合句法限制的動詞。';
+    if (canvasMode === 'PRAGMATIC_HP') return '組成符合說話者身分與情境的句子，送出後觀察社交關係值變化。';
+    if (canvasMode === 'GRAVITY_SWITCH') return '切換現實與假設模式，選擇符合假設語氣的動詞形式。';
     return getQuestionUiMode(currentQuestion.value) === 'REDUCE'
       ? '點擊多餘字磚將它丟進垃圾桶；用字磚左右箭頭調整保留詞序。'
       : getQuestionUiMode(currentQuestion.value) === 'MORPH'

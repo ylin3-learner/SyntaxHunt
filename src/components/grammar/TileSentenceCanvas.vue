@@ -1,21 +1,25 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue';
-import { diagnoseGrammar } from '../rules/grammarRules';
-import { mapOffsetToChunkIndex } from '../rules/adapter';
-import type { DiagnosticSignal, GrammarQuestionData, Chunk } from '../rules/types';
-import { useSound } from '../utils/useSound';
-import { useTTS } from '../utils/useSpeech';
-import { CloudDatabase, type LanguageToolMatch } from '../services/CloudDatabase';
+import { diagnoseGrammar } from '../../rules/grammarRules';
+import { mapOffsetToChunkIndex, normalizeAnswer } from '../../utils/textUtils';
+import type { DiagnosticSignal, GrammarQuestionData, Chunk } from '../../rules/types';
+import { useSound } from '../../utils/useSound';
+import { useTTS } from '../../utils/useSpeech';
+import { CloudDatabase, type LanguageToolMatch } from '../../services/CloudDatabase';
+import { shuffleArray } from '../../utils/shuffle';
 
 const { playError, playSuccess } = useSound();
 const { speak } = useTTS();
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   question: GrammarQuestionData;
   initialChunks: Chunk[];
   speechRate?: number;
   fixedMorph?: boolean;
-}>();
+  shuffleWordBank?: boolean;
+}>(), {
+  shuffleWordBank: true,
+});
 
 const emit = defineEmits<{
   (e: 'success'): void;
@@ -27,6 +31,7 @@ const emit = defineEmits<{
 const answerArea = ref<Chunk[]>([]);
 const trashArea = ref<Chunk[]>([]);
 const wordBank = ref<Chunk[]>([]);
+const isFixedMorph = computed(() => props.fixedMorph || props.question.ui_mode === 'MORPH');
 const answerSlotCount = computed(() =>
   Math.max(props.question.correctAnswer.length, answerArea.value.length)
 );
@@ -41,7 +46,7 @@ const isCheckingLanguageTool = ref(false);
 const activeMorphId = ref<string | null>(null);
 
 const initTiles = () => {
-  if (props.fixedMorph) {
+  if (isFixedMorph.value) {
     answerArea.value = JSON.parse(JSON.stringify(props.initialChunks.map(chunk => ({
       ...chunk,
     }))));
@@ -53,7 +58,10 @@ const initTiles = () => {
     wordBank.value = [];
   } else {
     // BUILD or MORPH 模式
-    wordBank.value = JSON.parse(JSON.stringify(props.initialChunks));
+    const chunks = props.shuffleWordBank
+      ? shuffleArray(props.initialChunks)
+      : props.initialChunks;
+    wordBank.value = JSON.parse(JSON.stringify(chunks));
     answerArea.value = [];
     trashArea.value = [];
   }
@@ -165,10 +173,8 @@ const checkAnswer = async (force = false) => {
 
   if (studentTokens.length === 0 && props.question.ui_mode !== 'REDUCE') return;
 
-  const normalize = (tokens: string[]) =>
-    tokens.map(token => token.replace(/[\[\]]/g, '').trim().toLowerCase().replace(/^[.,!?;:]+|[.,!?;:]+$/g, '')).join(' ');
-  const cleanCurrent = normalize(studentTokens);
-  const cleanTarget = normalize(correctTokens);
+  const cleanCurrent = normalizeAnswer(studentTokens);
+  const cleanTarget = normalizeAnswer(correctTokens);
   if (cleanCurrent === cleanTarget) {
     diagnosisRequest++;
     playSuccess();
@@ -318,11 +324,11 @@ const handleOutsideClick = () => {
 
 <template>
   <div class="grammar-canvas" @click="handleOutsideClick">
-    <div v-if="fixedMorph" class="fixed-morph-instruction">
+    <div v-if="isFixedMorph" class="fixed-morph-instruction">
       點擊紫色字詞，直接選擇適合的變形；句子順序已固定，不需要排列字塊。
     </div>
     <!-- 克漏字上下文 -->
-    <div class="cloze-context" v-if="question.contextCloze && !fixedMorph">
+    <div class="cloze-context" v-if="question.contextCloze && !isFixedMorph">
       <span class="cloze-text">{{ question.contextCloze.prefix }}</span>
       <div class="cloze-blanks-container">
         <template v-if="question.ui_mode !== 'REDUCE'">
@@ -343,7 +349,7 @@ const handleOutsideClick = () => {
     </div>
 
     <!-- 作答區 -->
-    <div v-if="fixedMorph" class="fixed-morph-sentence"
+    <div v-if="isFixedMorph" class="fixed-morph-sentence"
       :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
       <span v-if="question.contextCloze" class="fixed-context">{{ question.contextCloze.prefix }}</span>
       <template v-for="(chunk, index) in answerArea" :key="chunk.id">
@@ -417,7 +423,7 @@ const handleOutsideClick = () => {
         </div>
       </template>
     </div>
-    <button v-if="question.ui_mode !== 'REDUCE' && !fixedMorph && answerArea.length > 0
+    <button v-if="question.ui_mode !== 'REDUCE' && !isFixedMorph && answerArea.length > 0
       && answerArea.length < question.correctAnswer.length && signals.length === 0
       && !isCheckingLanguageTool" type="button" class="check-answer-button" @click.stop="checkAnswer(true)">
       檢查目前答案
@@ -472,7 +478,7 @@ const handleOutsideClick = () => {
     </div>
 
     <!-- 字庫 (Build/Morph) -->
-    <div v-if="question.ui_mode !== 'REDUCE' && !fixedMorph" class="word-bank">
+    <div v-if="question.ui_mode !== 'REDUCE' && !isFixedMorph" class="word-bank">
       <div v-for="tile in wordBank" :key="tile.id" class="tile"
         :class="{ 'tile-chunk': tile.text.startsWith('['), 'can-morph': tile.can_morph }" @click="selectTile(tile)">
         {{ tile.text.replace(/[\[\]]/g, '') }}

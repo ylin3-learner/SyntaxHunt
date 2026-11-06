@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import type { Chunk, GrammarQuestionData } from '../../rules/types';
-import LegacyGrammarCanvas from '../LegacyGrammarCanvas.vue';
+import TileSentenceCanvas from './TileSentenceCanvas.vue';
 
-defineProps<{
+withDefaults(defineProps<{
   question: GrammarQuestionData;
   initialChunks: Chunk[];
   speechRate?: number;
-}>();
+  shuffleWordBank?: boolean;
+}>(), {
+  shuffleWordBank: true,
+});
 
 const emit = defineEmits<{
   (e: 'success'): void;
@@ -18,7 +21,8 @@ const emit = defineEmits<{
 <template>
   <section class="magnetic-canvas">
     <div class="magnetic-prompt"><span aria-hidden="true">🧲</span>將語序卡片吸附到正確句型位置</div>
-    <LegacyGrammarCanvas :question="question" :initial-chunks="initialChunks" :speech-rate="speechRate"
+    <TileSentenceCanvas :question="question" :initial-chunks="initialChunks" :speech-rate="speechRate"
+      :shuffle-word-bank="shuffleWordBank"
       @success="emit('success')" @misconception="emit('misconception', $event)"
       @continue="emit('continue')" />
   </section>

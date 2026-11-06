@@ -25,10 +25,11 @@ describe('GrammarCanvas', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     vi.mocked(CloudDatabase.checkLanguageTool).mockResolvedValue([]);
   });
 
-  it('lets students change a MORPH tile to an allowed answer form', async () => {
+  it('keeps MORPH sentences fixed while students choose an allowed word form', async () => {
     vi.useFakeTimers();
     const question: GrammarQuestionData = {
       id: 'morph-test',
@@ -47,17 +48,43 @@ describe('GrammarCanvas', () => {
       props: { question, initialChunks: question.chunks },
     });
 
-    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
-    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
-    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
-    expect(wrapper.find('.alert-bubble').text()).toContain('應該用「went」');
+    expect(wrapper.findAll('.fixed-morph-sentence > .fixed-sentence-token, .fixed-morph-token')
+      .map(token => token.text())).toEqual(['He', 'go', 'to school']);
+    expect(wrapper.find('.word-bank').exists()).toBe(false);
 
-    await wrapper.find('.answer-area .can-morph').trigger('click');
+    await wrapper.find('.fixed-morph-sentence .can-morph').trigger('click');
     await wrapper.findAll('.morph-menu button').find(option => option.text() === 'went')!.trigger('click');
-    expect(wrapper.find('.answer-area').text()).toContain('went');
+    expect(wrapper.findAll('.fixed-morph-sentence > .fixed-sentence-token, .fixed-morph-token')
+      .map(token => token.text())).toEqual(['He', 'went', 'to school']);
 
     await vi.advanceTimersByTimeAsync(1500);
     expect(wrapper.emitted('success')).toBeTruthy();
+    wrapper.unmount();
+  });
+
+  it('shuffles BUILD word cards without mutating the authored answer data', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const question: GrammarQuestionData = {
+      id: 'build-shuffle-test',
+      type: 'grammar',
+      ui_mode: 'BUILD',
+      targetNoun: 'The student',
+      antecedent: { noun: 'The student', number: 'singular', person: 'person' },
+      correctAnswer: ['The', 'student', 'writes'],
+      chunks: ['The', 'student', 'writes'].map((text, index) => ({
+        id: `build-${index}`, text, draggable: true,
+      })),
+    };
+    const originalChunks = structuredClone(question.chunks);
+    const wrapper = mount(GrammarCanvas, {
+      props: { question, initialChunks: question.chunks },
+    });
+
+    const displayedCards = wrapper.findAll('.word-bank .tile').map(tile => tile.text());
+    expect(displayedCards).not.toEqual(question.correctAnswer);
+    expect([...displayedCards].sort()).toEqual([...question.correctAnswer].sort());
+    expect(question.chunks).toEqual(originalChunks);
+    expect(question.correctAnswer).toEqual(['The', 'student', 'writes']);
     wrapper.unmount();
   });
 
@@ -191,8 +218,8 @@ describe('GrammarCanvas', () => {
     expect(diagnoseGrammar(['I', 'eat', 'pie'], question.correctAnswer, question)
       .map(signal => signal.code)).toContain('UNKNOWN_ERROR');
 
-    for (const _chunk of question.chunks) {
-      await wrapper.find('.word-bank .tile').trigger('click');
+    for (const token of ['I', 'eat', 'pie']) {
+      await wrapper.findAll('.word-bank .tile').find(tile => tile.text() === token)!.trigger('click');
     }
 
     await vi.waitFor(() => expect(CloudDatabase.checkLanguageTool).toHaveBeenCalledWith(
@@ -223,9 +250,9 @@ describe('GrammarCanvas', () => {
       props: { question, initialChunks: question.chunks },
     });
 
-    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
-    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
-    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
+    for (const token of ['I', 'eat', 'room']) {
+      await wrapper.findAll('.word-bank .tile').find(tile => tile.text() === token)!.trigger('click');
+    }
     await wrapper.find('.check-answer-button').trigger('click');
 
     expect(wrapper.text()).toContain('少了「in」');
@@ -258,9 +285,9 @@ describe('GrammarCanvas', () => {
       props: { question, initialChunks: question.chunks },
     });
 
-    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
-    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
-    await wrapper.findAll('.word-bank .tile')[0].trigger('click');
+    for (const token of ['I', 'eat', 'pie']) {
+      await wrapper.findAll('.word-bank .tile').find(tile => tile.text() === token)!.trigger('click');
+    }
     await vi.waitFor(() => expect(wrapper.text()).toContain('Use the past tense.'));
 
     expect(wrapper.find('.answer-area .tile-error').text()).toBe('pie');
@@ -294,10 +321,10 @@ describe('GrammarCanvas', () => {
       props: { question, initialChunks: question.chunks },
     });
 
-    for (const _chunk of question.chunks) {
-      await wrapper.find('.word-bank .tile').trigger('click');
+    for (const token of ['I', 'eat', 'pie']) {
+      await wrapper.findAll('.word-bank .tile').find(tile => tile.text() === token)!.trigger('click');
     }
-    await vi.advanceTimersByTimeAsync(3000);
+    await vi.advanceTimersByTimeAsync(8000);
 
     expect(wrapper.text()).toContain('系統連線中，暫無法提供進階文法建議');
     await wrapper.find('.continue-button').trigger('click');
@@ -305,7 +332,7 @@ describe('GrammarCanvas', () => {
     wrapper.unmount();
   });
 
-  it('uses fixed sentence morph choices instead of tile banks or per-word timelines', async () => {
+  it('uses fixed sentence morph choices with a time-conveyor range', async () => {
     vi.useFakeTimers();
     const question: GrammarQuestionData = {
       id: 'timeline-test',
@@ -326,12 +353,12 @@ describe('GrammarCanvas', () => {
       props: { question, initialChunks: question.chunks },
     });
 
-    await vi.waitFor(() => expect(wrapper.text()).toContain('句子變形'));
+    await vi.waitFor(() => expect(wrapper.find('.fixed-morph-sentence').exists()).toBe(true));
     expect(wrapper.find('.fixed-morph-sentence').text()).toContain('They');
     expect(wrapper.findAll('.fixed-morph-token')).toHaveLength(2);
     expect(wrapper.find('.word-bank').exists()).toBe(false);
     expect(wrapper.find('.answer-slot').exists()).toBe(false);
-    expect(wrapper.find('input[type="range"]').exists()).toBe(false);
+    expect(wrapper.findAll('input[type="range"]')).toHaveLength(2);
 
     await wrapper.find('[aria-label="變形字詞：would"]').trigger('click');
     await wrapper.findAll('.morph-menu button').find(option => option.text() === 'will')!.trigger('click');
@@ -392,6 +419,136 @@ describe('GrammarCanvas', () => {
 
     await vi.waitFor(() => expect(wrapper.text()).toContain('情態語氣壓力計'));
     expect(wrapper.find('input[type="range"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('requires both feature axes before unlocking the correct matrix card', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const question: GrammarQuestionData = {
+      id: 'matrix-test',
+      type: 'grammar',
+      ui_mode: 'BUILD',
+      targetNoun: 'The ticket',
+      antecedent: { noun: 'The ticket', number: 'singular', person: 'thing' },
+      correctAnswer: ['The', 'ticket', 'cost', 'me', '100', 'dollars', 'to', 'buy.'],
+      matrix_x: ['人', '物 / It'],
+      matrix_y: ['時間', '金錢'],
+      correct_x: 1,
+      correct_y: 1,
+      matrix_prompt: 'The ticket ______ me 100 dollars to buy.',
+      matrix_answer: 'cost',
+      matrix_options: ['spend', 'cost', 'take', 'pay'],
+      chunks: ['The', 'ticket', 'cost', 'me', '100', 'dollars', 'to', 'buy.'].map((text, index) => ({
+        id: `matrix-${index}`, text, draggable: true,
+      })),
+    };
+    const wrapper = mount(GrammarCanvas, {
+      props: { question, initialChunks: question.chunks },
+    });
+
+    await vi.waitFor(() => expect(wrapper.find('.matrix-prompt').exists()).toBe(true));
+    expect(wrapper.find('.matrix-prompt').text()).toContain('The ticket');
+    expect(wrapper.findAll('.matrix-word-bank button').every(button => button.attributes('disabled') !== undefined)).toBe(true);
+
+    await wrapper.findAll('fieldset').at(0)!.findAll('button')[1]!.trigger('click');
+    await wrapper.findAll('fieldset').at(1)!.findAll('button')[0]!.trigger('click');
+    await wrapper.find('.decode-button').trigger('click');
+    expect(wrapper.find('.matrix-hint').text()).toContain('仍維持鎖定');
+    expect(wrapper.findAll('.matrix-word-bank button').every(button => button.attributes('disabled') !== undefined)).toBe(true);
+
+    await wrapper.findAll('fieldset').at(1)!.findAll('button')[1]!.trigger('click');
+    await wrapper.find('.decode-button').trigger('click');
+    const matrixCards = wrapper.findAll('.matrix-word-bank button').map(button => button.text());
+    expect(matrixCards).not.toEqual(['spend', 'cost', 'take', 'pay']);
+    expect([...matrixCards].sort()).toEqual(['spend', 'cost', 'take', 'pay'].sort());
+    const correctCard = wrapper.findAll('.matrix-word-bank button').find(button => button.text() === 'cost')!;
+    expect(correctCard.attributes('disabled')).toBeUndefined();
+    expect(wrapper.findAll('.matrix-word-bank button').find(button => button.text() === 'spend')!.attributes('disabled')).toBeDefined();
+    await correctCard.trigger('click');
+    expect(wrapper.find('.matrix-result').text()).toContain(question.correctAnswer.join(' '));
+    expect(wrapper.find('.word-bank').exists()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(900);
+    expect(wrapper.emitted('success')).toBeTruthy();
+    wrapper.unmount();
+  });
+
+  it('scores pragmatic language locally and lets students repair a harsh sentence', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const question: GrammarQuestionData = {
+      id: 'pragmatic-test',
+      type: 'grammar',
+      ui_mode: 'BUILD',
+      status_gap: 1,
+      targetNoun: 'You',
+      antecedent: { noun: 'You', number: 'singular', person: 'person' },
+      correctAnswer: ['Could', 'you', 'please', 'check', 'this', 'data?'],
+      chunks: ['You', 'must', 'check', 'this', 'data', 'right', 'now.'].map((text, index) => ({
+        id: `pragmatic-${index}`, text, draggable: true,
+      })),
+    };
+    const wrapper = mount(GrammarCanvas, {
+      props: { question, initialChunks: question.chunks },
+    });
+    await vi.waitFor(() => expect(wrapper.find('.pragmatic-word-bank').exists()).toBe(true));
+    const displayedCards = wrapper.findAll('.pragmatic-word-bank button').map(button => button.text());
+    expect(displayedCards).not.toEqual(question.chunks.map(chunk => chunk.text));
+    const choose = async (text: string) => {
+      const tile = wrapper.findAll('.pragmatic-word-bank button').find(button =>
+        button.text().toLowerCase().replace(/[.,!?;:]+$/, '') === text.toLowerCase().replace(/[.,!?;:]+$/, '')
+      );
+      if (!tile) throw new Error(`Missing word card: ${text}`);
+      await tile.trigger('click');
+    };
+
+    for (const token of ['You', 'must', 'check', 'this', 'data', 'right', 'now.']) await choose(token);
+    await wrapper.find('.submit-button').trigger('click');
+    expect(wrapper.find('.meter-track').attributes('aria-valuenow')).toBe('15');
+    expect(wrapper.find('.impact').text()).toBe('-85 HP');
+    expect(wrapper.emitted('misconception')?.[0]).toEqual(['PRAGMATIC_TONE']);
+
+    await wrapper.find('.pragmatic-actions button:last-child').trigger('click');
+    for (const token of question.correctAnswer) await choose(token);
+    await wrapper.find('.submit-button').trigger('click');
+    expect(wrapper.find('.meter-track').attributes('aria-valuenow')).toBe('35');
+    expect(wrapper.find('.impact').text()).toBe('+20 HP');
+    await vi.advanceTimersByTimeAsync(900);
+    expect(wrapper.emitted('success')).toBeTruthy();
+    wrapper.unmount();
+  });
+
+  it('switches subjunctive and conditional morphology into an irrealis gravity mode', async () => {
+    const question: GrammarQuestionData = {
+      id: 'gravity-test',
+      type: 'grammar',
+      ui_mode: 'MORPH',
+      concept: 'SUBJUNCTIVE',
+      targetNoun: 'I',
+      antecedent: { noun: 'I', number: 'singular', person: 'person' },
+      correctAnswer: ['If', 'I', 'were', 'you', 'I', 'would', 'go.'],
+      chunks: [
+        { id: 'if', text: 'If', draggable: true },
+        { id: 'i', text: 'I', draggable: true },
+        { id: 'am', text: 'am', draggable: true, can_morph: true, options: ['am', 'were'] },
+        { id: 'you', text: 'you', draggable: true },
+        { id: 'i2', text: 'I', draggable: true },
+        { id: 'will', text: 'will', draggable: true, can_morph: true, options: ['will', 'would'] },
+        { id: 'go', text: 'go.', draggable: true },
+      ],
+    };
+    const wrapper = mount(GrammarCanvas, {
+      props: { question, initialChunks: question.chunks },
+    });
+
+    await vi.waitFor(() => expect(wrapper.find('[role="switch"]').exists()).toBe(true));
+    const gravitySwitch = wrapper.find('[role="switch"]');
+    await gravitySwitch.trigger('click');
+    expect(wrapper.find('.morph-strategy').classes()).toContain('gravity-irreal');
+    expect(wrapper.find('.fixed-morph-sentence').text()).toContain('were');
+    expect(wrapper.find('.fixed-morph-sentence').text()).toContain('would');
+    expect(wrapper.text()).toContain('假設模式：失重語氣');
     wrapper.unmount();
   });
 });

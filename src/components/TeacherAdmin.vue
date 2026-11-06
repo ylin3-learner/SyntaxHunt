@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import type { Chunk, GrammarConcept, QuestionData, UIMode } from '../rules/types';
+import type { CanvasMode, Chunk, GrammarConcept, QuestionData, UIMode } from '../rules/types';
+import { getQuestionCanvasMode } from '../rules/types';
 import { autoChunk } from '../rules/autoChunk';
 import { getGrammarTopic, grammarChapters } from '../rules/grammarTopics';
 import { useClassroomSync } from '../composables/useClassroomSync';
 import QuestionFlow from './QuestionFlow.vue';
+import QuestionListSidebar from './QuestionListSidebar.vue';
+import QuestionEditor from './QuestionEditor.vue';
+import EditorFormFields from './EditorFormFields.vue';
 
 const props = defineProps<{ currentQuestions: QuestionData[]; }>();
 
@@ -16,6 +20,17 @@ const grammarSentence = ref('');
 const grammarAnswer = ref('');
 const grammarChunks = ref<Chunk[]>([]);
 const grammarError = ref('');
+const selectedCanvasMode = ref<CanvasMode>('BUILD');
+const statusGap = ref(1);
+const npcLabel = ref('');
+const matrixXInput = ref('👤 主詞是人, 🤖 主詞是物 / It');
+const matrixYInput = ref('⏳ 花費時間, 💰 花費金錢');
+const matrixCorrectX = ref(1);
+const matrixCorrectY = ref(1);
+const matrixPrompt = ref('');
+const matrixAnswer = ref('');
+const matrixOptionsInput = ref('spend, cost, take, pay');
+const advancedSettingsExpanded = ref(false);
 const selectedChapter = ref(19);
 const selectedGrammarTopicId = ref('sentence-patterns');
 const editingGrammarTopicId = ref<string | undefined>();
@@ -26,10 +41,14 @@ const selectedGrammarTopic = computed(() => getGrammarTopic(selectedGrammarTopic
 const recommendedUiLabel = computed(() => {
   const topic = selectedGrammarTopic.value;
   if (!topic) return '';
-  if (topic.concept === 'MODAL_VERB') return '情態語氣壓力計';
-  if (topic.mode === 'BUILD') return 'BUILD 組句';
-  if (topic.mode === 'REDUCE') return 'REDUCE 化簡';
-  return 'MORPH 形式選擇';
+  return ({
+    BUILD: 'BUILD 磁吸插槽',
+    MORPH: 'MORPH 摺紙變形',
+    REDUCE: 'REDUCE 碎紙機',
+    MATRIX_GATE: 'MATRIX_GATE 特徵解鎖',
+    PRAGMATIC_HP: 'PRAGMATIC_HP 語情血條',
+    GRAVITY_SWITCH: 'GRAVITY_SWITCH 重力切換',
+  } satisfies Record<CanvasMode, string>)[topic.defaultCanvasMode];
 });
 const isQuestionsExpanded = ref(true);
 const showQuestionFlow = ref(false);
@@ -70,7 +89,8 @@ watch(() => props.currentQuestions, (questions) => {
   }
 }, { deep: true });
 
-const unitFilter = ref('all');
+type QuestionFilter = 'all' | 'unclassified' | `unit:${string}`;
+const unitFilter = ref<QuestionFilter>('all');
 const unitName = ref('');
 const availableUnits = computed(() => [...new Set(
   localQuestions.value
@@ -135,6 +155,7 @@ const applyGrammarTopic = (topicId: string) => {
   selectedChapter.value = topic.chapter;
   grammarConcept.value = topic.concept;
   uiMode.value = topic.mode;
+  selectedCanvasMode.value = topic.defaultCanvasMode;
   grammarChunks.value = [];
   grammarError.value = '';
 };
@@ -144,14 +165,32 @@ const handleChapterChange = () => {
   if (firstTopic) applyGrammarTopic(firstTopic.id);
 };
 
+const handleCanvasModeChange = () => {
+  uiMode.value = getCanvasUIMode(selectedCanvasMode.value);
+  grammarError.value = '';
+};
+
+const getCanvasUIMode = (mode: CanvasMode): UIMode => {
+  if (mode === 'REDUCE') return 'REDUCE';
+  if (mode === 'MORPH' || mode === 'GRAVITY_SWITCH') return 'MORPH';
+  return 'BUILD';
+};
+
 const resetForm = () => {
   grammarSentence.value = ''; grammarAnswer.value = ''; grammarChunks.value = [];
+  selectedCanvasMode.value = 'BUILD'; statusGap.value = 1; npcLabel.value = '';
+  matrixXInput.value = '👤 主詞是人, 🤖 主詞是物 / It';
+  matrixYInput.value = '⏳ 花費時間, 💰 花費金錢';
+  matrixCorrectX.value = 1; matrixCorrectY.value = 1;
+  matrixPrompt.value = ''; matrixAnswer.value = ''; matrixOptionsInput.value = 'spend, cost, take, pay';
   unitName.value = '';
   selectedChapter.value = 19; selectedGrammarTopicId.value = 'sentence-patterns';
   editingGrammarTopicId.value = undefined;
   const defaultTopic = getGrammarTopic(selectedGrammarTopicId.value);
   grammarConcept.value = defaultTopic?.concept ?? 'SENTENCE_PATTERN';
   uiMode.value = defaultTopic?.mode ?? 'BUILD'; grammarError.value = '';
+  selectedCanvasMode.value = defaultTopic?.defaultCanvasMode ?? 'BUILD';
+  advancedSettingsExpanded.value = false;
   chunkZhInput.value = ''; chunkQuizInput.value = ''; distractorImageUrl.value = '';
   correctLabel.value = ''; distractorLabel.value = '';
   antecedentNumber.value = 'singular';
@@ -190,6 +229,18 @@ const editQuestion = (q: QuestionData) => {
     grammarAnswer.value = (q.correctAnswer || []).join(' ');
     grammarChunks.value = JSON.parse(JSON.stringify(q.chunks || []));
     grammarSentence.value = grammarChunks.value.map(chunk => chunk.text).join(' ');
+    selectedCanvasMode.value = q.canvas_mode ?? savedTopic?.defaultCanvasMode ?? getQuestionCanvasMode(q);
+    const matrix = q.matrix_config;
+    statusGap.value = q.pragmatic_target?.statusGap ?? q.status_gap ?? 1;
+    npcLabel.value = q.pragmatic_target?.npcLabel ?? '';
+    matrixXInput.value = matrix?.xOptions.join(', ') || q.matrix_x?.join(', ') || '👤 主詞是人, 🤖 主詞是物 / It';
+    matrixYInput.value = matrix?.yOptions.join(', ') || q.matrix_y?.join(', ') || '⏳ 花費時間, 💰 花費金錢';
+    matrixCorrectX.value = matrix?.correctX ?? q.correct_x ?? 1;
+    matrixCorrectY.value = matrix?.correctY ?? q.correct_y ?? 1;
+    matrixPrompt.value = matrix?.prompt || q.matrix_prompt || '';
+    matrixAnswer.value = matrix?.answer || q.matrix_answer || '';
+    matrixOptionsInput.value = matrix?.options.join(', ') || q.matrix_options?.join(', ') || 'spend, cost, take, pay';
+    advancedSettingsExpanded.value = false;
     enabledStages.value = q.enabledStages || ['micro'];
     grammarError.value = '';
     activeUploadTarget.value = null;
@@ -252,20 +303,25 @@ const splitGrammarSentenceManually = () => {
   grammarError.value = '';
 };
 
-const updateMorphOptions = (chunk: Chunk, event: Event) => {
-  const input = event.target;
-  if (!(input instanceof HTMLInputElement)) return;
-  const options = input.value.split(',').map(value => value.trim()).filter(Boolean);
+const updateMorphOptions = (id: string, value: string) => {
+  const chunk = grammarChunks.value.find(item => item.id === id);
+  if (!chunk) return;
+  const options = value.split(',').map(option => option.trim()).filter(Boolean);
   chunk.options = options;
   chunk.morph_options = options;
   chunk.current_index = Math.max(0, options.indexOf(chunk.text));
 };
 
-const handleMorphTargetToggle = (chunk: Chunk, event: Event) => {
-  const input = event.target;
-  if (!(input instanceof HTMLInputElement)) return;
-  chunk.can_morph = input.checked;
-  if (!input.checked) {
+const updateChunkText = (id: string, value: string) => {
+  const chunk = grammarChunks.value.find(item => item.id === id);
+  if (chunk) chunk.text = value;
+};
+
+const handleMorphTargetToggle = (id: string, enabled: boolean) => {
+  const chunk = grammarChunks.value.find(item => item.id === id);
+  if (!chunk) return;
+  chunk.can_morph = enabled;
+  if (!enabled) {
     chunk.options = [];
     chunk.morph_options = [];
     chunk.current_index = 0;
@@ -369,6 +425,26 @@ const saveQuestion = () => {
       return;
     }
 
+    if (selectedCanvasMode.value === 'PRAGMATIC_HP'
+      && (!Number.isInteger(statusGap.value) || statusGap.value < 0 || statusGap.value > 5)) {
+      grammarError.value = '語情題的地位差距請設定為 0 到 5 的整數。';
+      return;
+    }
+
+    const matrixX = matrixXInput.value.split(/[,，]/).map(value => value.trim()).filter(Boolean);
+    const matrixY = matrixYInput.value.split(/[,，]/).map(value => value.trim()).filter(Boolean);
+    const matrixOptions = matrixOptionsInput.value.split(/[,，]/).map(value => value.trim()).filter(Boolean);
+    if (selectedCanvasMode.value === 'MATRIX_GATE'
+      && (matrixX.length !== 2 || matrixY.length !== 2
+        || !matrixPrompt.value.trim() || !matrixAnswer.value.trim()
+        || !matrixOptions.some(option => option.toLowerCase() === matrixAnswer.value.trim().toLowerCase())
+        || !answer.split(/\s+/).some(token => token.replace(/[.,!?;:]+$/, '').toLowerCase()
+          === matrixAnswer.value.trim().toLowerCase())
+        || ![0, 1].includes(matrixCorrectX.value) || ![0, 1].includes(matrixCorrectY.value))) {
+      grammarError.value = '特徵矩陣需設定兩組各兩個選項、題目提示句、正確動詞；動詞需同時出現在答案與選項字卡中。';
+      return;
+    }
+
     const selectedTopic = selectedGrammarTopic.value;
     const chunks = grammarChunks.value.length > 0
       ? grammarChunks.value
@@ -376,12 +452,15 @@ const saveQuestion = () => {
         ...chunk,
         id: `${editingId.value || 'new'}-chunk-${index}`,
       }));
-    if (selectedTopic?.mode === 'MORPH') {
+    if (['MORPH', 'GRAVITY_SWITCH'].includes(selectedCanvasMode.value)) {
       const morphTargets = chunks.filter(chunk =>
         chunk.can_morph && new Set(chunk.options ?? chunk.morph_options ?? []).size > 1
       );
-      if (morphTargets.length !== 1) {
-        grammarError.value = '此考點一次只練一個變形目標，請只勾選一個可變形字塊，並提供至少兩種形式。';
+      const allowsMultipleTargets = selectedCanvasMode.value === 'GRAVITY_SWITCH';
+      if (morphTargets.length === 0 || (!allowsMultipleTargets && morphTargets.length !== 1)) {
+        grammarError.value = allowsMultipleTargets
+          ? '假設語氣至少需要一個可變形字塊；每個字塊需提供至少兩種形式。'
+          : '此考點一次只練一個變形目標，請只勾選一個可變形字塊，並提供至少兩種形式。';
         return;
       }
     }
@@ -391,7 +470,8 @@ const saveQuestion = () => {
       type: 'grammar',
       unit: unitName.value.trim() || undefined,
       grammarTopicId: selectedTopic?.id ?? editingGrammarTopicId.value,
-      ui_mode: selectedTopic?.mode ?? uiMode.value,
+      canvas_mode: selectedCanvasMode.value,
+      ui_mode: getCanvasUIMode(selectedCanvasMode.value),
       concept: selectedTopic?.concept ?? grammarConcept.value,
       targetNoun: targetNoun.value.trim() || source.split(/\s+/)[0],
       antecedent: {
@@ -410,6 +490,20 @@ const saveQuestion = () => {
       explanation: explanationTitle.value || explanationDesc.value
         ? { title: explanationTitle.value, desc: explanationDesc.value }
         : undefined,
+      ...(selectedCanvasMode.value === 'PRAGMATIC_HP' ? {
+        pragmatic_target: { statusGap: statusGap.value, npcLabel: npcLabel.value.trim() || undefined },
+      } : {}),
+      ...(selectedCanvasMode.value === 'MATRIX_GATE' ? {
+        matrix_config: {
+          xOptions: [matrixX[0]!, matrixX[1]!] as [string, string],
+          yOptions: [matrixY[0]!, matrixY[1]!] as [string, string],
+          correctX: matrixCorrectX.value === 0 ? 0 as const : 1 as const,
+          correctY: matrixCorrectY.value === 0 ? 0 as const : 1 as const,
+          prompt: matrixPrompt.value.trim(),
+          answer: matrixAnswer.value.trim(),
+          options: matrixOptions,
+        },
+      } : {}),
     };
 
     if (isEditing.value) {
@@ -583,108 +677,32 @@ const openQuestionEdit = (id: string) => {
       @back="showQuestionFlow = false" />
     <div v-else class="admin-modal">
       <div class="admin-layout">
-        <!-- 左側邊欄 -->
-        <div class="sidebar">
-          <!-- 1. 固定頭部 -->
-          <div class="sidebar-header">
-            <h2>📚 課前備課中心</h2>
-            <p>編輯題目，或用流程畫布直覺調整作答順序。</p>
-            <button type="button" class="btn-flow" @click="showQuestionFlow = true">
-              🧩 開啟流程編排 <span>{{ localQuestions.length }}</span>
-            </button>
-          </div>
-
-          <!-- 2. 可折疊的班級控制 -->
-          <div class="class-mode-panel">
-            <div class="panel-header" @click="isClassPanelExpanded = !isClassPanelExpanded">
-              <h3>⚙️ 班級控制</h3>
-              <span class="toggle-icon">{{ isClassPanelExpanded ? '▲' : '▼' }}</span>
-            </div>
-
-            <div v-show="isClassPanelExpanded" class="panel-content">
-              <div class="mode-toggle">
-                <label>
-                  <input type="checkbox" v-model="isClassModeToggle" @change="handleModeChange" />
-                  🎓 上課模式 (鎖定學生進度)
-                </label>
-              </div>
-              <div class="target-count">
-                <label>目標人數：</label>
-                <input type="number" v-model.number="targetCountInput" @change="handleModeChange" />
-              </div>
-              <button class="btn-reset-progress" @click="sendResetProgress">
-                🔄 重置全班作答進度
-              </button>
-            </div>
-          </div>
-
-          <!-- 3. 可折疊的列表區塊 -->
-          <div class="sidebar-section">
-            <div class="section-header" @click="isQuestionsExpanded = !isQuestionsExpanded">
-              <h3>📝 題目列表</h3>
-              <span class="toggle-icon">{{ isQuestionsExpanded ? '▲' : '▼' }}</span>
-            </div>
-            <div class="list-wrapper" v-show="isQuestionsExpanded">
-              <div class="unit-filter">
-                <label for="unit-filter">顯示單元</label>
-                <select id="unit-filter" v-model="unitFilter" class="grammar-select">
-                  <option value="all">全部單元</option>
-                  <option value="unclassified">未分類</option>
-                  <option v-for="unit in availableUnits" :key="unit" :value="`unit:${unit}`">{{ unit }}</option>
-                </select>
-              </div>
-              <div class="question-list">
-                <div class="question-list-inner">
-                  <div v-for="(q, index) in filteredQuestions" :key="q.id" class="question-item"
-                    :class="{ active: editingId === q.id }" @click="editQuestion(q)">
-
-                    <div class="q-index">
-                      第 {{ index + 1 }} 關
-                      <span class="q-type-tag" :class="q.type">
-                        {{ q.type === 'contrast' ? '對比題' : q.type === 'chunk' ? '片語題' : '標準題' }}
-                      </span>
-                      <span v-if="q.type === 'standard'" class="q-mode-tag" :class="q.mode || 'build'">
-                        {{ (q.mode || 'build') === 'reduce' ? 'Reduce' : 'Build' }}
-                      </span>
-                      <span v-if="q.isTimed" class="q-time-tag">🔴 {{ q.timeLimit || 60 }}s</span>
-                      <span v-else class="q-free-tag">🟢 自由</span>
-                    </div>
-                    <div class="q-content">
-                      <span class="q-noun">{{ q.targetNoun }}</span>
-                      <span class="q-desc">{{ q.type === 'grammar' ? (q.correctAnswer || []).join(' ') :
-                        q.grammarFeature?.relative?.label || '未設定句型' }}</span>
-                    </div>
-
-                    <div class="q-actions">
-                      <button class="btn-push" @click.stop="handleSaveAndPush(q.id)">🚀 發送給全班</button>
-                      <button class="btn-delete" @click.stop="deleteQuestion(q.id)" title="刪除">✕</button>
-                    </div>
-                  </div>
-                </div>
-                <button class="btn-new" @click="resetForm" :class="{ active: editingId === null }">➕ 新增題目</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- 4. 固定底部按鈕 -->
-          <div class="sidebar-footer">
-            <button class="btn-close" @click="saveAllAndClose">✅ 完成備課，開始上課</button>
-          </div>
-        </div>
+        <QuestionListSidebar
+          v-model:unit-filter="unitFilter"
+          v-model:is-class-panel-expanded="isClassPanelExpanded"
+          v-model:is-questions-expanded="isQuestionsExpanded"
+          v-model:is-class-mode-toggle="isClassModeToggle"
+          v-model:target-count-input="targetCountInput"
+          :questions="localQuestions"
+          :filtered-questions="filteredQuestions"
+          :available-units="availableUnits"
+          :editing-id="editingId"
+          @open-flow="showQuestionFlow = true"
+          @mode-change="handleModeChange"
+          @reset-progress="sendResetProgress"
+          @edit="editQuestion"
+          @push="handleSaveAndPush"
+          @delete="deleteQuestion"
+          @new-question="resetForm"
+          @save-close="saveAllAndClose"
+        />
 
         <!-- 右側編輯器 -->
-        <div class="editor">
-          <div class="editor-header">
-            <h3>{{ isEditing ? '✏️ 編輯題目' : '🆕 新增題目' }}</h3>
-            <div class="type-switcher">
-              <button :class="{ active: questionType === 'standard' }" @click="questionType = 'standard'">標準題</button>
-              <button :class="{ active: questionType === 'contrast' }" @click="questionType = 'contrast'">對比題</button>
-              <button :class="{ active: questionType === 'chunk' }" @click="questionType = 'chunk'">片語題</button>
-              <button :class="{ active: questionType === 'grammar' }" @click="questionType = 'grammar'">通用文法題</button>
-            </div>
-          </div>
-
-          <div class="editor-body">
+        <QuestionEditor
+          :title="isEditing ? '✏️ 編輯題目' : '🆕 新增題目'"
+          :question-type="questionType"
+          @update:question-type="questionType = $event"
+        >
             <div class="form-group">
               <label for="question-unit">單元名稱</label>
               <input id="question-unit" v-model="unitName" type="text" placeholder="例如：Unit 1" />
@@ -716,8 +734,8 @@ const openQuestionEdit = (id: string) => {
                 <strong>系統推薦：{{ recommendedUiLabel }}</strong>
                 <p>{{ selectedGrammarTopic.recommendation }}</p>
                 <span>本題唯一操作焦點：{{ selectedGrammarTopic.focus }}</span>
-                <small v-if="selectedGrammarTopic.mode === 'MORPH'">
-                  請只勾選一個可變形字塊，並提供至少兩種形式。
+                <small v-if="selectedGrammarTopic.defaultCanvasMode === 'MORPH' || selectedGrammarTopic.defaultCanvasMode === 'GRAVITY_SWITCH'">
+                  請設定至少一個可變形字塊，並提供正確形式。
                 </small>
               </div>
               <div v-else class="grammar-recommendation legacy-recommendation" role="status">
@@ -725,60 +743,46 @@ const openQuestionEdit = (id: string) => {
                 <p>保留此題原有的文法概念與互動模式。選擇課綱考點後，系統會套用對應推薦。</p>
                 <span>目前模式：{{ uiMode }}</span>
               </div>
+              <EditorFormFields
+                v-model:canvas-mode="selectedCanvasMode"
+                v-model:grammar-sentence="grammarSentence"
+                v-model:grammar-answer="grammarAnswer"
+                v-model:target-noun="targetNoun"
+                v-model:antecedent-number="antecedentNumber"
+                :grammar-chunks="grammarChunks"
+                v-model:status-gap="statusGap"
+                v-model:npc-label="npcLabel"
+                v-model:matrix-x-input="matrixXInput"
+                v-model:matrix-y-input="matrixYInput"
+                v-model:matrix-correct-x="matrixCorrectX"
+                v-model:matrix-correct-y="matrixCorrectY"
+                v-model:matrix-prompt="matrixPrompt"
+                v-model:matrix-answer="matrixAnswer"
+                v-model:matrix-options-input="matrixOptionsInput"
+                @auto-chunk="autoChunkGrammarSentence"
+                @split-manually="splitGrammarSentenceManually"
+                @update-chunk-text="updateChunkText"
+                @toggle-morph-target="handleMorphTargetToggle"
+                @update-morph-options="updateMorphOptions"
+                @mode-change="handleCanvasModeChange"
+              />
               <div class="form-group">
-                <label><input v-model="isTimedForm" type="checkbox" /> 限時挑戰</label>
-                <input v-if="isTimedForm" v-model.number="timeLimitForm" type="number" min="10" step="10"
-                  placeholder="60 秒" />
-              </div>
-              <div class="form-group">
-                <label>{{ uiMode === 'REDUCE' ? '原始完整句子（字塊起始內容）' : '英文句子（字塊來源）' }}</label>
-                <input v-model="grammarSentence" type="text" placeholder="例如：The boy went to school yesterday." />
-              </div>
-              <div class="form-group">
-                <label>學生完成時的正確答案</label>
-                <input v-model="grammarAnswer" type="text"
-                  :placeholder="uiMode === 'REDUCE' ? '例如：The boy to school yesterday.' : '留空則與英文句子相同'" />
-              </div>
-              <div class="form-group">
-                <label>目標名詞與單複數（供診斷規則使用）</label>
-                <div class="form-row">
-                  <input v-model="targetNoun" type="text" placeholder="例如：The boy" />
-                  <select v-model="antecedentNumber" class="grammar-select">
-                    <option value="singular">單數</option>
-                    <option value="plural">複數</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-group">
-                <label>標籤（逗號分隔）</label>
-                <input v-model="tagsInput" type="text" placeholder="例如：過去式, 動詞時態" />
-              </div>
-              <div class="form-group">
-                <button class="btn-save" @click="autoChunkGrammarSentence">⚡ 本地切詞</button>
-                <button class="btn-push" style="margin-top: 10px;" @click="splitGrammarSentenceManually">
-                  以空白拆解（手動設定變形）
+                <button type="button" class="btn-push"
+                  @click="advancedSettingsExpanded = !advancedSettingsExpanded">
+                  {{ advancedSettingsExpanded ? '收合進階設定 ▲' : '展開進階設定 ▼' }}
                 </button>
-                <p v-if="grammarError" class="grammar-error" role="alert">{{ grammarError }}</p>
-              </div>
-              <div v-if="grammarChunks.length" class="form-group">
-                <label>切詞預覽</label>
-                <div class="grammar-chunk-preview" aria-label="切詞預覽">
-                  <span v-for="chunk in grammarChunks" :key="`preview-${chunk.id}`" class="grammar-chunk-chip"
-                    :class="{ 'morph-chip': chunk.can_morph }">
-                    {{ chunk.text }}
-                  </span>
+                <div v-show="advancedSettingsExpanded" class="advanced-settings">
+                  <label><input v-model="isTimedForm" type="checkbox" /> 限時挑戰</label>
+                  <input v-if="isTimedForm" v-model.number="timeLimitForm" type="number" min="10" step="10"
+                    placeholder="60 秒" aria-label="限時秒數" />
+                  <label for="grammar-tags">標籤（逗號分隔）</label>
+                  <input id="grammar-tags" v-model="tagsInput" type="text" placeholder="例如：過去式, 動詞時態" />
+                  <label for="grammar-speech-rate">TTS 語速</label>
+                  <input id="grammar-speech-rate" v-model.number="speechRate" type="number" min="0.5" max="1.5"
+                    step="0.1" />
                 </div>
               </div>
-              <div v-if="grammarChunks.length" class="form-group">
-                <label>字塊檢視（可編輯；勾選字塊可設定 MORPH 選項）</label>
-                <div v-for="chunk in grammarChunks" :key="chunk.id" class="grammar-chunk-row">
-                  <input v-model="chunk.text" type="text" aria-label="字塊文字" />
-                  <label><input :checked="chunk.can_morph" type="checkbox"
-                      @change="handleMorphTargetToggle(chunk, $event)" /> 可變形</label>
-                  <input v-if="chunk.can_morph" :value="(chunk.options ?? chunk.morph_options)?.join(', ')" type="text"
-                    placeholder="go, goes, went" aria-label="變形選項" @input="updateMorphOptions(chunk, $event)" />
-                </div>
-              </div>
+              <p v-if="grammarError" class="grammar-error" role="alert">{{ grammarError }}</p>
             </template>
             <template v-else>
               <div class="form-group" v-if="questionType !== 'chunk'">
@@ -1032,13 +1036,11 @@ const openQuestionEdit = (id: string) => {
                 </div>
               </template>
             </template>
-          </div>
-
-          <div class="editor-footer">
+          <template #footer>
             <button v-if="isEditing" class="btn-cancel" @click="resetForm">取消</button>
             <button class="btn-save" @click="saveQuestion">{{ isEditing ? '💾 儲存修改' : '✨ 加入題庫' }}</button>
-          </div>
-        </div>
+          </template>
+        </QuestionEditor>
       </div>
     </div>
   </Teleport>
