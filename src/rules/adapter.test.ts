@@ -92,6 +92,7 @@ describe('convertLegacyQuestion', () => {
       const legacyTiles = question.grammarFeature?.relative.tiles ?? [];
 
       expect(converted.ui_mode).toBe(question.mode === 'reduce' ? 'REDUCE' : 'BUILD');
+      expect(converted.canvas_mode).toBeUndefined();
       expect(converted.correctAnswer).toEqual(
         question.mode === 'reduce'
           ? question.grammarFeature?.preposition.correctAnswer
@@ -214,5 +215,35 @@ describe('convertLegacyQuestion', () => {
 
     expect(converted.chunks.map(chunk => chunk.text)).toEqual(['custom chunk']);
     expect(converted.correctAnswer).toEqual(['custom', 'answer']);
+  });
+
+  it('normalizes legacy matrix and pragmatic flags into strict canvas config', () => {
+    const matrixQuestion: QuestionData = {
+      ...legacyQuestion,
+      matrix_x: ['人', '物'],
+      matrix_y: ['時間', '金錢'],
+      correct_x: 1,
+      correct_y: 1,
+      matrix_prompt: 'The ticket costs ______.',
+      matrix_answer: 'cost',
+      matrix_options: ['spend', 'cost'],
+      correctAnswer: ['The', 'ticket', 'costs', '100', 'dollars'],
+    };
+    const pragmaticQuestion: QuestionData = { ...legacyQuestion, status_gap: 2 };
+
+    expect(convertLegacyQuestion(matrixQuestion)).toMatchObject({
+      canvas_mode: 'MATRIX_GATE',
+      matrix_config: {
+        xOptions: ['人', '物'],
+        yOptions: ['時間', '金錢'],
+        correctX: 1,
+        correctY: 1,
+        answer: 'cost',
+      },
+    });
+    expect(convertLegacyQuestion(pragmaticQuestion)).toMatchObject({
+      canvas_mode: 'PRAGMATIC_HP',
+      pragmatic_target: { statusGap: 2 },
+    });
   });
 });

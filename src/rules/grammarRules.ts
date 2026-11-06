@@ -2,6 +2,7 @@ import type { Antecedent, DiagnosticCode, DiagnosticSignal, QuestionData } from 
 import { distance } from 'fastest-levenshtein';
 import { findVerbPair, expectedForm } from './verbTable';
 import { getGrammarRules, registerGrammarRule } from './registry';
+import { cleanToken } from '../utils/textUtils';
 
 const pluginModules = import.meta.glob('./validators/*.ts', { eager: true });
 void pluginModules;
@@ -17,9 +18,6 @@ export interface RuleContext {
 
 export type RuleValidator = (ctx: RuleContext) => DiagnosticSignal[];
 
-// 輔助函數
-const cleanToken = (text: string) =>
-  text.replace(/[\[\]]/g, '').trim().toLowerCase().replace(/^[.,!?;:]+|[.,!?;:]+$/g, '');
 const RELATIVE_PRONOUNS = new Set(['who', 'which', 'that']);
 const SUBJECT_PRONOUNS = new Set(['i', 'you', 'he', 'she', 'it', 'we', 'they']);
 const BE_VERBS = new Set(['is', 'are', 'was', 'were', 'am']);

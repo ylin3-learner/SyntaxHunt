@@ -141,20 +141,28 @@ const makeChunk = (text: string, index: number, concept: GrammarConcept): Chunk 
     : undefined;
   if (!verbForms) return { id: `auto-${index}`, text, draggable: true };
 
-  const options = [...new Set([
+  const options = [
     verbForms.infinitive,
     verbForms.present,
     verbForms.past,
     verbForms.participle,
     verbForms.gerund,
-  ])];
-  const currentIndex = options.findIndex(option => option.toLowerCase() === text.toLowerCase());
+  ];
+  if (['TENSE_ASPECT', 'PAST_TENSE'].includes(concept)) {
+    options.push(`will ${verbForms.infinitive}`);
+  }
+  if (['SUBJUNCTIVE', 'CONDITIONALS'].includes(concept)) {
+    if (verbForms.infinitive === 'be') options.push('were');
+    if (verbForms.infinitive === 'will') options.push('would');
+  }
+  const uniqueOptions = [...new Set(options)];
+  const currentIndex = uniqueOptions.findIndex(option => option.toLowerCase() === text.toLowerCase());
   return {
     id: `auto-${index}`,
     text,
     draggable: true,
     can_morph: true,
-    options,
+    options: uniqueOptions,
     current_index: currentIndex < 0 ? 0 : currentIndex,
   };
 };

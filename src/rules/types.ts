@@ -1,3 +1,5 @@
+import { getGrammarTopic } from './grammarTopics';
+
 // ==========================================
 // 1. 雙軸診斷與錯誤標籤定義 (ERRANT + SST)
 // ==========================================
@@ -106,11 +108,62 @@ export type UIMode =
   | 'REDUCE'  // 減法與替代 (原垃圾桶題)
   | 'MORPH';  // 動態字塊變形 (新增：時態、單複數題)
 
+export type CanvasMode = UIMode | 'MATRIX_GATE' | 'PRAGMATIC_HP' | 'GRAVITY_SWITCH';
+
+export interface MatrixConfig {
+  xOptions: [string, string];
+  yOptions: [string, string];
+  correctX: 0 | 1;
+  correctY: 0 | 1;
+  prompt: string;
+  answer: string;
+  options: string[];
+}
+
+export interface PragmaticTarget {
+  statusGap: number;
+  npcLabel?: string;
+}
+
+export interface NoticingData {
+  examples?: string[];
+  question?: string;
+  options?: Array<{ text: string; isCorrect: boolean }>;
+  explanation?: string;
+}
+
+export interface ContrastData {
+  chineseSentence: string;
+  chineseHighlight: string;
+  modifierImage: string;
+  layout?: 'modifier-left' | 'modifier-right';
+  nounImage?: string;
+}
+
 export interface QuestionData {
   id: string;
   sortOrder?: number;
   unit?: string;
   grammarTopicId?: string;
+  canvas_mode?: CanvasMode;
+  matrix_config?: MatrixConfig;
+  pragmatic_target?: PragmaticTarget;
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  status_gap?: number;
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  matrix_x?: string[];
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  matrix_y?: string[];
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  correct_x?: number;
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  correct_y?: number;
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  matrix_prompt?: string;
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  matrix_answer?: string;
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  matrix_options?: string[];
 
   /**
    * 題型分類
@@ -164,8 +217,8 @@ export interface QuestionData {
     preposition: { label: string; tiles: string[]; correctAnswer: string[] };
   };
   inputData?: { audioText: string; options: { image: string; text: string; isCorrect: boolean }[] };
-  noticingData?: any;
-  contrastData?: any;
+  noticingData?: NoticingData;
+  contrastData?: ContrastData;
   previewData?: { targetImage: string; targetNoun: string; chunkText: string; chunkZh: string; quizOptions?: { text: string; isCorrect: boolean }[] };
 }
 
@@ -175,6 +228,16 @@ export type GrammarQuestionData = QuestionData & {
   chunks: Chunk[];
   correctAnswer: string[];
 };
+
+export function getQuestionCanvasMode(question: QuestionData): CanvasMode {
+  if (question.canvas_mode) return question.canvas_mode;
+  if (question.pragmatic_target || typeof question.status_gap === 'number') return 'PRAGMATIC_HP';
+  if (question.matrix_config || question.matrix_x || question.matrix_y) return 'MATRIX_GATE';
+  if (question.concept === 'SUBJUNCTIVE' || question.concept === 'CONDITIONALS') return 'GRAVITY_SWITCH';
+  const topicMode = getGrammarTopic(question.grammarTopicId)?.defaultCanvasMode;
+  if (topicMode) return topicMode;
+  return getQuestionUiMode(question);
+}
 
 export function getQuestionUiMode(question: QuestionData): UIMode {
   return question.ui_mode ?? (question.mode === 'reduce' ? 'REDUCE' : 'BUILD');

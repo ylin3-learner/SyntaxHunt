@@ -1,9 +1,14 @@
 import {
   getQuestionAnswer,
   getQuestionChunks,
+  getQuestionCanvasMode,
   type GrammarQuestionData,
   type QuestionData,
 } from './types';
+import { getGrammarTopic } from './grammarTopics';
+import { mapOffsetToChunkIndex } from '../utils/textUtils';
+
+export { mapOffsetToChunkIndex } from '../utils/textUtils';
 
 type LegacyFeature = 'relative' | 'preposition';
 
@@ -12,38 +17,6 @@ export function formatAnswerForDisplay(tokens: string[]): string {
     .map(token => token.replace(/[\[\]]/g, '').trim())
     .filter(Boolean)
     .join(' ');
-}
-
-export function mapOffsetToChunkIndex(
-  text: string,
-  offset: number,
-  length: number,
-  chunks?: string[]
-): number {
-  if (!Number.isFinite(offset) || !Number.isFinite(length) || offset < 0 || length < 0) return -1;
-
-  const spans: Array<{ start: number; end: number }> = [];
-  if (chunks) {
-    let cursor = 0;
-    chunks.forEach((chunk, index) => {
-      const visibleText = chunk.replace(/[\[\]]/g, '');
-      const start = cursor;
-      const end = start + visibleText.length;
-      spans.push({ start, end });
-      cursor = end + (index < chunks.length - 1 ? 1 : 0);
-    });
-  } else {
-    const words = /\S+/g;
-    let match: RegExpExecArray | null;
-    while ((match = words.exec(text)) !== null) {
-      spans.push({ start: match.index, end: match.index + match[0].length });
-    }
-  }
-
-  const endOffset = offset + length;
-  return spans.findIndex(({ start, end }) =>
-    length === 0 ? offset >= start && offset <= end : offset < end && endOffset > start
-  );
 }
 
 const normalizeMorphChunk = (chunk: GrammarQuestionData['chunks'][number]) => {
@@ -80,6 +53,23 @@ export function convertLegacyQuestion(
   const chunks = [...(question.chunks ?? getQuestionChunks(question, legacyFeature))];
   const correctAnswer = question.correctAnswer ?? getQuestionAnswer(question, legacyFeature);
   const uiMode = question.ui_mode ?? (question.mode === 'reduce' ? 'REDUCE' : 'BUILD');
+  const legacyMatrix = question.matrix_x?.length === 2 && question.matrix_y?.length === 2
+    ? {
+      xOptions: [question.matrix_x[0]!, question.matrix_x[1]!] as [string, string],
+      yOptions: [question.matrix_y[0]!, question.matrix_y[1]!] as [string, string],
+      correctX: question.correct_x === 0 ? 0 as const : 1 as const,
+      correctY: question.correct_y === 0 ? 0 as const : 1 as const,
+      prompt: question.matrix_prompt ?? '',
+      answer: question.matrix_answer ?? '',
+      options: question.matrix_options ?? [],
+    }
+    : undefined;
+  const topicCanvasMode = getGrammarTopic(question.grammarTopicId)?.defaultCanvasMode;
+  const canvasMode = question.canvas_mode ?? (legacyMatrix
+    ? 'MATRIX_GATE'
+    : question.pragmatic_target || typeof question.status_gap === 'number'
+      ? 'PRAGMATIC_HP'
+      : topicCanvasMode ?? getQuestionCanvasMode(question));
 
   if (uiMode === 'REDUCE') {
     const normalizeWord = (word: string) =>
@@ -108,6 +98,14 @@ export function convertLegacyQuestion(
     ...question,
     type: 'grammar',
     ui_mode: uiMode,
+    ...(question.canvas_mode || topicCanvasMode || legacyMatrix || question.pragmatic_target
+      || typeof question.status_gap === 'number'
+      ? { canvas_mode: canvasMode }
+      : {}),
+    ...(legacyMatrix && !question.matrix_config ? { matrix_config: legacyMatrix } : {}),
+    ...(typeof question.status_gap === 'number' && !question.pragmatic_target
+      ? { pragmatic_target: { statusGap: question.status_gap } }
+      : {}),
     chunks: chunks.map(normalizeMorphChunk),
     correctAnswer: [...correctAnswer],
   };

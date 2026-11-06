@@ -39,10 +39,19 @@ describe('autoChunk', () => {
 
     expect(morphChunks[1]).toMatchObject({
       can_morph: true,
-      options: ['go', 'goes', 'went', 'gone', 'going'],
+      options: ['go', 'goes', 'went', 'gone', 'going', 'will go'],
       current_index: 2,
     });
     expect(buildChunks[1].can_morph).toBeUndefined();
+  });
+
+  it('adds a three-time future form and unreal-subjunctive choices for the grammar canvases', () => {
+    const tenseChunks = autoChunk('He goes to school.', 'TENSE_ASPECT');
+    const subjunctiveChunks = autoChunk('If I am you, I will go.', 'SUBJUNCTIVE');
+
+    expect(tenseChunks.find(chunk => chunk.text === 'goes')?.options).toContain('will go');
+    expect(subjunctiveChunks.find(chunk => chunk.text === 'am')?.options).toContain('were');
+    expect(subjunctiveChunks.find(chunk => chunk.text === 'will')?.options).toContain('would');
   });
 
   it('uses the irregular verb table first and compromise for regular verbs', () => {
