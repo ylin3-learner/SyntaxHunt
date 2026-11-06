@@ -53,7 +53,7 @@ describe('GrammarCanvas', () => {
     expect(wrapper.find('.alert-bubble').text()).toContain('應該用「went」');
 
     await wrapper.find('.answer-area .can-morph').trigger('click');
-    await wrapper.findAll('.morph-menu div').find(option => option.text() === 'went')!.trigger('click');
+    await wrapper.findAll('.morph-menu button').find(option => option.text() === 'went')!.trigger('click');
     expect(wrapper.find('.answer-area').text()).toContain('went');
 
     await vi.advanceTimersByTimeAsync(1500);
@@ -305,7 +305,8 @@ describe('GrammarCanvas', () => {
     wrapper.unmount();
   });
 
-  it('routes tense concepts to the timeline morphology canvas', async () => {
+  it('uses fixed sentence morph choices instead of tile banks or per-word timelines', async () => {
+    vi.useFakeTimers();
     const question: GrammarQuestionData = {
       id: 'timeline-test',
       type: 'grammar',
@@ -313,19 +314,60 @@ describe('GrammarCanvas', () => {
       concept: 'TENSE_ASPECT',
       targetNoun: 'They',
       antecedent: { noun: 'They', number: 'plural', person: 'person' },
-      correctAnswer: ['They', 'went'],
+      correctAnswer: ['They', 'will', 'do', 'it'],
       chunks: [
         { id: 'they', text: 'They', draggable: true },
-        { id: 'go', text: 'go', draggable: true, can_morph: true, options: ['go', 'goes', 'went'] },
+        { id: 'will', text: 'would', draggable: true, can_morph: true, options: ['will', 'would'] },
+        { id: 'do', text: 'did', draggable: true, can_morph: true, options: ['do', 'did'] },
+        { id: 'it', text: 'it', draggable: true },
       ],
     };
     const wrapper = mount(GrammarCanvas, {
       props: { question, initialChunks: question.chunks },
     });
 
-    await vi.waitFor(() => expect(wrapper.text()).toContain('時態時間軸'));
-    await wrapper.find('input[type="range"]').setValue(0);
-    expect(wrapper.find('.selected-form').text()).toContain('went');
+    await vi.waitFor(() => expect(wrapper.text()).toContain('句子變形'));
+    expect(wrapper.find('.fixed-morph-sentence').text()).toContain('They');
+    expect(wrapper.findAll('.fixed-morph-token')).toHaveLength(2);
+    expect(wrapper.find('.word-bank').exists()).toBe(false);
+    expect(wrapper.find('.answer-slot').exists()).toBe(false);
+    expect(wrapper.find('input[type="range"]').exists()).toBe(false);
+
+    await wrapper.find('[aria-label="變形字詞：would"]').trigger('click');
+    await wrapper.findAll('.morph-menu button').find(option => option.text() === 'will')!.trigger('click');
+    expect(wrapper.find('.fixed-morph-sentence').text()).toContain('will');
+    expect(wrapper.emitted('success')).toBeUndefined();
+
+    await wrapper.find('[aria-label="變形字詞：did"]').trigger('click');
+    await wrapper.findAll('.morph-menu button').find(option => option.text() === 'do')!.trigger('click');
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(wrapper.emitted('success')).toBeTruthy();
+    wrapper.unmount();
+  });
+
+  it('routes a catalog-recommended morphology topic to the fixed-sentence interaction', async () => {
+    const question: GrammarQuestionData = {
+      id: 'comparison-topic',
+      type: 'grammar',
+      grammarTopicId: 'comparison',
+      ui_mode: 'MORPH',
+      concept: 'SENTENCE_PATTERN',
+      targetNoun: 'The car',
+      antecedent: { noun: 'The car', number: 'singular', person: 'thing' },
+      correctAnswer: ['The car', 'is', 'faster'],
+      chunks: [
+        { id: 'car', text: 'The car', draggable: true },
+        { id: 'is', text: 'is', draggable: true },
+        { id: 'fast', text: 'fast', draggable: true, can_morph: true, options: ['fast', 'faster', 'fastest'] },
+      ],
+    };
+    const wrapper = mount(GrammarCanvas, {
+      props: { question, initialChunks: question.chunks },
+    });
+
+    await vi.waitFor(() => expect(wrapper.find('.fixed-morph-sentence').exists()).toBe(true));
+    expect(wrapper.find('.word-bank').exists()).toBe(false);
+    expect(wrapper.findAll('.fixed-morph-token')).toHaveLength(1);
     wrapper.unmount();
   });
 

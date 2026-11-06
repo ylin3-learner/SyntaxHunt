@@ -201,10 +201,10 @@ sequenceDiagram
 ### Using general grammar questions
 
 1. Open **Teacher Admin** and select **General Grammar** in the question editor.
-2. Choose a grammar concept and interaction mode. The concept supplies a default mode, which can be changed.
+2. Choose a curriculum chapter and a specific grammar topic. The system recommends one interaction mode, learning focus, and rationale; the mode is not freely switchable.
 3. Enter the source sentence and the exact target answer. For `REDUCE`, enter the complete sentence as the source and the reduced sentence as the answer.
 4. Click **Local chunking** or split the sentence manually. Bracket a multi-word chunk in the source, e.g. `[in a blue uniform]`. Review the generated chips and edit the chunks before using them.
-5. For `MORPH`, mark each changeable chunk and provide its comma-separated forms (e.g. `go, goes, went`). Chunking uses compromise.js and an irregular-verb JSON table; add or correct forms manually when needed.
+5. For a `MORPH` topic, mark exactly one changeable chunk and provide its comma-separated forms (e.g. `go, goes, went`). Students see the fixed sentence and click that word to choose a form. Chunking uses compromise.js and an irregular-verb JSON table; add or correct forms manually when needed.
 6. Click **Add to question bank**. Click **Send to class** on that question to make it active, or click **Finish prep** to save the bank and close the editor (reopen Teacher Admin to push it later). Students answer by clicking tiles: assemble in `BUILD`, remove tiles in `REDUCE`, and select forms in `MORPH`.
 
 > **Teacher access note:** The frontend demo uses the fixed password `admin123` and sends that same value to `teacher-action`. The Edge Function defaults to `admin123` when `TEACHER_PASSWORD` is unset; setting that secret to a different value will break remote teacher actions until the frontend is updated too. This is not secure authentication—do not expose the demo as a public or production teacher console.
@@ -229,24 +229,24 @@ To ensure accurate diagnostics, the system performs **Context Stitching**: it re
 
 An 8-second timeout (accommodating Render's cold starts) or service failure displays a neutral notice and lets the student skip to the next question. In `BUILD` and `MORPH`, students can also check a partial answer before filling every slot.
 
-Teacher-authored general grammar questions choose a concept and interaction mode. `autoChunk(sentence, concept)` uses compromise.js for deterministic tokenization and verb parsing, checks the irregular-verb table first, and preserves bracketed phrases as explicit chunks. It does not call an LLM. MORPH options are stored as strings with `current_index` identifying the initial selected form, while legacy `morph_options` remains supported. The canvas routes new concepts to a timeline, modal-strength gauge, shredder, or magnetic-slot interaction. Questions without a concept keep the legacy canvas.
+Teacher-authored general grammar questions select a curriculum chapter and a specific topic. Each topic supplies a single recommended interaction, a learning focus, and a short rationale; teachers no longer freely combine incompatible concepts and UI modes. Morphology topics show the fixed sentence and let students click the single configured target word to choose a form, without a tile bank or sentence slots. `autoChunk(sentence, concept)` uses compromise.js for deterministic tokenization and verb parsing, checks the irregular-verb table first, and preserves bracketed phrases as explicit chunks. It does not call an LLM. MORPH options are stored as strings with `current_index` identifying the initial selected form, while legacy `morph_options` remains supported. Modal questions use a strength gauge, REDUCE uses the shredder, and BUILD uses magnetic sentence slots. Questions without a saved curriculum topic keep their existing settings and canvas.
 
 ### How the Rule Registry connects authoring, gameplay, and diagnosis
 
 The registry is the **local diagnosis plugin point**, not the question authoring UI router:
 
-1. **Authoring:** In Teacher Admin, the teacher selects a grammar concept and `BUILD`, `REDUCE`, or `MORPH`, enters a sentence and answer, then uses local `autoChunk` (or edits the chunks and morphology options). The chosen concept and mode are saved with the question. `autoChunk` does not consult the Rule Registry.
-2. **Gameplay UI:** `GrammarCanvas.vue` selects a canvas from the saved `concept` and `ui_mode`; it does not look up registered rules. Concept defaults are provided by `defaultUiModeForConcept`, and the teacher may override the mode. The current routing is:
+1. **Authoring:** In Teacher Admin, the teacher selects a curriculum chapter and a specific topic. The topic determines the recommended interaction, learning focus, and rationale; the teacher enters the sentence and answer, then uses local `autoChunk` (or edits the chunks and morphology options). `autoChunk` does not consult the Rule Registry. For a `MORPH` topic, exactly one chunk can be configured as the transformation target.
+2. **Gameplay UI:** `GrammarCanvas.vue` selects a canvas from the saved topic, `concept`, and `ui_mode`; it does not look up registered rules. Curriculum topics supply their recommended mode, while legacy questions without a saved topic retain their prior settings. The current routing is:
 
    | Question setting | Student interaction |
    | :--- | :--- |
    | `MODAL_VERB` | Modal-strength gauge |
    | `REDUCE` | Shredder-style reduction |
-   | `MORPH` + tense, agreement, subjunctive, or conditional concept | Tense timeline |
+   | `MORPH` with a saved curriculum topic, or a legacy tense/agreement/subjunctive/conditional concept | Fixed sentence with click-to-change word forms |
    | `BUILD` | Magnetic sentence slots |
    | No concept or an unmatched combination | Legacy canvas |
 
-   The gallery shows **illustrative UI mockups, not live application screenshots**. The student's actual canvas is routed as above; tiles are selected by clicking rather than dragging, and retained `REDUCE` tiles can be reordered with their arrow controls.
+   The gallery shows **illustrative UI mockups, not live application screenshots**. The student's actual canvas is routed as above; tiles are selected by clicking rather than dragging, and retained `REDUCE` tiles can be reordered with their arrow controls. A `MORPH` topic keeps the sentence fixed and exposes one configured target word, rather than asking students to also assemble sentence tiles.
 
    | `BUILD` — assemble sentence chunks | `REDUCE` — remove unnecessary chunks |
    | :---: | :---: |
@@ -254,7 +254,7 @@ The registry is the **local diagnosis plugin point**, not the question authoring
 
    | `MORPH` — select a tense or verb form | `MODAL_VERB` — choose a modal strength |
    | :---: | :---: |
-   | ![Tense MORPH and sentence assembly UI illustration](docs/images/adaptive-grammar-game-ui.svg) | ![Modal verb strength gauge UI illustration](docs/images/grammar-modal-ui.svg) |
+   | ![Fixed-sentence MORPH UI with one clickable target word](docs/images/grammar-morph-ui.svg) | ![Modal verb strength gauge UI illustration](docs/images/grammar-modal-ui.svg) |
 3. **Diagnosis:** After submission, `diagnoseGrammar` runs general validators plus validators registered for that question's concept. `grammarRules.ts` eagerly loads `src/rules/validators/*.ts`; each plugin calls `registerGrammarRule` with an ID, validator, and optional concept list. For example, conjunction rules target clause concepts, inversion targets question/inversion concepts, and modal-form checks target `MODAL_VERB`. A definite local signal drives the existing misconception feedback/logging; if local rules cannot classify the incorrect answer, LanguageTool is called through the Supabase `lt-proxy` Edge Function and its native result is retained.
 
 Therefore, adding a validator changes local diagnosis only. It does not automatically add a teacher form field or a new visual interaction; those require updates to the concept/type list, authoring controls, and/or canvas routing as appropriate. For a new validator, add a file under `src/rules/validators/` and register it; keep the ID unique.
@@ -266,7 +266,7 @@ The authoring form exposes every concept listed in the scope, but that does **no
 | Scope topic | Current interaction | Coverage and limitation |
 | :--- | :--- | :--- |
 | Sentence units, S/V/O/C, five sentence patterns | `BUILD` | Can assemble a keyed sentence; it does not label grammatical roles or model each pattern as a distinct task. |
-| Subject-verb agreement; tense and aspect | `MORPH` or `BUILD` | Supports configured alternatives and exact-answer checking. Auto-generated forms use a small vocabulary; the timeline does not fully model all tense/aspect combinations. |
+| Subject-verb agreement; tense and aspect | `MORPH` or `BUILD` | Supports teacher-configured alternatives and exact-answer checking. A `MORPH` topic focuses on one target word in a fixed sentence; this does not model all tense/aspect combinations. |
 | Questions and inversion | `BUILD` | Can assemble a question/inverted sentence. Local inversion diagnosis is heuristic, not a general question parser. |
 | Connectors; noun, adjective, and adverb clauses | `BUILD` / `REDUCE` | Can assemble or reduce teacher-authored chunks. Deterministic tokenization does not identify clause boundaries or grammatical roles; teachers can bracket phrases and edit the generated chunks. |
 | Subjunctive mood and conditionals | `MORPH` / `BUILD` | Can practice supplied forms and sentence order, but there is no dedicated two-clause conditional interaction; local mood diagnosis covers only narrow patterns. |

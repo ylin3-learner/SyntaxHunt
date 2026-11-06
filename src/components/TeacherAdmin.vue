@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import type { Chunk, GrammarConcept, QuestionData, UIMode } from '../rules/types';
-import { autoChunk, defaultUiModeForConcept } from '../rules/autoChunk';
+import { autoChunk } from '../rules/autoChunk';
+import { getGrammarTopic, grammarChapters } from '../rules/grammarTopics';
 import { useClassroomSync } from '../composables/useClassroomSync';
 import QuestionFlow from './QuestionFlow.vue';
 
@@ -15,6 +16,21 @@ const grammarSentence = ref('');
 const grammarAnswer = ref('');
 const grammarChunks = ref<Chunk[]>([]);
 const grammarError = ref('');
+const selectedChapter = ref(19);
+const selectedGrammarTopicId = ref('sentence-patterns');
+const editingGrammarTopicId = ref<string | undefined>();
+const topicsInSelectedChapter = computed(() =>
+  grammarChapters.find(chapter => chapter.number === selectedChapter.value)?.topics ?? []
+);
+const selectedGrammarTopic = computed(() => getGrammarTopic(selectedGrammarTopicId.value));
+const recommendedUiLabel = computed(() => {
+  const topic = selectedGrammarTopic.value;
+  if (!topic) return '';
+  if (topic.concept === 'MODAL_VERB') return '情態語氣壓力計';
+  if (topic.mode === 'BUILD') return 'BUILD 組句';
+  if (topic.mode === 'REDUCE') return 'REDUCE 化簡';
+  return 'MORPH 形式選擇';
+});
 const isQuestionsExpanded = ref(true);
 const showQuestionFlow = ref(false);
 
@@ -112,15 +128,30 @@ const handleModeChange = () => {
   updateClassMode(isClassModeToggle.value, targetCountInput.value, pwd);
 };
 
-const handleGrammarConceptChange = () => {
-  uiMode.value = defaultUiModeForConcept(grammarConcept.value);
+const applyGrammarTopic = (topicId: string) => {
+  const topic = getGrammarTopic(topicId);
+  if (!topic) return;
+  selectedGrammarTopicId.value = topic.id;
+  selectedChapter.value = topic.chapter;
+  grammarConcept.value = topic.concept;
+  uiMode.value = topic.mode;
   grammarChunks.value = [];
+  grammarError.value = '';
+};
+
+const handleChapterChange = () => {
+  const firstTopic = topicsInSelectedChapter.value[0];
+  if (firstTopic) applyGrammarTopic(firstTopic.id);
 };
 
 const resetForm = () => {
   grammarSentence.value = ''; grammarAnswer.value = ''; grammarChunks.value = [];
   unitName.value = '';
-  uiMode.value = 'BUILD'; grammarConcept.value = 'SENTENCE_PATTERN'; grammarError.value = '';
+  selectedChapter.value = 19; selectedGrammarTopicId.value = 'sentence-patterns';
+  editingGrammarTopicId.value = undefined;
+  const defaultTopic = getGrammarTopic(selectedGrammarTopicId.value);
+  grammarConcept.value = defaultTopic?.concept ?? 'SENTENCE_PATTERN';
+  uiMode.value = defaultTopic?.mode ?? 'BUILD'; grammarError.value = '';
   chunkZhInput.value = ''; chunkQuizInput.value = ''; distractorImageUrl.value = '';
   correctLabel.value = ''; distractorLabel.value = '';
   antecedentNumber.value = 'singular';
@@ -140,6 +171,10 @@ const editQuestion = (q: QuestionData) => {
   showQuestionFlow.value = false;
   unitName.value = q.unit || '';
   if (q.type === 'grammar') {
+    const savedTopic = getGrammarTopic(q.grammarTopicId);
+    selectedGrammarTopicId.value = savedTopic?.id ?? '';
+    selectedChapter.value = savedTopic?.chapter ?? 0;
+    editingGrammarTopicId.value = q.grammarTopicId;
     editingId.value = q.id;
     questionType.value = 'grammar';
     grammarConcept.value = q.concept || 'SENTENCE_PATTERN';
@@ -224,6 +259,17 @@ const updateMorphOptions = (chunk: Chunk, event: Event) => {
   chunk.options = options;
   chunk.morph_options = options;
   chunk.current_index = Math.max(0, options.indexOf(chunk.text));
+};
+
+const handleMorphTargetToggle = (chunk: Chunk, event: Event) => {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) return;
+  chunk.can_morph = input.checked;
+  if (!input.checked) {
+    chunk.options = [];
+    chunk.morph_options = [];
+    chunk.current_index = 0;
+  }
 };
 
 const deleteQuestion = (id: string) => {
@@ -323,24 +369,37 @@ const saveQuestion = () => {
       return;
     }
 
+    const selectedTopic = selectedGrammarTopic.value;
+    const chunks = grammarChunks.value.length > 0
+      ? grammarChunks.value
+      : autoChunk(source, grammarConcept.value).map((chunk, index) => ({
+        ...chunk,
+        id: `${editingId.value || 'new'}-chunk-${index}`,
+      }));
+    if (selectedTopic?.mode === 'MORPH') {
+      const morphTargets = chunks.filter(chunk =>
+        chunk.can_morph && new Set(chunk.options ?? chunk.morph_options ?? []).size > 1
+      );
+      if (morphTargets.length !== 1) {
+        grammarError.value = '此考點一次只練一個變形目標，請只勾選一個可變形字塊，並提供至少兩種形式。';
+        return;
+      }
+    }
+
     const question: QuestionData = {
       id: editingId.value || `q_${Date.now()}`,
       type: 'grammar',
       unit: unitName.value.trim() || undefined,
-      ui_mode: uiMode.value,
-      concept: grammarConcept.value,
+      grammarTopicId: selectedTopic?.id ?? editingGrammarTopicId.value,
+      ui_mode: selectedTopic?.mode ?? uiMode.value,
+      concept: selectedTopic?.concept ?? grammarConcept.value,
       targetNoun: targetNoun.value.trim() || source.split(/\s+/)[0],
       antecedent: {
         noun: targetNoun.value.trim() || source.split(/\s+/)[0],
         number: antecedentNumber.value,
         person: antecedentPerson.value,
       },
-      chunks: grammarChunks.value.length > 0
-        ? grammarChunks.value
-        : autoChunk(source, grammarConcept.value).map((chunk, index) => ({
-          ...chunk,
-          id: `${editingId.value || 'new'}-chunk-${index}`,
-        })),
+      chunks,
       correctAnswer: answer.split(/\s+/).filter(Boolean),
       enabledStages: ['micro'],
       imageUrl: imageUrl.value || undefined,
@@ -632,31 +691,39 @@ const openQuestionEdit = (id: string) => {
             </div>
             <template v-if="questionType === 'grammar'">
               <div class="form-group">
-                <label for="grammar-concept">文法概念</label>
-                <select id="grammar-concept" v-model="grammarConcept" class="grammar-select"
-                  @change="handleGrammarConceptChange">
-                  <option value="SENTENCE_PATTERN">句子成分與五大句型</option>
-                  <option value="SUBJECT_VERB_AGREEMENT">主詞動詞一致</option>
-                  <option value="QUESTION_FORM">問句</option>
-                  <option value="TENSE_ASPECT">時態與狀態</option>
-                  <option value="CLAUSES_CONNECTORS">子句與連接詞</option>
-                  <option value="NOUN_CLAUSE">名詞子句</option>
-                  <option value="ADJECTIVE_CLAUSE">形容詞子句／關係子句</option>
-                  <option value="ADVERB_CLAUSE">副詞子句</option>
-                  <option value="INVERSION">倒裝句</option>
-                  <option value="SUBJUNCTIVE">假設語氣</option>
-                  <option value="CONDITIONALS">條件句</option>
-                  <option value="MODAL_VERB">情態動詞</option>
-                  <option value="PAST_TENSE">過去式</option>
+                <label for="grammar-chapter">課綱章節</label>
+                <select id="grammar-chapter" v-model.number="selectedChapter" class="grammar-select"
+                  @change="handleChapterChange">
+                  <option v-if="selectedChapter === 0" :value="0" disabled>
+                    舊題／自訂考點（保留原設定）
+                  </option>
+                  <option v-for="chapter in grammarChapters" :key="chapter.number" :value="chapter.number">
+                    第 {{ chapter.number }} 章：{{ chapter.title }}
+                  </option>
                 </select>
               </div>
               <div class="form-group">
-                <label>題目 UI 模式</label>
-                <div class="type-switcher">
-                  <button :class="{ active: uiMode === 'BUILD' }" @click="uiMode = 'BUILD'">BUILD 組句</button>
-                  <button :class="{ active: uiMode === 'REDUCE' }" @click="uiMode = 'REDUCE'">REDUCE 刪除</button>
-                  <button :class="{ active: uiMode === 'MORPH' }" @click="uiMode = 'MORPH'">MORPH 變形</button>
-                </div>
+                <label for="grammar-topic">具體考點</label>
+                <select id="grammar-topic" v-model="selectedGrammarTopicId" class="grammar-select"
+                  :disabled="selectedChapter === 0"
+                  @change="applyGrammarTopic(selectedGrammarTopicId)">
+                  <option v-for="topic in topicsInSelectedChapter" :key="topic.id" :value="topic.id">
+                    {{ topic.title }}
+                  </option>
+                </select>
+              </div>
+              <div v-if="selectedGrammarTopic" class="grammar-recommendation" role="status">
+                <strong>系統推薦：{{ recommendedUiLabel }}</strong>
+                <p>{{ selectedGrammarTopic.recommendation }}</p>
+                <span>本題唯一操作焦點：{{ selectedGrammarTopic.focus }}</span>
+                <small v-if="selectedGrammarTopic.mode === 'MORPH'">
+                  請只勾選一個可變形字塊，並提供至少兩種形式。
+                </small>
+              </div>
+              <div v-else class="grammar-recommendation legacy-recommendation" role="status">
+                <strong>舊題／自訂考點</strong>
+                <p>保留此題原有的文法概念與互動模式。選擇課綱考點後，系統會套用對應推薦。</p>
+                <span>目前模式：{{ uiMode }}</span>
               </div>
               <div class="form-group">
                 <label><input v-model="isTimedForm" type="checkbox" /> 限時挑戰</label>
@@ -706,7 +773,8 @@ const openQuestionEdit = (id: string) => {
                 <label>字塊檢視（可編輯；勾選字塊可設定 MORPH 選項）</label>
                 <div v-for="chunk in grammarChunks" :key="chunk.id" class="grammar-chunk-row">
                   <input v-model="chunk.text" type="text" aria-label="字塊文字" />
-                  <label><input v-model="chunk.can_morph" type="checkbox" /> 可變形</label>
+                  <label><input :checked="chunk.can_morph" type="checkbox"
+                      @change="handleMorphTargetToggle(chunk, $event)" /> 可變形</label>
                   <input v-if="chunk.can_morph" :value="(chunk.options ?? chunk.morph_options)?.join(', ')" type="text"
                     placeholder="go, goes, went" aria-label="變形選項" @input="updateMorphOptions(chunk, $event)" />
                 </div>
@@ -1700,6 +1768,39 @@ const openQuestionEdit = (id: string) => {
   border: 1px solid #d6e5f1;
   border-radius: 12px;
   background: #f7fbff;
+}
+
+.grammar-recommendation {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  background: #f0f9ff;
+  color: #0c4a6e;
+}
+
+.grammar-recommendation p {
+  margin: 0;
+  color: #334155;
+}
+
+.grammar-recommendation span,
+.grammar-recommendation small {
+  color: #475569;
+  line-height: 1.5;
+}
+
+.grammar-recommendation small {
+  color: #7c3aed;
+  font-weight: 700;
+}
+
+.legacy-recommendation {
+  border-color: #e2e8f0;
+  background: #f8fafc;
 }
 
 .grammar-chunk-chip {

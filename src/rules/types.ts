@@ -110,6 +110,7 @@ export interface QuestionData {
   id: string;
   sortOrder?: number;
   unit?: string;
+  grammarTopicId?: string;
 
   /**
    * 題型分類

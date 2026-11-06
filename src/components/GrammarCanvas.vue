@@ -25,6 +25,7 @@ const selectedCanvas = computed(() => {
   if (!concept) return LegacyGrammarCanvas;
   if (concept === 'MODAL_VERB') return ModalGaugeCanvas;
   if (uiMode === 'REDUCE') return ShredderReduceCanvas;
+  if (uiMode === 'MORPH' && props.question.grammarTopicId) return TimelineMorphCanvas;
   if (uiMode === 'MORPH' && [
     'SUBJECT_VERB_AGREEMENT',
     'TENSE_ASPECT',

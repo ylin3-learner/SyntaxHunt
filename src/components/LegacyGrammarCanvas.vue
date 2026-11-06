@@ -14,6 +14,7 @@ const props = defineProps<{
   question: GrammarQuestionData;
   initialChunks: Chunk[];
   speechRate?: number;
+  fixedMorph?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -40,7 +41,13 @@ const isCheckingLanguageTool = ref(false);
 const activeMorphId = ref<string | null>(null);
 
 const initTiles = () => {
-  if (props.question.ui_mode === 'REDUCE') {
+  if (props.fixedMorph) {
+    answerArea.value = JSON.parse(JSON.stringify(props.initialChunks.map(chunk => ({
+      ...chunk,
+    }))));
+    trashArea.value = [];
+    wordBank.value = [];
+  } else if (props.question.ui_mode === 'REDUCE') {
     answerArea.value = JSON.parse(JSON.stringify(props.initialChunks));
     trashArea.value = [];
     wordBank.value = [];
@@ -311,8 +318,11 @@ const handleOutsideClick = () => {
 
 <template>
   <div class="grammar-canvas" @click="handleOutsideClick">
+    <div v-if="fixedMorph" class="fixed-morph-instruction">
+      點擊紫色字詞，直接選擇適合的變形；句子順序已固定，不需要排列字塊。
+    </div>
     <!-- 克漏字上下文 -->
-    <div class="cloze-context" v-if="question.contextCloze">
+    <div class="cloze-context" v-if="question.contextCloze && !fixedMorph">
       <span class="cloze-text">{{ question.contextCloze.prefix }}</span>
       <div class="cloze-blanks-container">
         <template v-if="question.ui_mode !== 'REDUCE'">
@@ -333,7 +343,34 @@ const handleOutsideClick = () => {
     </div>
 
     <!-- 作答區 -->
-    <div class="answer-area" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
+    <div v-if="fixedMorph" class="fixed-morph-sentence"
+      :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
+      <span v-if="question.contextCloze" class="fixed-context">{{ question.contextCloze.prefix }}</span>
+      <template v-for="(chunk, index) in answerArea" :key="chunk.id">
+        <span v-if="index > 0 && !question.contextCloze" class="fixed-word-space"> </span>
+        <span v-if="chunk.can_morph" class="fixed-morph-token">
+          <button type="button" class="tile can-morph"
+            :class="{ 'tile-error': isError(index), 'tile-success': isSuccess, 'tile-wrong': isWrong }"
+            :aria-label="`變形字詞：${chunk.text.replace(/[\[\]]/g, '')}`"
+            :aria-expanded="activeMorphId === chunk.id"
+            @click.stop="toggleMorphMenu(chunk)">
+            {{ chunk.text.replace(/[\[\]]/g, '') }}
+          </button>
+          <div v-if="activeMorphId === chunk.id" class="morph-menu">
+            <button v-for="option in (chunk.options ?? chunk.morph_options)" :key="option" type="button"
+              @click.stop="selectMorph(chunk, option)">
+              {{ option }}
+            </button>
+          </div>
+        </span>
+        <span v-else class="fixed-sentence-token"
+          :class="{ 'tile-error': isError(index), 'tile-success': isSuccess, 'tile-wrong': isWrong }">
+          {{ chunk.text.replace(/[\[\]]/g, '') }}
+        </span>
+      </template>
+      <span v-if="question.contextCloze" class="fixed-context">{{ question.contextCloze.suffix }}</span>
+    </div>
+    <div v-else class="answer-area" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
       <template v-if="question.ui_mode !== 'REDUCE'">
         <div v-for="(_, index) in answerSlotCount" :key="index" class="answer-slot">
           <div v-if="answerArea[index]" class="tile-wrapper">
@@ -351,10 +388,11 @@ const handleOutsideClick = () => {
               @click.stop="unselectTile(answerArea[index])">×</button>
             <!-- 變形下拉選單 -->
             <div v-if="activeMorphId === answerArea[index].id" class="morph-menu">
-              <div v-for="opt in (answerArea[index].options ?? answerArea[index].morph_options)" :key="opt"
+              <button v-for="opt in (answerArea[index].options ?? answerArea[index].morph_options)" :key="opt"
+                type="button"
                 @click.stop="selectMorph(answerArea[index], opt)">
                 {{ opt }}
-              </div>
+              </button>
             </div>
           </div>
           <div v-else class="empty-slot"></div>
@@ -379,7 +417,7 @@ const handleOutsideClick = () => {
         </div>
       </template>
     </div>
-    <button v-if="question.ui_mode !== 'REDUCE' && answerArea.length > 0
+    <button v-if="question.ui_mode !== 'REDUCE' && !fixedMorph && answerArea.length > 0
       && answerArea.length < question.correctAnswer.length && signals.length === 0
       && !isCheckingLanguageTool" type="button" class="check-answer-button" @click.stop="checkAnswer(true)">
       檢查目前答案
@@ -434,7 +472,7 @@ const handleOutsideClick = () => {
     </div>
 
     <!-- 字庫 (Build/Morph) -->
-    <div v-if="question.ui_mode !== 'REDUCE'" class="word-bank">
+    <div v-if="question.ui_mode !== 'REDUCE' && !fixedMorph" class="word-bank">
       <div v-for="tile in wordBank" :key="tile.id" class="tile"
         :class="{ 'tile-chunk': tile.text.startsWith('['), 'can-morph': tile.can_morph }" @click="selectTile(tile)">
         {{ tile.text.replace(/[\[\]]/g, '') }}
@@ -451,6 +489,63 @@ const handleOutsideClick = () => {
   gap: 20px;
   min-height: 300px;
   position: relative;
+}
+
+.fixed-morph-instruction {
+  padding: 12px 16px;
+  border: 1px solid #e9d5ff;
+  border-radius: 12px;
+  background: #faf5ff;
+  color: #6b21a8;
+  font-weight: 700;
+}
+
+.fixed-morph-sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 5px;
+  min-height: 84px;
+  padding: 20px;
+  border: 2px solid #d5e0e8;
+  border-radius: 16px;
+  background: #ffffff;
+  font-size: clamp(1.15rem, 3vw, 1.65rem);
+  line-height: 1.7;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.fixed-context {
+  color: #526879;
+}
+
+.fixed-word-space {
+  width: 0;
+}
+
+.fixed-morph-token {
+  position: relative;
+  display: inline-flex;
+}
+
+.fixed-morph-token .tile {
+  padding: 5px 12px;
+  border: 0;
+  font: inherit;
+}
+
+.fixed-sentence-token {
+  padding: 2px 1px;
+  border-radius: 6px;
+}
+
+.fixed-morph-sentence.success-bg {
+  border-color: #58cc02;
+  background: #f0fff0;
+}
+
+.fixed-morph-sentence.shake {
+  animation: shake 0.4s;
 }
 
 .answer-area,
@@ -644,11 +739,17 @@ const handleOutsideClick = () => {
   z-index: 10;
   overflow: hidden;
   min-width: 100%;
+  max-height: 240px;
+  overflow-y: auto;
   animation: slideDown 0.2s;
 }
 
-.morph-menu div {
+.morph-menu button {
+  display: block;
+  width: 100%;
   padding: 10px 20px;
+  border: 0;
+  background: #ffffff;
   font-weight: bold;
   cursor: pointer;
   text-align: center;
@@ -656,7 +757,8 @@ const handleOutsideClick = () => {
   transition: background 0.2s;
 }
 
-.morph-menu div:hover {
+.morph-menu button:hover,
+.morph-menu button:focus-visible {
   background: #f3e8ff;
   color: #9c27b0;
 }
