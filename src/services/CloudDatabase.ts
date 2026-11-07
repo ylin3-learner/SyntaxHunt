@@ -16,6 +16,7 @@ export interface LearningLog {
   source?: DiagnosticSignal['source'];
   category?: string;
   rule_id?: string;
+  seat_code?: string;
   status?: 'PENDING' | 'SUCCESS' | 'FAILED' | null;
   diagnosis?: DiagnosticSignal | null;
   created_at?: string;

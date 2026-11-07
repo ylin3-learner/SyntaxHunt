@@ -14,6 +14,21 @@ const logs = ref<LearningLog[]>([]);
 const isLoading = ref(true);
 const isClearing = ref(false);
 const expandedCode = ref<string | null>(null);
+const selectedSeat = ref<string>('ALL');
+
+const filteredLogs = computed(() => {
+    if (selectedSeat.value === 'ALL') return logs.value;
+    return logs.value.filter(log => log.seat_code === selectedSeat.value);
+});
+
+const uniqueSeatCodes = computed(() => {
+    const codes = new Set<string>();
+    logs.value.forEach(log => {
+        if (log.seat_code) codes.add(log.seat_code);
+    });
+    return Array.from(codes).sort();
+});
+
 let learningLogsChannel: ReturnType<typeof supabase.channel> | undefined;
 let hasSubscribedToLearningLogs = false;
 
@@ -194,7 +209,7 @@ const sstDistribution = computed(() => {
     const counts = categories.map(category => ({
         category,
         label: sstLabels[category],
-        count: logs.value.filter(log =>
+        count: filteredLogs.value.filter(log =>
             log.source !== 'languagetool'
             && log.error_code !== 'CHUNK_DISTRACTOR'
             &&
@@ -281,7 +296,7 @@ interface ErrorNode {
 
 // 👇 核心邏輯：將資料分群成雙層結構，並加入克漏字上下文
 const errorTree = computed<ErrorNode[]>(() => {
-    const errorLogs = logs.value.filter(log =>
+    const errorLogs = filteredLogs.value.filter(log =>
         log.source !== 'languagetool'
         &&
         log.error_code !== 'CHUNK_DISTRACTOR'
@@ -344,6 +359,10 @@ const errorTree = computed<ErrorNode[]>(() => {
         <div class="analytics-card">
             <div class="header">
                 <h2>📊 學習診斷與教學處方</h2>
+                <select v-model="selectedSeat" class="seat-select">
+                    <option value="ALL">全班總覽</option>
+                    <option v-for="code in uniqueSeatCodes" :key="code" :value="code">{{ code }}</option>
+                </select>
                 <div class="header-actions">
                     <button class="btn-clear" @click="handleClearLogs" :disabled="isClearing || logs.length === 0">
                         {{ isClearing ? '清空中...' : '🗑️ 清空紀錄' }}
@@ -495,6 +514,15 @@ const errorTree = computed<ErrorNode[]>(() => {
     display: flex;
     align-items: center;
     gap: 12px;
+}
+
+.seat-select {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 0.9rem;
+    background: #fff;
+    cursor: pointer;
 }
 
 .btn-clear {

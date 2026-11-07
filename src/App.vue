@@ -18,6 +18,7 @@ import { getQuestionCanvasMode, getQuestionUiMode } from './rules/types';
 import { useSound, unlockAudioContext } from './utils/useSound';
 import { unlockTTS } from './utils/useSpeech';
 import { CloudDatabase } from './services/CloudDatabase';
+import { supabase } from './services/supabaseClient';
 
 import { useQuizTimer } from './composables/useQuizTimer';
 import { useFocusMonitor } from './composables/useFocusMonitor';
@@ -40,6 +41,7 @@ const { joinRoom, trackCompleted, trackAnswering, sendResetProgress, sendPush, s
 const { playSuccess, playError, playWarningBeep } = useSound();
 
 const showAdminAuth = ref(false);
+const adminEmailInput = ref('');
 const adminPasswordInput = ref('');
 const isAdminAuthenticated = ref(sessionStorage.getItem('admin_auth') === 'true');
 const sessionLog = ref<string[]>([]);
@@ -48,6 +50,8 @@ const completedCount = ref(0);
 
 const studentId = sessionStorage.getItem('student_uuid') || `stu_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 sessionStorage.setItem('student_uuid', studentId);
+
+const seatCode = ref<string>('');
 
 const presenceCompletedCount = ref(0);
 const targetCount = ref(0);
@@ -91,6 +95,15 @@ onMounted(async () => {
   }
   fixAntecedentNumbers();
   checkAndSetInitialStage();
+
+  const storedSeat = sessionStorage.getItem('seat_code');
+  if (!storedSeat) {
+    const generated = `S${String(Math.floor(Math.random() * 30) + 1).padStart(2, '0')}`;
+    sessionStorage.setItem('seat_code', generated);
+    seatCode.value = generated;
+  } else {
+    seatCode.value = storedSeat;
+  }
 
   joinRoom((event, payload) => {
     if (event === 'REALTIME_STATUS') {
@@ -141,7 +154,7 @@ onMounted(async () => {
       console.log('📡 收到重置指令，進度歸零');
       trackAnswering();
     }
-  }, studentId);
+  }, 'admin123', studentId);
 });
 
 onUnmounted(() => {
@@ -239,10 +252,10 @@ const fullSentenceData = computed(() => {
   const modifier = getQuestionUiMode(currentQuestion.value) === 'REDUCE'
     ? formatAnswerForDisplay(microQuestion.value.correctAnswer)
     : currentQuestion.value.grammarFeature
-    ? currentQuestion.value.type === 'contrast'
-      ? currentQuestion.value.grammarFeature.relative.label
-      : currentQuestion.value.grammarFeature[currentMode.value].label
-    : formatAnswerForDisplay(microQuestion.value.correctAnswer);
+      ? currentQuestion.value.type === 'contrast'
+        ? currentQuestion.value.grammarFeature.relative.label
+        : currentQuestion.value.grammarFeature[currentMode.value].label
+      : formatAnswerForDisplay(microQuestion.value.correctAnswer);
   return { target: `${noun} ${modifier} is my favorite.`, display: `${noun} | ${modifier} | is my favorite.`, modifier };
 });
 
@@ -285,7 +298,7 @@ const handleUnpack = (type: 'relative' | 'preposition') => { currentMode.value =
 const handleSuccess = () => {
   playSuccess();
   currentStage.value = 'success';
-  trackCompleted();
+  trackCompleted(seatCode.value);
   if (completedCount.value <= currentIndex.value) completedCount.value = currentIndex.value + 1;
 };
 
@@ -375,14 +388,26 @@ const handleTimeoutNext = () => { nextQuestion(); };
 
 const openAdmin = () => { if (isAdminAuthenticated.value) showAdmin.value = true; else { pendingAction.value = 'admin'; showAdminAuth.value = true; } };
 const openAnalytics = () => { if (isAdminAuthenticated.value) showAnalytics.value = true; else { pendingAction.value = 'analytics'; showAdminAuth.value = true; } };
-const verifyAdmin = () => {
-  if (adminPasswordInput.value === 'admin123') {
-    isAdminAuthenticated.value = true; sessionStorage.setItem('admin_auth', 'true'); showAdminAuth.value = false; adminPasswordInput.value = '';
+const verifyAdmin = async () => {
+  try {
+    const { error } = await supabase.auth.signInWithPassword({
+      email: adminEmailInput.value,
+      password: adminPasswordInput.value,
+    });
+    if (error) throw error;
+    isAdminAuthenticated.value = true;
+    sessionStorage.setItem('admin_auth', 'true');
+    showAdminAuth.value = false;
+    adminEmailInput.value = '';
+    adminPasswordInput.value = '';
     void CloudDatabase.warmLanguageTool();
     if (pendingAction.value === 'admin') showAdmin.value = true;
     else if (pendingAction.value === 'analytics') showAnalytics.value = true;
     pendingAction.value = null;
-  } else { alert('密碼錯誤！請聯繫授課教師。'); adminPasswordInput.value = ''; }
+  } catch (error) {
+    alert('登入失敗！請檢查 Email 與密碼是否正確。');
+    adminPasswordInput.value = '';
+  }
 };
 const cancelAuth = () => { showAdminAuth.value = false; adminPasswordInput.value = ''; pendingAction.value = null; };
 const logoutAdmin = () => {
@@ -424,6 +449,7 @@ const logoutAdmin = () => {
 
     <header>
       <h1>🕵️ SyntaxHunt</h1>
+      <span class="seat-badge">座號：{{ seatCode }}</span>
 
       <div class="header-controls">
         <div class="status-group">
@@ -465,7 +491,8 @@ const logoutAdmin = () => {
     <main class="game-card" :key="currentQuestion.id + currentMode">
       <div v-if="currentStage === 'noticing' && currentQuestion.noticingData" class="stage-content"
         style="justify-content: center;">
-        <NoticingBoard :data="currentQuestion.noticingData" @complete="handleNoticingComplete" />
+        <NoticingBoard :data="currentQuestion.noticingData as NonNullable<typeof currentQuestion.noticingData>"
+          @complete="handleNoticingComplete" />
       </div>
 
       <div v-else-if="currentStage === 'success'" class="success-screen">
@@ -484,7 +511,9 @@ const logoutAdmin = () => {
             </p>
       </div>
 
-      <div v-else-if="currentQuestion.type === 'contrast' && currentQuestion.contrastData && currentQuestion.grammarFeature" class="stage-content">
+      <div
+        v-else-if="currentQuestion.type === 'contrast' && currentQuestion.contrastData && currentQuestion.grammarFeature"
+        class="stage-content">
         <ContrastPuzzle :chineseSentence="currentQuestion.contrastData.chineseSentence"
           :chineseHighlight="currentQuestion.contrastData.chineseHighlight"
           :nounImage="currentQuestion.contrastData.nounImage"
@@ -515,11 +544,8 @@ const logoutAdmin = () => {
 
       <div v-else-if="currentStage === 'micro'" class="stage-content">
         <div class="target-noun"><span class="highlight">{{ currentQuestion.targetNoun }}</span></div>
-        <GrammarCanvas
-          :question="microQuestion"
-          :initialChunks="microQuestion.chunks"
-          :speechRate="currentQuestion.speechRate || 0.8" @success="handleSuccess"
-          @continue="nextQuestion(true)"
+        <GrammarCanvas :question="microQuestion" :initialChunks="microQuestion.chunks"
+          :speechRate="currentQuestion.speechRate || 0.8" @success="handleSuccess" @continue="nextQuestion(true)"
           @misconception="handleMisconception" />
       </div>
     </main>
@@ -532,8 +558,9 @@ const logoutAdmin = () => {
     <div v-if="showAdminAuth" class="auth-overlay">
       <div class="auth-card">
         <h3>👩‍🏫 教師驗證</h3>
-        <p>請輸入密碼以進入系統</p>
-        <input type="password" v-model="adminPasswordInput" placeholder="" @keyup.enter="verifyAdmin" />
+        <p>請輸入 Email 與密碼以進入系統</p>
+        <input type="email" v-model="adminEmailInput" placeholder="Email" @keyup.enter="verifyAdmin" />
+        <input type="password" v-model="adminPasswordInput" placeholder="密碼" @keyup.enter="verifyAdmin" />
         <div class="auth-actions">
           <button class="btn-cancel" @click="cancelAuth">取消</button>
           <button class="btn-confirm" @click="verifyAdmin">確認</button>
@@ -590,6 +617,15 @@ header h1 {
   margin: 0;
   font-weight: 900;
   text-shadow: 0 2px 4px rgba(28, 176, 246, 0.15);
+}
+
+.seat-badge {
+  font-weight: bold;
+  color: var(--text-muted, #666);
+  font-size: 1rem;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .header-controls {

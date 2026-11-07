@@ -203,7 +203,7 @@ sequenceDiagram
 5. 使用 `MORPH` 考點時，只勾選一個可變形目標字塊，並輸入逗號分隔的形式，例如 `go, goes, went`。學生會看到固定句子，點擊該字詞選擇形式。切詞使用 compromise.js 與不規則動詞 JSON 表；必要時請手動補齊或修正形式。
 6. 點選 **加入題庫**。若要指定學生目前作答的題目，請在該題列按 **發送給全班**；或按 **完成備課** 儲存題庫並關閉編輯器（之後可重新開啟教師備課中心再發送）。`BUILD` 會打亂組句字磚，`PRAGMATIC_HP` 會打亂語情題字庫，`MATRIX_GATE` 只打亂候選動詞。`MORPH` 與 `GRAVITY_SWITCH` 固定句子；`REDUCE` 保留來源句順序，讓學生聚焦刪減與簡化。
 
-> **教師登入提醒：**目前前端示範版固定以 `admin123` 驗證，並將相同密碼傳給 `teacher-action`。Edge Function 未設定 `TEACHER_PASSWORD` 時預設為 `admin123`；若將 Secret 設為其他值，遠端教師操作會因密碼不一致而失敗，除非同步修改前端。這不是安全的身分驗證，請勿將此教師介面直接公開部署至正式環境。
+> **教師登入提醒：**教師登入現使用 Supabase Auth（`supabase.auth.signInWithPassword`，Email + 密碼）。登入成功後，`isAdminAuthenticated` 會被設定並儲存在 `sessionStorage`。舊的固定 `admin123` 示範密碼僅作為 `joinRoom('admin123', studentId)` 的佔位符 teacherId，直到提供真正的教師帳號為止。這不是安全的身分驗證，請勿將此教師介面直接公開部署至正式環境。
 
 ## 📷 UI 畫面截圖
 
@@ -295,9 +295,17 @@ RuleRegistry 是**本地診斷規則的插件註冊點**，不是出題表單或
 
 **建議：**若要開始練習這些範圍，不需要立刻新增頂層遊戲題型；`BUILD`、`REDUCE`、`MORPH` 已涵蓋組合、移除與變形三種基本操作。但目前也不足以宣稱已完整支援 K–12 文法。建議先在既有模式補強 S/V/O/C 與子句結構鷹架、豐富時態／狀態選項、增加雙子句條件句提示，並擴充診斷規則。只有當某概念無法用字塊組合、刪減或形式選擇表達時，才需要新增獨立遊戲題型。
 
-### 實作與部署進度（2026-11-05）
+### 實作與部署進度（2026-11-07）
 
-自適應畫布、舊題轉接器、compromise.js 本地切詞、本地規則引擎及 LanguageTool 診斷鏈路均已實作。錯誤答案若沒有明確的本地診斷，瀏覽器會呼叫 Supabase `lt-proxy` Edge Function，再由代理轉送文字至已設定的 Render  LanguageTool，並回傳原生診斷供畫面顯示與紀錄。代理已處理瀏覽器 `POST` 預檢；若未設定 `LANGUAGETOOL_URL`，會明確回傳設定錯誤。舊題載入畫布時才轉接，不會改寫 `questions` 資料表。
+自適應畫布、舊題轉接器、compromise.js 本地切詞、本地規則引擎及 LanguageTool 診斷鏈路均已實作。
+
+**班級管理與教師隔離（新功能）：**
+- `questions`、`learning_logs`、`classroom_state` 現皆有 `teacher_id UUID REFERENCES auth.users(id) DEFAULT auth.uid()` 欄位。
+- `learning_logs` 額外新增 `seat_code TEXT` 欄位。
+- 三張表皆啟用 RLS，並建立 `auth.uid() = teacher_id` 的存取 Policy（僅限 authenticated 使用者）。
+- `useClassroomSync.joinRoom(onReceive, teacherId, studentId)` 現將 Realtime 頻道限定為 `classroom_sync_${teacherId}`，避免不同教師共用同一個 Presence 頻道。
+- 學生會取得隨機座號（`S01`–`S30`）並儲存在 `sessionStorage`，透過 `trackCompleted(seatCode)` 傳送，並在 Presence 同步中顯示。
+- `TeacherAnalytics.vue` 新增 `selectedSeat` 篩選器（`'ALL'` 或任何觀察到的 `seat_code`），用於縮減 `sstDistribution` 與 `errorTree` 的計算範圍。錯誤答案若沒有明確的本地診斷，瀏覽器會呼叫 Supabase `lt-proxy` Edge Function，再由代理轉送文字至已設定的 Render  LanguageTool，並回傳原生診斷供畫面顯示與紀錄。代理已處理瀏覽器 `POST` 預檢；若未設定 `LANGUAGETOOL_URL`，會明確回傳設定錯誤。舊題載入畫布時才轉接，不會改寫 `questions` 資料表。
 
 教師密碼驗證成功後，系統會自動透過相同代理送出一段有效短句，預熱 LanguageTool 服務。此請求不會建立學習紀錄；即使預熱失敗，也不會阻擋教師進入系統。
 
@@ -355,6 +363,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    npx supabase functions deploy teacher-action
    npx supabase functions deploy lt-proxy
    ```
+   遷移 `20261107120000_add_teacher_id_and_seat_code.sql` 會將 `teacher_id` 新增到 `questions`、`learning_logs`、`classroom_state`，將 `seat_code` 新增到 `learning_logs`，對三張表啟用 RLS，並建立 `auth.uid() = teacher_id` 的存取 Policy。
 3. 設定服務所需的 Secrets：
    ```bash
    npx supabase secrets set DEEPGRAM_API_KEY=your_deepgram_key

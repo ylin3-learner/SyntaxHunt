@@ -5,15 +5,20 @@ let channel: RealtimeChannel | null = null;
 let reportSyncError: ((message: string) => void) | null = null;
 
 export function useClassroomSync() {
-    const joinRoom = (onReceive: (event: string, payload: any) => void, studentId: string = 'anonymous') => {
+    // @joinRoom 開始：加入課室即時頻道，頻道由 teacherId 隔離
+    const joinRoom = (
+        onReceive: (event: string, payload: any) => void,
+        teacherId: string,
+        studentId: string = 'anonymous'
+    ) => {
         reportSyncError = (message) => onReceive('SYNC_ERROR', { message });
         if (channel) {
             supabase.removeChannel(channel);
             channel = null;
         }
 
-        // 使用固定的頻道名稱
-        const channelName = 'classroom_sync_main'; 
+        // 頻道名稱依教師 ID 隔離，避免不同班級串頻道
+        const channelName = `classroom_sync_${teacherId}`;
 
         channel = supabase.channel(channelName, {
             config: { presence: { key: studentId } },
@@ -31,12 +36,18 @@ export function useClassroomSync() {
             .on('broadcast', { event: 'RESET_PROGRESS' }, () => {
                 onReceive('RESET_PROGRESS', {});
             })
+            // 取得所有學生的狀態（包含座號）
             .on('presence', { event: 'sync' }, () => {
                 const presenceState = channel?.presenceState() || {};
-                const completedCount = Object.values(presenceState)
-                    .flat()
-                    .filter((p: any) => p.status === 'completed').length;
-                onReceive('PRESENCE_SYNC', { completedCount });
+                const students = Object.entries(presenceState).flatMap(([key, presences]) =>
+                    presences.map((p: any) => ({
+                        id: key,
+                        status: p.status,
+                        seatCode: p.seatCode || '未分配'
+                    }))
+                );
+                const completedCount = students.filter(s => s.status === 'completed').length;
+                onReceive('PRESENCE_SYNC', { completedCount, students });
             })
             .subscribe(async (status) => {
                 console.log(`[Realtime] Channel status:`, status);
@@ -71,11 +82,15 @@ export function useClassroomSync() {
                 }
             });
     };
+    // @joinRoom 結束
 
-    const trackPresence = async (status: 'completed' | 'answering') => {
+    // @trackPresence 開始：更新自身在線狀態，並可攜帶 seatCode
+    const trackPresence = async (status: 'completed' | 'answering', seatCode?: string) => {
         if (!channel) return;
         try {
-            const result = await channel.track({ status });
+            const payload: any = { status };
+            if (seatCode) payload.seatCode = seatCode;
+            const result = await channel.track(payload);
             if (result !== 'ok') throw new Error(`Presence 更新失敗：${result}`);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -84,8 +99,13 @@ export function useClassroomSync() {
         }
     };
 
-    const trackCompleted = () => trackPresence('completed');
-    const trackAnswering = () => trackPresence('answering');
+    // @trackCompleted 開始：標記學生完成作答，攜帶 seatCode
+    const trackCompleted = (seatCode?: string) => trackPresence('completed', seatCode);
+    // @trackCompleted 結束
+
+    // @trackAnswering 開始：標記學生正在作答，攜帶 seatCode
+    const trackAnswering = (seatCode?: string) => trackPresence('answering', seatCode);
+    // @trackAnswering 結束
 
     // 新增：老師廣播重置全班進度
     const sendResetProgress = () => {

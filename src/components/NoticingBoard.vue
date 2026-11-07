@@ -1,17 +1,25 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useSound } from '../utils/useSound';
 
 const props = defineProps<{
-  data: {
-    examples: string[];
-    question: string;
-    options: { text: string; isCorrect: boolean }[];
-    explanation: string;
+  data?: {
+    examples?: string[];
+    question?: string;
+    options?: Array<{ text: string; isCorrect: boolean }>;
+    explanation?: string;
   };
 }>();
 
 const emit = defineEmits<{ (e: 'complete'): void }>();
+
+// 提供預設值，讓模板可安全直接使用，無需 null 檢查
+const boardData = computed(() => ({
+  examples: props.data?.examples ?? [],
+  question: props.data?.question ?? '',
+  options: props.data?.options ?? [],
+  explanation: props.data?.explanation ?? '',
+}));
 
 const selectedIndex = ref<number | null>(null);
 const isCorrect = ref(false);
@@ -23,7 +31,7 @@ const handleSelect = (index: number) => {
   if (isCorrect.value) return;
   selectedIndex.value = index;
 
-  if (props.data.options[index].isCorrect) {
+  if (boardData.value.options[index]?.isCorrect) {
     isCorrect.value = true;
     playSuccess(); // 答對時播放音效
   } else {
@@ -43,16 +51,16 @@ const handleSelect = (index: number) => {
 
     <!-- 例句展示 -->
     <div class="examples">
-      <p v-for="(ex, i) in data.examples" :key="i" class="example-sentence">
+      <p v-for="(ex, i) in boardData.examples" :key="i" class="example-sentence">
         {{ ex }}
       </p>
     </div>
 
     <!-- 提問與選項 -->
     <div class="question-box">
-      <h3>{{ data.question }}</h3>
+      <h3>{{ boardData.question }}</h3>
       <div class="options">
-        <button v-for="(opt, index) in data.options" :key="index" class="option-btn" :class="{
+        <button v-for="(opt, index) in boardData.options" :key="index" class="option-btn" :class="{
           'correct': isCorrect && opt.isCorrect,
           'wrong': selectedIndex === index && !opt.isCorrect
         }" @click="handleSelect(index)">
@@ -63,7 +71,7 @@ const handleSelect = (index: number) => {
 
     <!-- 答對後的解釋與繼續按鈕 -->
     <div v-if="isCorrect" class="explanation">
-      <p>💡 {{ data.explanation }}</p>
+      <p>💡 {{ boardData.explanation }}</p>
       <button class="btn-continue" @click="emit('complete')">
         我明白了，繼續下一關 ➔
       </button>

@@ -8,7 +8,7 @@ const { playSuccess, playError } = useSound();
 const props = defineProps<{
   chineseSentence: string;
   chineseHighlight: string;
-  nounImage: string;
+  nounImage?: string;
   modifierImage: string;
   englishNoun: string;
   modifierLabel: string;
@@ -177,7 +177,7 @@ const formattedDesc = computed(() => {
             :class="{ 'dragging': draggingType === 'noun', 'in-slot': nounSlot !== null, 'wrong-piece': isWrong }"
             :style="{ left: `${nounX}px`, top: `${nounY}px`, transition: draggingType === 'noun' ? 'none' : 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)', zIndex: draggingType === 'noun' ? 10 : 1 }"
             @pointerdown="startDrag($event, 'noun')">
-            <img :src="nounImage" alt="noun" draggable="false" />
+            <img :src="nounImage || ''" alt="noun" draggable="false" />
             <div class="piece-label">{{ englishNoun }}</div>
           </div>
         </div>

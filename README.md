@@ -207,7 +207,7 @@ sequenceDiagram
 5. For a `MORPH` topic, mark exactly one changeable chunk and provide its comma-separated forms (e.g. `go, goes, went`). Students see the fixed sentence and click that word to choose a form. Chunking uses compromise.js and an irregular-verb JSON table; add or correct forms manually when needed.
 6. Click **Add to question bank**. Click **Send to class** on that question to make it active, or click **Finish prep** to save the bank and close the editor (reopen Teacher Admin to push it later). `BUILD` shuffles assembly tiles, `PRAGMATIC_HP` shuffles the phrase bank, and `MATRIX_GATE` shuffles only its candidate cards. `MORPH` and `GRAVITY_SWITCH` keep the sentence fixed; `REDUCE` preserves the source order so students focus on deletion and simplification.
 
-> **Teacher access note:** The frontend demo uses the fixed password `admin123` and sends that same value to `teacher-action`. The Edge Function defaults to `admin123` when `TEACHER_PASSWORD` is unset; setting that secret to a different value will break remote teacher actions until the frontend is updated too. This is not secure authentication—do not expose the demo as a public or production teacher console.
+> **Teacher access note:** Teacher sign-in now uses Supabase Auth (`supabase.auth.signInWithPassword` with email + password). On successful sign-in, `isAdminAuthenticated` is set and persisted in `sessionStorage`. The legacy fixed `admin123` demo password is retained only as a placeholder teacherId for `joinRoom('admin123', studentId)` until real teacher accounts are provisioned. This is not secure authentication—do not expose the demo as a public or production teacher console.
 
 ## 📷 UI Screenshots
 
@@ -298,9 +298,17 @@ The authoring form exposes every concept listed in the scope, but that does **no
 
 **Recommendation:** A new top-level game mode is not necessary to start teaching these topics: `BUILD`, `REDUCE`, and `MORPH` already provide the basic assemble/remove/change-form actions. However, the current UI is not enough to claim complete K–12 grammar coverage. Prioritize improvements within those modes—explicit S/V/O/C and clause scaffolds, richer tense/aspect choices, and paired-clause conditional prompts—along with broader validators. Add a separate game type only if those concepts need interaction that cannot be expressed as chunk assembly, removal, or form selection.
 
-### Implementation and rollout status (2026-11-05)
+### Implementation and rollout status (2026-11-07)
 
-The adaptive canvas, legacy adapter, compromise.js chunker, local rule engine, and LanguageTool diagnosis path are implemented. For an incorrect answer without a definite local diagnosis, the browser calls the Supabase `lt-proxy` Edge Function, which forwards the text to the configured Cloud Run LanguageTool endpoint and returns native matches for display and logging. The proxy handles browser `POST` preflight requests and returns an explicit configuration error if `LANGUAGETOOL_URL` is missing. Legacy questions are adapted when loaded into the canvas rather than rewritten in the `questions` table.
+The adaptive canvas, legacy adapter, compromise.js chunker, local rule engine, and LanguageTool diagnosis path are implemented.
+
+**Classroom management & teacher isolation (new):**
+- `questions`, `learning_logs`, and `classroom_state` now have a `teacher_id UUID REFERENCES auth.users(id) DEFAULT auth.uid()` column.
+- `learning_logs` additionally has a `seat_code TEXT` column.
+- RLS is enabled on all three tables with a policy `auth.uid() = teacher_id` for authenticated users.
+- `useClassroomSync.joinRoom(onReceive, teacherId, studentId)` now scopes the Realtime channel to `classroom_sync_${teacherId}`, so different teachers never share a presence channel.
+- Students get a random seat code (`S01`–`S30`) persisted in `sessionStorage`, which is sent with `trackCompleted(seatCode)` and surfaced in presence sync.
+- `TeacherAnalytics.vue` adds a `selectedSeat` filter (`'ALL'` or any observed `seat_code`) that scopes `sstDistribution` and `errorTree` calculations. For an incorrect answer without a definite local diagnosis, the browser calls the Supabase `lt-proxy` Edge Function, which forwards the text to the configured Cloud Run LanguageTool endpoint and returns native matches for display and logging. The proxy handles browser `POST` preflight requests and returns an explicit configuration error if `LANGUAGETOOL_URL` is missing. Legacy questions are adapted when loaded into the canvas rather than rewritten in the `questions` table.
 
 After the teacher password is accepted, the app automatically sends a short, valid sentence through the same LanguageTool proxy to warm the service. This request does not create a learning log and does not block teacher access if it fails.
 
@@ -350,6 +358,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    npx supabase functions deploy teacher-action
    npx supabase functions deploy lt-proxy
    ```
+   The migration `20261107120000_add_teacher_id_and_seat_code.sql` adds `teacher_id` to `questions`, `learning_logs`, and `classroom_state`, adds `seat_code` to `learning_logs`, enables RLS on all three tables, and creates an `auth.uid() = teacher_id` policy for authenticated access.
 3. Set the service secrets:
    ```bash
    npx supabase secrets set DEEPGRAM_API_KEY=your_deepgram_key
