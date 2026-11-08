@@ -11,7 +11,7 @@ import StageMacro from './components/stages/StageMacro.vue';
 import StageMicro from './components/stages/StageMicro.vue';
 import StageContrast from './components/stages/StageContrast.vue';
 import StageSuccess from './components/stages/StageSuccess.vue';
-import AuthModal from './components/AuthModal.vue'; // 👈 引入抽離的 Modal
+import AuthModal from './components/AuthModal.vue'; // 引入抽離的 Modal
 
 import type { QuestionData, SSTCategory } from './rules/types';
 import { formatAnswerForDisplay } from './rules/adapter';
@@ -26,7 +26,7 @@ import { useClassroomSync, currentRoomCode } from './composables/useClassroomSyn
 import { useQuizFlow } from './composables/useQuizFlow';
 import { useAdminAuth } from './composables/useAdminAuth';
 import { useRoomEntry } from './composables/useRoomEntry';
-import { useRealtimeSync } from './composables/useRealtimeSync'; // 👈 引入抽離的同步邏輯
+import { useRealtimeSync } from './composables/useRealtimeSync'; // 引入抽離的同步邏輯
 
 const TeacherAdmin = defineAsyncComponent(() => import('./components/TeacherAdmin.vue'));
 const isDebugMode = window.location.search.includes('debug=1');
@@ -47,7 +47,7 @@ const {
   checkAndSetInitialStage, handleSuccess, nextQuestion, handleUnpack, handlePreviewSuccess,
   handleInputSuccess, handleChunkWrongAnswer, updateQuestionBank, handleBatchQuestionImport,
   handleAddTime, handleNoticingComplete, restartGame,
-  unitFilter, availableUnits, filteredQuestions, changeUnit // 👈 新增的單元過濾
+  unitFilter, availableUnits, filteredQuestions, changeUnit // 新增的單元過濾
 } = quizFlow;
 
 // ---- 從 AdminAuth 解構 ----
@@ -78,8 +78,8 @@ const handleDistracted = () => {
 
 useFocusMonitor(handleDistracted);
 
-// 👈 使用抽離的 Realtime 事件處理
-const { handleRealtimeEvent } = useRealtimeSync(quizFlow, realtimeNotice);
+// 使用抽離的 Realtime 事件處理
+const { handleRealtimeEvent, lockedUnit } = useRealtimeSync(quizFlow, realtimeNotice);
 
 // ---- UI 路由 ----
 const currentStageComponent = computed(() => {
@@ -106,10 +106,40 @@ const handleGlobalInteraction = () => {
 onMounted(async () => {
   document.addEventListener('pointerup', handleGlobalInteraction);
 
-  const cloudQuestions = await CloudDatabase.fetchQuestions();
+  if (!seatCode.value) {
+    seatCode.value = `S${String(Math.floor(Math.random() * 30) + 1).padStart(2, '0')}`;
+    sessionStorage.setItem('seat_code', seatCode.value);
+  }
+
+  // 1. 先決定我們要連線到哪個老師的頻道
+  let activeTeacherId = sessionStorage.getItem('teacher_id');
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomFromUrl = urlParams.get('room');
+
+  if (!activeTeacherId && roomFromUrl) {
+    // 如果有 ?room= 但還沒加入過，我們先查出老師 ID
+    const tid = await findTeacherByRoomCode(roomFromUrl);
+    if (tid) {
+      activeTeacherId = tid;
+      sessionStorage.setItem('teacher_id', tid);
+      sessionStorage.setItem('room_code', roomFromUrl.toUpperCase());
+
+      // 清除網址上的 ?room=
+      const url = new URL(window.location.href);
+      url.searchParams.delete('room');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }
+
+  // 2. 根據 activeTeacherId 決定從哪裡載入題庫
+  // 修正：確保如果是 null 或 'public_room'，都轉換為 undefined
+  const targetTeacherId = activeTeacherId && activeTeacherId !== 'public_room' ? activeTeacherId : undefined;
+  const cloudQuestions = await CloudDatabase.fetchQuestions(targetTeacherId);
+
   if (cloudQuestions && cloudQuestions.length > 0) {
     updateQuestionBank(cloudQuestions);
   } else {
+    // Fallback 到本機或預設題庫
     const saved = localStorage.getItem('custom_questions');
     if (saved) {
       try { updateQuestionBank(JSON.parse(saved)); } catch (e) { updateQuestionBank([...defaultQuestions] as unknown as QuestionData[]); }
@@ -118,26 +148,12 @@ onMounted(async () => {
     }
   }
 
-  if (!seatCode.value) {
-    seatCode.value = `S${String(Math.floor(Math.random() * 30) + 1).padStart(2, '0')}`;
-    sessionStorage.setItem('seat_code', seatCode.value);
-  }
-
-  const urlParams = new URLSearchParams(window.location.search);
-  const roomFromUrl = urlParams.get('room');
-
-  if (roomFromUrl) {
-    await roomEntry.handleJoinRoom(roomFromUrl, currentTeacherId, studentId, handleRealtimeEvent);
-    return;
-  }
-
-  const savedTeacherId = sessionStorage.getItem('teacher_id');
-  const activeTeacherId = savedTeacherId || 'public_room';
-
-  if (activeTeacherId === 'public_room') {
-    showRoomEntry.value = true;
-  } else {
+  // 3. 決定是否加入頻道
+  if (activeTeacherId) {
     joinRoom(handleRealtimeEvent, activeTeacherId, studentId);
+  } else {
+    // 如果沒有老師 ID，代表還沒輸入班級代碼
+    showRoomEntry.value = true;
   }
 });
 
@@ -244,12 +260,18 @@ const handleTimeoutNext = () => quizFlow.nextQuestion();
             ✅ 作答進度：{{ presenceCompletedCount }} / {{ targetCount }} 人
           </div>
 
-          <!-- 👈 新增：單元切換器 -->
-          <div v-if="availableUnits.length > 0 && !isClassMode" class="unit-selector">
+          <!-- 新增：單元切換器 -->
+           <!-- 修改：如果 lockedUnit === 'all' 且非上課模式，才顯示選單 -->
+          <div v-if="availableUnits.length > 0 && !isClassMode && lockedUnit === 'all'" class="unit-selector">
             <select :value="unitFilter" @change="changeUnit(($event.target as HTMLSelectElement).value)">
               <option value="all">📚 全部單元</option>
               <option v-for="unit in availableUnits" :key="unit" :value="unit">{{ unit }}</option>
             </select>
+          </div>
+
+          <!-- 新增：如果被老師鎖定，顯示唯讀的提示 -->
+          <div v-else-if="lockedUnit !== 'all'" class="locked-unit-badge">
+            🔒 鎖定單元：{{ lockedUnit }}
           </div>
 
           <div class="progress-bar">第 {{ currentIndex + 1 }} / {{ filteredQuestions.length }} 關</div>
@@ -303,7 +325,7 @@ const handleTimeoutNext = () => quizFlow.nextQuestion();
 
     <TeacherAnalytics v-if="showAnalytics" :questionBank="questionBank" @close="showAnalytics = false" />
 
-    <!-- 👈 使用抽離的 AuthModal -->
+    <!-- 使用抽離的 AuthModal -->
     <AuthModal :is-open="showAdminAuth" :is-register-mode="isRegisterMode" :email="adminEmailInput"
       :password="adminPasswordInput" @update:email="adminEmailInput = $event"
       @update:password="adminPasswordInput = $event" @update:is-register-mode="isRegisterMode = $event"
@@ -414,7 +436,7 @@ header h1 {
   color: var(--primary-color);
 }
 
-/* 👈 新增：單元下拉選單樣式 */
+/* 新增：單元下拉選單樣式 */
 .unit-selector select {
   padding: 8px 16px;
   border-radius: 20px;
@@ -856,5 +878,15 @@ header h1 {
     font-size: 0.95rem;
     padding: 10px 16px;
   }
+}
+
+.locked-unit-badge {
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: #fff3e0;
+  color: #b45309;
+  font-weight: bold;
+  font-size: 0.95rem;
+  border: 2px dashed #fcd34d;
 }
 </style>

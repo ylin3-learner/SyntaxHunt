@@ -18,13 +18,22 @@ export function useRoomEntry() {
     if (!code.trim()) return;
     isJoining.value = true;
     joinError.value = '';
+
     const teacherId = await findTeacherByRoomCode(code.trim());
+
     if (teacherId) {
       currentTeacherIdRef.value = teacherId;
       sessionStorage.setItem('teacher_id', teacherId);
       sessionStorage.setItem('room_code', code.trim().toUpperCase());
       joinRoom(handleRealtimeEvent, teacherId, studentId);
-      window.location.reload();
+
+      // 只保留更新網址，移除 window.location.reload()
+      const url = new URL(window.location.href);
+      url.searchParams.delete('room');
+      window.history.replaceState({}, '', url.toString());
+
+      // 成功後關閉輸入視窗
+      showRoomEntry.value = false;
     } else {
       joinError.value = '找不到該班級代碼，請確認後重新輸入。';
     }

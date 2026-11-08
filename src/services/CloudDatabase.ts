@@ -26,20 +26,25 @@ export type LanguageToolMatch = LanguageToolDiagnosticData;
 
 export const CloudDatabase = {
   // 從雲端抓取題庫
-  async fetchQuestions(): Promise<QuestionData[] | null> {
-    // 👈 改用 getUser 檢查真實登入狀態
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      console.log('💡 未登入教師身分，使用本機題庫。');
-      return null;
-    }
-
+  // 修正 1：允許傳入 teacherId (學生端會傳入老師的 ID)
+  async fetchQuestions(targetTeacherId?: string): Promise<QuestionData[] | null> {
     try {
+      let teacherId = targetTeacherId;
+
+      // 如果沒傳入 targetTeacherId，代表是老師端，檢查登入狀態
+      if (!teacherId) {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+          console.log('💡 未登入且無指定老師 ID，使用本機題庫。');
+          return null;
+        }
+        teacherId = user.id;
+      }
+
       const { data, error } = await supabase
         .from('questions')
         .select('data, created_at')
-        .eq('teacher_id', user.id) // 👈 使用 user.id
+        .eq('teacher_id', teacherId) // 使用找到的 teacherId
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -53,7 +58,7 @@ export const CloudDatabase = {
         };
       });
       questions.sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
-      console.log('☁️ 雲端題庫讀取順序:', questions.map(q => ({ id: q.id, sortOrder: q.sortOrder })));
+      console.log(`☁️ 雲端題庫讀取順序 (Teacher: ${teacherId}):`, questions.map(q => ({ id: q.id, sortOrder: q.sortOrder })));
       return questions;
     } catch (error) {
       console.error('無法連線到雲端資料庫:', error);
@@ -63,7 +68,7 @@ export const CloudDatabase = {
 
   // 將題庫存到雲端（包含同步刪除）
   async saveQuestions(questions: QuestionData[]): Promise<boolean> {
-    // 👈 改用 getUser 檢查真實登入狀態
+    // 改用 getUser 檢查真實登入狀態
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
