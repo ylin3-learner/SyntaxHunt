@@ -143,18 +143,22 @@ flowchart TD
     end
 
     subgraph App ["📱 Student App (App.vue)"]
-        Start((Enter App)) --> Load[Load Questions]
+        Start((Enter App)) --> Load[Load Questions based on Teacher ID]
         Load --> ModeCheck{Classroom Mode?}
         
-        ModeCheck -->|Self-Paced| ShowSelector[Show Unit Selector]
+        ModeCheck -->|Self-Paced| LockCheck{Teacher Locked Unit?}
+        LockCheck -->|No| ShowSelector[Show Unit Selector]
         ShowSelector --> UserSelect[Student Selects Unit]
         UserSelect --> Filter1[Filter Questions by Unit]
+        
+        LockCheck -->|Yes| ForceFilter[Force Switch to Locked Unit<br>Hide Selector]
         
         ModeCheck -->|Class Mode Lock| LockUI[Hide Selector<br>Lock UI]
         LockUI --> TeacherPush[Receive Teacher Broadcast]
         TeacherPush --> AutoSwitch[Auto-switch to Pushed Question's Unit]
         
         Filter1 --> Render[Render Current Question]
+        ForceFilter --> Render
         AutoSwitch --> Render
     end
     
@@ -225,6 +229,7 @@ sequenceDiagram
 - **Speech Playback**: Hear the sentence through a native English voice or Deepgram TTS.
 - **Pronunciation Practice**: Record your voice for Deepgram STT transcription and word-by-word comparison.
 - **Unit Selector (Self-Paced Mode)**: Students can use the dropdown menu to filter questions by specific curriculum units. However, when the teacher enables Class Mode, this selector is hidden, and the system automatically locks to the question pushed by the teacher.
+- **Unit Selector & Teacher Lock**: In self-paced mode, students can freely switch between units using a dropdown. However, if the teacher publishes a specific unit, the dropdown is hidden and replaced by a locked badge, forcing students to focus on the assigned unit.
 
 ### For Teachers (Teacher Admin)
 - **Presence Dashboard**: Input the target student count. Watch the live progress bar update in real-time. Seat codes are displayed in the grid.
@@ -234,6 +239,7 @@ sequenceDiagram
 - **Local Deterministic Chunking**: Uses `compromise.js` and an irregular-verb JSON table to automatically generate interactive chunks.
 - **Visual Question Flow**: Open the full-screen node canvas to reorder questions by dragging nodes.
 - **Master Remote Control**: Push questions, force-reset timers, and add time (`+30s`) instantly.
+- **Unit-Level Locking**: Force students to stay within a specific unit by selecting and publishing it from the class control panel. Students cannot switch units until the teacher unlocks it.
 - **QR Code & Room Code Sharing**: Instantly generate a projector-friendly QR Code. Students can scan it to automatically join the teacher's specific classroom channel without typing.
 
 ### Using general grammar questions

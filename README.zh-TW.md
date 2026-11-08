@@ -138,18 +138,22 @@ flowchart TD
     end
 
     subgraph App ["📱 學生端 (App.vue)"]
-        Start((進入頁面)) --> Load[載入題庫]
+        Start((進入頁面)) --> Load[依老師 ID 載入題庫]
         Load --> ModeCheck{當前模式?}
         
-        ModeCheck -->|自學模式| ShowSelector[顯示單元下拉選單]
+        ModeCheck -->|自學模式| LockCheck{老師是否鎖定單元?}
+        LockCheck -->|否| ShowSelector[顯示單元下拉選單]
         ShowSelector --> UserSelect[學生點選單元]
         UserSelect --> Filter1[過濾出該單元題目]
+        
+        LockCheck -->|是| ForceFilter[強制切換至鎖定單元<br>隱藏選單]
         
         ModeCheck -->|上課模式| LockUI[隱藏下拉選單<br>鎖定畫面]
         LockUI --> TeacherPush[接收老師廣播]
         TeacherPush --> AutoSwitch[自動切換至該題所屬單元]
         
         Filter1 --> Render[渲染當前題目]
+        ForceFilter --> Render
         AutoSwitch --> Render
     end
     
@@ -216,7 +220,7 @@ sequenceDiagram
 - **片語塊視覺化**：多字片語顯示為不可分割的藍色磚塊。
 - **無標籤空間拼圖**：巨觀拖拉階段只顯示圖片，不顯示文字，避免洩題。
 - **文字比對發音面板**：透過 Deepgram 辨識發音，精準畫線標示漏讀單字。
-- **單元選擇器 (自學模式)**：在自由進度模式下，學生可透過頂部的下拉選單，自由選擇想複習的單元。但當老師開啟「上課模式」時，選單會自動隱藏，並鎖定為老師當前推播的題目單元。
+- **單元選擇器與遠端鎖定**：在自由進度模式下，學生可透過下拉選單切換單元。但若老師發布了「鎖定單元」，選單會自動隱藏並替換為鎖定提示，強制學生專注於當前單元。
 
 ### 給老師（Teacher Admin）
 - **進度監控面板 (Presence Dashboard)**：輸入目標人數，系統會即時統計「已完成人數」，並顯示高亮進度條。
@@ -225,6 +229,7 @@ sequenceDiagram
 - **語意控制 (Person vs. Thing)**：明確指定先行詞是「人」或「物」，確保本地規則引擎能精準判斷 `who` 與 `which`。
 - **視覺化題目流程與單元資料夾**：開啟全螢幕節點畫布，以連線檢視及調整題目順序。
 - **主從遠端控制**：老師可一鍵推送題目、強制重置計時器，或隨時點擊 `+30s` 為全班加時。
+- **單元級別鎖定 (Unit Locking)**：老師可在班級控制面板選擇特定單元並發布，強制學生端只能看到該單元的題目，隱藏切換選單，防止學生偷跑或分心。
 - **一鍵掃碼加入 (QR Code)**：老師可在班級控制面板點擊生成全螢幕 QR Code，學生用手機或平板掃描即可自動帶入 `?room=XXXX` 參數並加入專屬班級頻道，省去手動輸入代碼的麻煩。
 
 ### 如何使用通用文法題
