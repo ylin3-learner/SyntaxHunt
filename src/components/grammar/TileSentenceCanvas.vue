@@ -95,10 +95,18 @@ const selectMorph = (chunk: Chunk, newText: string, hintText?: string) => {
   const options = chunk.options ?? chunk.morph_options ?? [];
   chunk.current_index = Math.max(0, options.indexOf(newText));
 
-  // 顯性反饋：顯示元語言提示
   const isCorrect = props.question.correctAnswer.includes(newText);
+
+  // 動態反饋：移除硬編碼的「非現實假設」
+  let feedbackText = '';
+  if (isCorrect) {
+    feedbackText = hintText || `✅ 正確！這裡使用 ${newText}。`;
+  } else {
+    feedbackText = `❌ 這裡不符合語境喔，再想想看。`;
+  }
+
   morphFeedback.value = {
-    text: hintText || (isCorrect ? `✅ 正確！這裡使用 ${newText} 表示非現實假設。` : `❌ 這裡不符合假設語氣喔，再想想看。`),
+    text: feedbackText,
     type: isCorrect ? 'success' : 'error'
   };
 
@@ -301,11 +309,8 @@ const toLanguageToolSignal = (
   submittedChunks: string[],
   prefixLength: number
 ): DiagnosticSignal => {
-  // 核心修正：計算相對於作答區的偏移量
-  // 使用 Math.max(0, ...) 避免因為前綴的錯誤導致負數
   const relativeOffset = Math.max(0, match.offset - prefixLength);
 
-  // 這裡才是回傳物件
   return {
     code: match.rule.id,
     source: 'languagetool',
@@ -465,7 +470,10 @@ const handleOutsideClick = () => {
 }
 
 /* === FIXED MORPH 膠囊樣式 === */
+/* === FIXED MORPH 膠囊樣式 === */
 .fixed-morph-sentence {
+  position: relative;
+  /* 👈 關鍵：讓選單以此為定位基準 */
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -475,8 +483,7 @@ const handleOutsideClick = () => {
   border-radius: 16px;
   background: #ffffff;
   font-size: clamp(1.2rem, 3vw, 1.8rem);
-  line-height: 1.8;
-  /* 稍微加大行高，避免選單擋住下一行 */
+  line-height: 1.6;
   transition: all 0.2s;
 }
 
@@ -488,7 +495,7 @@ const handleOutsideClick = () => {
   padding: 4px 2px;
 }
 
-/* 關鍵：父容器必須是 relative，選單才能以此為基準向下展開 */
+/* 包裹膠囊的父層 */
 .fixed-morph-token {
   position: relative;
   display: inline-flex;
@@ -511,6 +518,54 @@ const handleOutsideClick = () => {
   background: #e9d5ff;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(156, 39, 176, 0.2);
+}
+
+/* 👈 下拉選單：縮小尺寸，限制寬度，並精準置中 */
+.capsule-menu {
+  position: absolute;
+  top: 100%;
+  /* 貼齊按鈕底部 */
+  left: 50%;
+  /* 水平置中 */
+  transform: translateX(-50%);
+  margin-top: 8px;
+
+  display: flex;
+  flex-direction: column;
+  min-width: 100px;
+  max-width: 180px;
+  /* 👈 限制最大寬度，避免太肥 */
+
+  background: white;
+  border: 2px solid #9c27b0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(156, 39, 176, 0.15);
+  z-index: 50;
+  /* 確保在最上層 */
+  overflow: hidden;
+  animation: slideDown 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* 👈 選單內的按鈕：固定字體大小，不繼承外層大字體 */
+.capsule-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  border: 0;
+  background: #ffffff;
+  color: #333;
+  font-weight: bold;
+  font-size: 1rem;
+  /* 👈 強制固定為 1rem，就不會變超大 */
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.2s;
+}
+
+.capsule-menu button:hover,
+.capsule-menu button:focus-visible {
+  background: #f3e8ff;
+  color: #9c27b0;
 }
 
 /* 選單絕對定位在膠囊正下方 */
@@ -657,7 +712,7 @@ const handleOutsideClick = () => {
 }
 
 /* ==========================================
-   3. BUILD (磁吸插槽) - 👈 這是被漏掉的關鍵
+   3. BUILD (磁吸插槽)
    ========================================== */
 .build-mode-wrapper {
   display: flex;

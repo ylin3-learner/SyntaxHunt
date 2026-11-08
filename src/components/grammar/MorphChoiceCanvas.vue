@@ -27,8 +27,6 @@ const toggleGravity = () => {
 // 根據是否為假設模式，調整傳入底層的字塊
 const adjustedChunks = computed(() => {
   return props.initialChunks.map(chunk => {
-    // 如果是非現實模式，且字塊是 was/can 等，我們可以在這裡過濾選項
-    // 但為了保持邏輯單純，我們把控制權交給底層的 TileSentenceCanvas
     return { ...chunk };
   });
 });
@@ -45,13 +43,7 @@ const adjustedChunks = computed(() => {
       </button>
     </div>
 
-    <div v-if="strategy === 'timeline'" class="grammar-landmarks">
-      <div class="landmark-item" v-for="chunk in initialChunks.filter(c => c.can_morph)" :key="chunk.id">
-        <span class="lm-from">{{ chunk.text }}</span>
-        <span class="lm-arrow">➔</span>
-        <span class="lm-to">{{ isIrrealis ? '非現實 (were/could)' : '現實 (was/can)' }}</span>
-      </div>
-    </div>
+    <!-- 這裡原本的 grammar-landmarks (go -> 現實) 已移除 -->
 
     <!-- 其他全部交給底層的 TileSentenceCanvas，它會處理膠囊與下拉選單 -->
     <TileSentenceCanvas :question="question" :initial-chunks="adjustedChunks" :speech-rate="speechRate"
@@ -110,25 +102,4 @@ const adjustedChunks = computed(() => {
   background: #4c1d95aa;
   color: #f8fafc;
 }
-
-.grammar-landmarks {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
-  margin-bottom: 16px;
-  padding: 12px;
-  background: #f8fafc;
-  border-radius: 12px;
-  border: 1px dashed #cbd5e1;
-}
-.landmark-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 1rem;
-  font-weight: bold;
-}
-.lm-from { color: #64748b; text-decoration: line-through; }
-.lm-arrow { color: #94a3b8; }
-.lm-to { color: #1cb0f6; background: #e0f2fe; padding: 2px 8px; border-radius: 6px; }
 </style>
