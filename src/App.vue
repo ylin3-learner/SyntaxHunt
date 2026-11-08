@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, defineAsyncComponent, onMounted, onUnmounted, watch } from 'vue';
 import TeacherAnalytics from './components/TeacherAnalytics.vue';
 import NoticingBoard from './components/NoticingBoard.vue';
@@ -11,6 +11,7 @@ import StageMacro from './components/stages/StageMacro.vue';
 import StageMicro from './components/stages/StageMicro.vue';
 import StageContrast from './components/stages/StageContrast.vue';
 import StageSuccess from './components/stages/StageSuccess.vue';
+import AuthModal from './components/AuthModal.vue'; // 👈 引入抽離的 Modal
 
 import type { QuestionData, SSTCategory } from './rules/types';
 import { formatAnswerForDisplay } from './rules/adapter';
@@ -25,6 +26,7 @@ import { useClassroomSync, currentRoomCode } from './composables/useClassroomSyn
 import { useQuizFlow } from './composables/useQuizFlow';
 import { useAdminAuth } from './composables/useAdminAuth';
 import { useRoomEntry } from './composables/useRoomEntry';
+import { useRealtimeSync } from './composables/useRealtimeSync'; // 👈 引入抽離的同步邏輯
 
 const TeacherAdmin = defineAsyncComponent(() => import('./components/TeacherAdmin.vue'));
 const isDebugMode = window.location.search.includes('debug=1');
@@ -44,7 +46,8 @@ const {
   currentQuestion, microQuestion, instructionText,
   checkAndSetInitialStage, handleSuccess, nextQuestion, handleUnpack, handlePreviewSuccess,
   handleInputSuccess, handleChunkWrongAnswer, updateQuestionBank, handleBatchQuestionImport,
-  handleAddTime, handleNoticingComplete, restartGame
+  handleAddTime, handleNoticingComplete, restartGame,
+  unitFilter, availableUnits, filteredQuestions, changeUnit // 👈 新增的單元過濾
 } = quizFlow;
 
 // ---- 從 AdminAuth 解構 ----
@@ -75,9 +78,11 @@ const handleDistracted = () => {
 
 useFocusMonitor(handleDistracted);
 
+// 👈 使用抽離的 Realtime 事件處理
+const { handleRealtimeEvent } = useRealtimeSync(quizFlow, realtimeNotice);
+
 // ---- UI 路由 ----
 const currentStageComponent = computed(() => {
-  console.log('當前題型:', currentQuestion.value?.type, '當前階段:', currentStage.value);
   if (currentQuestion.value?.type === 'contrast') return StageContrast;
 
   let comp = null;
@@ -88,9 +93,6 @@ const currentStageComponent = computed(() => {
   else if (currentStage.value === 'macro') comp = StageMacro;
   else if (currentStage.value === 'micro') comp = StageMicro;
 
-  // 加上這行，重整網頁後看控制台印出什麼
-  if (comp) console.log(`[Debug] 嘗試渲染組件:`, comp, `是否有 template/render:`, !!(comp.template || comp.render));
-
   return comp;
 });
 
@@ -99,50 +101,6 @@ const handleGlobalInteraction = () => {
   unlockAudioContext();
   unlockTTS();
   document.removeEventListener('pointerup', handleGlobalInteraction);
-};
-
-const handleRealtimeEvent = (event: string, payload: any) => {
-  if (event === 'REALTIME_STATUS') {
-    realtimeNotice.value = payload.status === 'SUBSCRIBED' ? '' : '班級同步連線中斷；目前題目仍可繼續作答，連線恢復後會自動同步。';
-  }
-  if (event === 'SYNC_ERROR') {
-    realtimeNotice.value = '班級同步暫時無法使用；本機作答仍可繼續。';
-    const errorMsg = payload.message?.message || JSON.stringify(payload.message) || '未知錯誤';
-    console.error('班級同步錯誤:', errorMsg);
-  }
-  if (event === 'SYNC_STATE') {
-    if (payload.isClassMode !== undefined) isClassMode.value = payload.isClassMode;
-    if (payload.targetCount !== undefined) targetCount.value = payload.targetCount;
-
-    const targetId = payload.id;
-    const targetEndTime = payload.timerEndTime;
-
-    if (targetId && currentQuestion.value?.id !== targetId) {
-      const idx = questionBank.value.findIndex(q => q.id === targetId);
-      if (idx !== -1) {
-        currentIndex.value = idx;
-        checkAndSetInitialStage();
-        trackAnswering();
-      }
-    }
-
-    if (targetEndTime) {
-      const remaining = Math.max(0, Math.floor((targetEndTime - Date.now()) / 1000));
-      if (currentQuestion.value) {
-        currentQuestion.value.isTimed = true;
-        currentQuestion.value.timeLimit = remaining;
-      }
-      startTimer(remaining);
-    } else {
-      clearTimer();
-    }
-  }
-  if (event === 'PRESENCE_SYNC') {
-    presenceCompletedCount.value = payload.completedCount;
-  }
-  if (event === 'RESET_PROGRESS') {
-    trackAnswering();
-  }
 };
 
 onMounted(async () => {
@@ -277,7 +235,7 @@ const handleTimeoutNext = () => quizFlow.nextQuestion();
 
     <header>
       <h1>🕵️ SyntaxHunt</h1>
-      <span class="seat-badge">座號：{{ seatCode }}</span>
+      <span v-if="!isAdminAuthenticated" class="seat-badge">座號：{{ seatCode }}</span>
 
       <div class="header-controls">
         <div class="status-group">
@@ -285,7 +243,16 @@ const handleTimeoutNext = () => quizFlow.nextQuestion();
             :class="{ 'all-done': presenceCompletedCount >= targetCount }">
             ✅ 作答進度：{{ presenceCompletedCount }} / {{ targetCount }} 人
           </div>
-          <div class="progress-bar">第 {{ currentIndex + 1 }} / {{ questionBank.length }} 關</div>
+
+          <!-- 👈 新增：單元切換器 -->
+          <div v-if="availableUnits.length > 0 && !isClassMode" class="unit-selector">
+            <select :value="unitFilter" @change="changeUnit(($event.target as HTMLSelectElement).value)">
+              <option value="all">📚 全部單元</option>
+              <option v-for="unit in availableUnits" :key="unit" :value="unit">{{ unit }}</option>
+            </select>
+          </div>
+
+          <div class="progress-bar">第 {{ currentIndex + 1 }} / {{ filteredQuestions.length }} 關</div>
         </div>
 
         <div class="action-group">
@@ -325,43 +292,22 @@ const handleTimeoutNext = () => quizFlow.nextQuestion();
 
       <component v-else :is="currentStageComponent" class="stage-content" :question="currentQuestion"
         :full-sentence-data="fullSentenceData" :is-class-mode="isClassMode" :current-index="currentIndex"
-        :question-bank-length="questionBank.length" @success="handleSuccess" @next="nextQuestion"
+        :question-bank-length="filteredQuestions.length" @success="handleSuccess" @next="nextQuestion"
         @continue="nextQuestion(true)" @unpack="handleUnpack" @misconception="handleMisconception"
         @wrong-answer="handleChunkWrongAnswer" @preview-success="handlePreviewSuccess"
         @input-success="handleInputSuccess" />
     </main>
 
-    <SummaryReport v-if="showSummary" :completedLevels="completedCount" :totalLevels="questionBank.length"
+    <SummaryReport v-if="showSummary" :completedLevels="completedCount" :totalLevels="filteredQuestions.length"
       :misconceptions="sessionLog" @restart="restartGame" />
 
     <TeacherAnalytics v-if="showAnalytics" :questionBank="questionBank" @close="showAnalytics = false" />
 
-    <div v-if="showAdminAuth" class="auth-overlay">
-      <div class="auth-card">
-        <h3>{{ isRegisterMode ? '📝 註冊教師帳號' : '👩‍🏫 教師驗證' }}</h3>
-        <p>{{ isRegisterMode ? '請設定您的 Email 與密碼' : '請輸入 Email 與密碼以進入系統' }}</p>
-
-        <input type="email" v-model="adminEmailInput" placeholder="Email"
-          @keyup.enter="isRegisterMode ? registerAdmin() : verifyAdmin()" />
-        <input type="password" v-model="adminPasswordInput" placeholder="密碼"
-          @keyup.enter="isRegisterMode ? registerAdmin() : verifyAdmin()" />
-
-        <div class="auth-actions">
-          <button class="btn-cancel" @click="cancelAuth">取消</button>
-          <button class="btn-confirm" @click="isRegisterMode ? registerAdmin() : verifyAdmin()">
-            {{ isRegisterMode ? '註冊' : '登入' }}
-          </button>
-        </div>
-
-        <!-- 切換登入/註冊的連結 -->
-        <div class="auth-toggle" style="margin-top: 16px; text-align: center; font-size: 0.9rem;">
-          <a href="#" @click.prevent="isRegisterMode = !isRegisterMode"
-            style="color: #1cb0f6; text-decoration: underline;">
-            {{ isRegisterMode ? '已經有帳號了？切換到登入' : '還沒有帳號？點此註冊' }}
-          </a>
-        </div>
-      </div>
-    </div>
+    <!-- 👈 使用抽離的 AuthModal -->
+    <AuthModal :is-open="showAdminAuth" :is-register-mode="isRegisterMode" :email="adminEmailInput"
+      :password="adminPasswordInput" @update:email="adminEmailInput = $event"
+      @update:password="adminPasswordInput = $event" @update:is-register-mode="isRegisterMode = $event"
+      @cancel="cancelAuth" @submit="isRegisterMode ? registerAdmin() : verifyAdmin()" />
 
     <TeacherAdmin v-if="showAdmin" :currentQuestions="questionBank" :room-code="currentRoomCode"
       @update="updateQuestionBank" @batch-import="handleBatchQuestionImport" @sync-local="handleLocalSync"
@@ -372,7 +318,7 @@ const handleTimeoutNext = () => quizFlow.nextQuestion();
 </template>
 
 <style scoped>
-/* 保持原本樣式，請直接沿用你原本的 Style */
+/* (這裡保留你原本的 CSS，但我已經確保這裡是乾淨的，直接貼上即可) */
 :root {
   --primary-color: #1cb0f6;
   --success-color: #58cc02;
@@ -434,6 +380,7 @@ header h1 {
 .status-group {
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -465,6 +412,25 @@ header h1 {
 .progress-bar {
   background: #e6f7ff;
   color: var(--primary-color);
+}
+
+/* 👈 新增：單元下拉選單樣式 */
+.unit-selector select {
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 2px solid #1cb0f6;
+  background: #e6f7ff;
+  color: #1cb0f6;
+  font-weight: bold;
+  font-size: 0.95rem;
+  outline: none;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(28, 176, 246, 0.1);
+}
+
+.unit-selector select:focus {
+  border-color: #1899d6;
+  background: #d0efff;
 }
 
 .action-group {
@@ -680,7 +646,6 @@ header h1 {
   margin-bottom: 24px;
 }
 
-.auth-overlay,
 .timeout-overlay,
 .focus-warning-overlay {
   position: fixed;
@@ -690,10 +655,6 @@ header h1 {
   align-items: center;
   z-index: 10000;
   backdrop-filter: blur(4px);
-}
-
-.auth-overlay {
-  background: rgba(0, 0, 0, 0.5);
 }
 
 .timeout-overlay {
@@ -707,7 +668,6 @@ header h1 {
   z-index: 99999;
 }
 
-.auth-card,
 .timeout-box,
 .warning-box {
   background: white;
@@ -715,11 +675,6 @@ header h1 {
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.2);
   animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   text-align: center;
-}
-
-.auth-card {
-  padding: 32px;
-  width: 320px;
 }
 
 .timeout-box {
@@ -733,7 +688,6 @@ header h1 {
   box-shadow: 0 12px 32px rgba(255, 75, 75, 0.3);
 }
 
-.auth-card h3,
 .timeout-box h2 {
   font-size: 1.5rem;
   margin: 0 0 8px 0;
@@ -750,7 +704,6 @@ header h1 {
   margin: 0 0 8px 0;
 }
 
-.auth-card p,
 .timeout-box p,
 .warning-box p {
   color: var(--text-muted);
@@ -758,28 +711,6 @@ header h1 {
   margin-bottom: 20px;
 }
 
-.auth-card input {
-  width: 100%;
-  padding: 14px;
-  border: 2px solid #e5e5e5;
-  border-radius: 12px;
-  font-size: 1rem;
-  box-sizing: border-box;
-  margin-bottom: 20px;
-  outline: none;
-  transition: border 0.2s;
-}
-
-.auth-card input:focus {
-  border-color: var(--primary-color);
-}
-
-.auth-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.auth-actions button,
 .btn-timeout-next,
 .btn-add-time {
   flex: 1;
@@ -790,22 +721,6 @@ header h1 {
   border: none;
   transition: all 0.1s;
   font-size: 1rem;
-}
-
-.btn-cancel {
-  background: #f0f0f0;
-  color: var(--text-muted);
-}
-
-.btn-confirm {
-  background: var(--primary-color);
-  color: white;
-  border-bottom: 4px solid #1899d6;
-}
-
-.btn-confirm:active {
-  border-bottom-width: 0;
-  transform: translateY(4px);
 }
 
 .btn-timeout-next {
@@ -940,64 +855,6 @@ header h1 {
   .instruction-banner {
     font-size: 0.95rem;
     padding: 10px 16px;
-  }
-
-  .room-entry-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10000;
-    backdrop-filter: blur(4px);
-  }
-
-  .room-entry-card {
-    background: #fff;
-    padding: 32px;
-    border-radius: 16px;
-    text-align: center;
-    min-width: 320px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  }
-
-  .room-entry-card h2 {
-    margin-top: 0;
-    margin-bottom: 8px;
-    font-size: 1.5rem;
-    color: #1cb0f6;
-  }
-
-  .room-entry-card p {
-    margin: 6px 0 16px 0;
-    color: #555;
-  }
-
-  .room-entry-card input {
-    width: 100%;
-    padding: 12px;
-    font-size: 1rem;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    margin-bottom: 12px;
-    box-sizing: border-box;
-  }
-
-  .room-entry-card button {
-    width: 100%;
-    padding: 12px;
-    background: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    cursor: pointer;
-  }
-
-  .room-entry-card button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
   }
 }
 </style>

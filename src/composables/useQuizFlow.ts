@@ -1,16 +1,14 @@
-import { ref, computed, watch } from 'vue';
+﻿import { ref, computed } from 'vue';
 import type { QuestionData, GrammarQuestionData } from '../rules/types';
 import { defaultQuestions } from '../data/questions';
 import { convertLegacyQuestion } from '../rules/adapter';
 import { getQuestionCanvasMode, getQuestionUiMode } from '../rules/types';
-import { supabase } from '../services/supabaseClient';
 import { CloudDatabase } from '../services/CloudDatabase';
 import { useQuizTimer } from './useQuizTimer';
 import { useSound } from '../utils/useSound';
 import { useClassroomSync } from './useClassroomSync';
 
 export function useQuizFlow() {
-  // ---- 狀態 ----
   const currentIndex = ref(0);
   const currentStage = ref<'preview' | 'input' | 'macro' | 'micro' | 'success' | 'noticing'>('preview');
   const currentMode = ref<'relative' | 'preposition'>('relative');
@@ -21,16 +19,28 @@ export function useQuizFlow() {
   const isClassMode = ref(false);
   const targetCount = ref(0);
   const presenceCompletedCount = ref(0);
+  const unitFilter = ref<string>('all');
 
-  // ---- Timer 與 Sound ----
-  const { timeLeft, isTimeUp, startTimer, addTime, clearTimer } = useQuizTimer(() => {});
+  const { timeLeft, isTimeUp, startTimer, addTime, clearTimer } = useQuizTimer(() => { });
   const { playSuccess } = useSound();
-
-  // ---- Realtime ----
   const { trackCompleted, trackAnswering, sendPush, sendAddTime } = useClassroomSync();
 
-  // ---- Computed ----
-  const currentQuestion = computed(() => questionBank.value[currentIndex.value] || (defaultQuestions[0] as unknown as QuestionData));
+  const availableUnits = computed(() => {
+    const units = questionBank.value.map(q => q.unit).filter(Boolean) as string[];
+    return [...new Set(units)].sort((a, b) => a.localeCompare(b));
+  });
+
+  const filteredQuestions = computed(() => {
+    if (unitFilter.value === 'all') return questionBank.value;
+    return questionBank.value.filter(q => q.unit === unitFilter.value);
+  });
+
+  const currentQuestion = computed(() => {
+    if (filteredQuestions.value.length === 0) {
+      return defaultQuestions[0] as unknown as QuestionData;
+    }
+    return filteredQuestions.value[currentIndex.value] || filteredQuestions.value[0];
+  });
 
   const getEnabledStages = computed<NonNullable<QuestionData['enabledStages']>>(() =>
     currentQuestion.value.enabledStages || (currentQuestion.value.type === 'grammar'
@@ -64,7 +74,6 @@ export function useQuizFlow() {
     return '';
   });
 
-  // ---- Functions ----
   const fixAntecedentNumbers = () => {
     questionBank.value.forEach(q => {
       if (q.targetNoun.toLowerCase().endsWith('s') && !q.targetNoun.toLowerCase().endsWith('is') && !q.targetNoun.toLowerCase().endsWith('this')) {
@@ -79,10 +88,7 @@ export function useQuizFlow() {
     if (currentQuestion.value.type === 'chunk') { currentStage.value = 'preview'; return; }
     if (currentQuestion.value.previewData && getEnabledStages.value.includes('input')) currentStage.value = 'preview';
     else if (getEnabledStages.value.includes('input') && currentQuestion.value.inputData) currentStage.value = 'input';
-
-    // 👈 關鍵修改：如果是 Reduce 題，直接跳過 Macro 進 Micro
     else if (currentQuestion.value.mode === 'reduce' && getEnabledStages.value.includes('micro')) currentStage.value = 'micro';
-
     else if (getEnabledStages.value.includes('macro')) currentStage.value = 'macro';
     else if (getEnabledStages.value.includes('micro')) currentStage.value = 'micro';
     else currentStage.value = 'success';
@@ -130,32 +136,41 @@ export function useQuizFlow() {
     trackAnswering();
     window.speechSynthesis.cancel();
     if (currentStage.value === 'success' && getEnabledStages.value.includes('noticing') && currentQuestion.value.noticingData) { currentStage.value = 'noticing'; return; }
-    if (currentIndex.value < questionBank.value.length - 1) { currentIndex.value++; checkAndSetInitialStage(); } else { showSummary.value = true; }
+    if (currentIndex.value < filteredQuestions.value.length - 1) {
+      currentIndex.value++; checkAndSetInitialStage();
+    } else {
+      showSummary.value = true;
+    }
   };
 
   const handleNoticingComplete = () => {
-    if (currentIndex.value < questionBank.value.length - 1) { currentIndex.value++; checkAndSetInitialStage(); } else { showSummary.value = true; }
+    if (currentIndex.value < filteredQuestions.value.length - 1) {
+      currentIndex.value++; checkAndSetInitialStage();
+    } else {
+      showSummary.value = true;
+    }
   };
 
   const restartGame = () => { currentIndex.value = 0; sessionLog.value = []; completedCount.value = 0; showSummary.value = false; checkAndSetInitialStage(); };
 
-  // ---- Question Bank Persistence ----
+  const changeUnit = (newUnit: string) => {
+    unitFilter.value = newUnit;
+    currentIndex.value = 0;
+    checkAndSetInitialStage();
+  };
+
   const updateQuestionBank = async (updatedQuestions: QuestionData[]) => {
     const currentIdx = currentIndex.value;
     questionBank.value = updatedQuestions;
-
     fixAntecedentNumbers();
     showSummary.value = false;
 
-    if (currentIdx >= questionBank.value.length) {
-      currentIndex.value = Math.max(0, questionBank.value.length - 1);
+    if (currentIdx >= filteredQuestions.value.length) {
+      currentIndex.value = Math.max(0, filteredQuestions.value.length - 1);
     } else {
       currentIndex.value = currentIdx;
     }
-
-    // 治本：更新題庫後，必須重新判斷當前題目的初始階段！
     checkAndSetInitialStage();
-
     const success = await persistQuestionBank(updatedQuestions);
     if (!success) alert('注意：題庫已存在本機，但「雲端同步失敗」，請確認網路連線。');
   };
@@ -177,20 +192,24 @@ export function useQuizFlow() {
   };
 
   const handlePushQuestion = (id: string) => {
-    const idx = questionBank.value.findIndex(q => q.id === id);
-    if (idx !== -1) {
-      const targetQ = questionBank.value[idx];
-      currentIndex.value = idx;
-      checkAndSetInitialStage();
-      trackAnswering();
-
-      if (targetQ.isTimed && targetQ.timeLimit) {
-        setTimeout(() => { startTimer(targetQ.timeLimit!); }, 150);
-      } else {
-        clearTimer();
+    const targetQ = questionBank.value.find(q => q.id === id);
+    if (targetQ) {
+      if (unitFilter.value !== 'all' && targetQ.unit !== unitFilter.value) {
+        unitFilter.value = targetQ.unit || 'all';
       }
+      const idx = filteredQuestions.value.findIndex(q => q.id === id);
+      if (idx !== -1) {
+        currentIndex.value = idx;
+        checkAndSetInitialStage();
+        trackAnswering();
 
-      sendPush(targetQ, targetQ.timeLimit ? Date.now() + targetQ.timeLimit * 1000 : null);
+        if (targetQ.isTimed && targetQ.timeLimit) {
+          setTimeout(() => { startTimer(targetQ.timeLimit!); }, 150);
+        } else {
+          clearTimer();
+        }
+        sendPush(targetQ, targetQ.timeLimit ? Date.now() + targetQ.timeLimit * 1000 : null);
+      }
     }
   };
 
@@ -203,45 +222,13 @@ export function useQuizFlow() {
   const handleTimeoutNext = () => { nextQuestion(); };
 
   return {
-    currentIndex,
-    currentStage,
-    currentMode,
-    questionBank,
-    showSummary,
-    completedCount,
-    sessionLog,
-    isClassMode,
-    targetCount,
-    presenceCompletedCount,
-    timeLeft,
-    isTimeUp,
-    startTimer,
-    addTime,
-    clearTimer,
-    trackCompleted,
-    trackAnswering,
-    sendPush,
-    sendAddTime,
-    currentQuestion,
-    getEnabledStages,
-    microQuestion,
-    instructionText,
-    fixAntecedentNumbers,
-    checkAndSetInitialStage,
-    handlePreviewSuccess,
-    handleChunkWrongAnswer,
-    handleInputSuccess,
-    handleUnpack,
-    handleSuccess,
-    nextQuestion,
-    handleNoticingComplete,
-    restartGame,
-    handleTimeoutNext,
-    handlePushQuestion,
-    handleAddTime,
-    updateQuestionBank,
-    persistQuestionBank,
-    handleBatchQuestionImport,
-    handleLocalSync,
+    currentIndex, currentStage, currentMode, questionBank, showSummary, completedCount, sessionLog,
+    isClassMode, targetCount, presenceCompletedCount, timeLeft, isTimeUp, startTimer, addTime, clearTimer,
+    trackCompleted, trackAnswering, sendPush, sendAddTime, currentQuestion, getEnabledStages, microQuestion,
+    instructionText, fixAntecedentNumbers, checkAndSetInitialStage, handlePreviewSuccess, handleChunkWrongAnswer,
+    handleInputSuccess, handleUnpack, handleSuccess, nextQuestion, handleNoticingComplete, restartGame,
+    handleTimeoutNext, handlePushQuestion, handleAddTime, updateQuestionBank, persistQuestionBank,
+    handleBatchQuestionImport, handleLocalSync,
+    unitFilter, availableUnits, filteredQuestions, changeUnit,
   };
 }
