@@ -203,6 +203,7 @@ sequenceDiagram
 - **Local Deterministic Chunking**: Uses `compromise.js` and an irregular-verb JSON table to automatically generate interactive chunks.
 - **Visual Question Flow**: Open the full-screen node canvas to reorder questions by dragging nodes.
 - **Master Remote Control**: Push questions, force-reset timers, and add time (`+30s`) instantly.
+- **QR Code & Room Code Sharing**: Instantly generate a projector-friendly QR Code. Students can scan it to automatically join the teacher's specific classroom channel without typing.
 
 ### Using general grammar questions
 
@@ -214,6 +215,19 @@ sequenceDiagram
 6. Click **Add to question bank** and **Send to class** to make it active.
 
 > **Teacher Access Note:** Teacher sign-in uses Supabase Auth (`signInWithPassword`). The legacy fixed `admin123` demo password has been **removed**. You must create a teacher account in the Supabase Authentication dashboard and log in with Email + Password. 
+
+---
+
+## 🛠️ Tech Stack & Engineering
+
+- **Frontend**: Vue 3 (Composition API) + Vite + TypeScript
+- **State Management**: Vue Composables (`useQuizFlow`, `useQuestionForm`, `useClassroomSync`)
+- **Local NLP**: compromise.js + `english-verbs-irregular`
+- **Diagnostic Engine**: Local Rule Registry + LCS algorithm + LanguageTool (Deep Semantic Check)
+- **Backend & DB**: Supabase (PostgreSQL, Edge Functions, Realtime Presence, Auth, RLS)
+- **Infrastructure**: Render (Docker / LanguageTool) + GitHub Actions (Keep-Alive)
+- **Speech (TTS & STT)**: Native `SpeechSynthesis` / Deepgram via Edge Functions
+- **QR Code Generation**: `qrcode.vue`
 
 ---
 

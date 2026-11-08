@@ -194,6 +194,7 @@ sequenceDiagram
 - **語意控制 (Person vs. Thing)**：明確指定先行詞是「人」或「物」，確保本地規則引擎能精準判斷 `who` 與 `which`。
 - **視覺化題目流程與單元資料夾**：開啟全螢幕節點畫布，以連線檢視及調整題目順序。
 - **主從遠端控制**：老師可一鍵推送題目、強制重置計時器，或隨時點擊 `+30s` 為全班加時。
+- **一鍵掃碼加入 (QR Code)**：老師可在班級控制面板點擊生成全螢幕 QR Code，學生用手機或平板掃描即可自動帶入 `?room=XXXX` 參數並加入專屬班級頻道，省去手動輸入代碼的麻煩。
 
 ### 如何使用通用文法題
 
@@ -205,6 +206,19 @@ sequenceDiagram
 6. 點選 **加入題庫**。若要指定學生目前作答的題目，請在該題列按 **發送給全班**。
 
 > **教師登入提醒：**教師登入已全面改為 Supabase Auth（`signInWithPassword`，Email + 密碼）。**舊的 `admin123` 示範密碼已移除**。請務必先到 Supabase 後台的 Authentication 建立教師帳號，才能登入系統。
+
+---
+
+## 🛠️ 技術棧與工程
+
+- **前端**：Vue 3（Composition API）+ Vite + TypeScript
+- **狀態管理**：Vue Composables (`useQuizFlow`, `useQuestionForm`, `useClassroomSync`)
+- **本地 NLP**：compromise.js + `english-verbs-irregular`
+- **診斷引擎**：Local Rule Registry + LCS algorithm + LanguageTool (Deep Semantic Check)
+- **後端與資料庫**：Supabase（PostgreSQL、Edge Functions、Realtime Presence、Auth、RLS）
+- **基礎設施**：Render (Docker / LanguageTool) + GitHub Actions (Keep-Alive)
+- **語音 (TTS & STT)**：可用的原生 `SpeechSynthesis` 語音；Deepgram TTS／STT 透過 Edge Functions 呼叫
+- **QR Code 產生**：`qrcode.vue`
 
 ---
 
