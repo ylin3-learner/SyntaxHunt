@@ -10,8 +10,8 @@ export function useAdminAuth() {
   const showAdminAuth = ref(false);
   const pendingAction = ref<'admin' | 'analytics' | null>(null);
   const isVerifying = ref(false);
+  const isRegisterMode = ref(false); // 新增：切換登入/註冊模式
 
-  // 暫存登入成功後需要打開的視窗 Ref
   let pendingShowRef: Ref<boolean> | null = null;
 
   const verifyAdmin = async () => {
@@ -34,10 +34,10 @@ export function useAdminAuth() {
       showAdminAuth.value = false;
       adminEmailInput.value = '';
       adminPasswordInput.value = '';
+      isRegisterMode.value = false; // 登入成功後重置模式
 
       void CloudDatabase.warmLanguageTool();
 
-      // 修正：登入成功後，執行剛才被攔截的動作（打開後台）
       if (pendingShowRef) {
         pendingShowRef.value = true;
         pendingShowRef = null;
@@ -45,9 +45,52 @@ export function useAdminAuth() {
       pendingAction.value = null;
 
     } catch (error: any) {
-      // 修正：印出詳細錯誤，方便除錯 400 錯誤
       console.error('Supabase 登入失敗:', error);
       alert(`登入失敗！原因：${error.message || '請檢查 Email 與密碼'}`);
+      adminPasswordInput.value = '';
+    } finally {
+      isVerifying.value = false;
+    }
+  };
+
+  // 新增：註冊函數
+  const registerAdmin = async () => {
+    if (isVerifying.value) return;
+    isVerifying.value = true;
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: adminEmailInput.value,
+        password: adminPasswordInput.value,
+      });
+      if (error) throw error;
+
+      // 註冊成功（Supabase 預設會寄送驗證信，或者直接登入）
+      if (data.session) {
+        // 如果 Supabase 關閉了信箱驗證，會直接回傳 session，可以直接登入
+        currentTeacherId.value = data.user!.id;
+        sessionStorage.setItem('teacher_id', data.user!.id);
+        isAdminAuthenticated.value = true;
+        sessionStorage.setItem('admin_auth', 'true');
+        showAdminAuth.value = false;
+        alert('註冊並登入成功！');
+        if (pendingShowRef) {
+          pendingShowRef.value = true;
+          pendingShowRef = null;
+        }
+      } else {
+        // 如果 Supabase 開啟了信箱驗證，需要使用者去收信
+        alert('註冊成功！請至您的信箱點擊驗證連結，驗證完成後再回來登入。');
+        isRegisterMode.value = false; // 切回登入模式
+      }
+
+      adminEmailInput.value = '';
+      adminPasswordInput.value = '';
+      pendingAction.value = null;
+
+    } catch (error: any) {
+      console.error('Supabase 註冊失敗:', error);
+      alert(`註冊失敗！原因：${error.message || '請檢查 Email 格式或密碼強度'}`);
       adminPasswordInput.value = '';
     } finally {
       isVerifying.value = false;
@@ -67,13 +110,14 @@ export function useAdminAuth() {
     adminPasswordInput.value = '';
     pendingAction.value = null;
     pendingShowRef = null;
+    isRegisterMode.value = false; // 取消時重置模式
   };
 
   const openAdmin = (showAdminRef: Ref<boolean>, setPending: (v: 'admin' | 'analytics' | null) => void) => {
     if (isAdminAuthenticated.value) {
       showAdminRef.value = true;
     } else {
-      pendingShowRef = showAdminRef; // 記住這個 Ref
+      pendingShowRef = showAdminRef;
       setPending('admin');
       showAdminAuth.value = true;
     }
@@ -83,7 +127,7 @@ export function useAdminAuth() {
     if (isAdminAuthenticated.value) {
       showAnalyticsRef.value = true;
     } else {
-      pendingShowRef = showAnalyticsRef; // 記住這個 Ref
+      pendingShowRef = showAnalyticsRef;
       setPending('analytics');
       showAdminAuth.value = true;
     }
@@ -97,7 +141,9 @@ export function useAdminAuth() {
     showAdminAuth,
     pendingAction,
     isVerifying,
+    isRegisterMode, // 記得 return
     verifyAdmin,
+    registerAdmin,  // 記得 return
     logoutAdmin,
     cancelAuth,
     openAdmin,

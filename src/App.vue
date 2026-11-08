@@ -50,7 +50,7 @@ const {
 // ---- 從 AdminAuth 解構 ----
 const {
   currentTeacherId, isAdminAuthenticated, adminEmailInput, adminPasswordInput, showAdminAuth, pendingAction,
-  verifyAdmin, logoutAdmin, cancelAuth, openAdmin, openAnalytics
+  isRegisterMode, verifyAdmin, registerAdmin, logoutAdmin, cancelAuth, openAdmin, openAnalytics
 } = adminAuth;
 
 // ---- 從 RoomEntry 解構 ----
@@ -338,13 +338,27 @@ const handleTimeoutNext = () => quizFlow.nextQuestion();
 
     <div v-if="showAdminAuth" class="auth-overlay">
       <div class="auth-card">
-        <h3>👩‍🏫 教師驗證</h3>
-        <p>請輸入 Email 與密碼以進入系統</p>
-        <input type="email" v-model="adminEmailInput" placeholder="Email" @keyup.enter="verifyAdmin" />
-        <input type="password" v-model="adminPasswordInput" placeholder="密碼" @keyup.enter="verifyAdmin" />
+        <h3>{{ isRegisterMode ? '📝 註冊教師帳號' : '👩‍🏫 教師驗證' }}</h3>
+        <p>{{ isRegisterMode ? '請設定您的 Email 與密碼' : '請輸入 Email 與密碼以進入系統' }}</p>
+
+        <input type="email" v-model="adminEmailInput" placeholder="Email"
+          @keyup.enter="isRegisterMode ? registerAdmin() : verifyAdmin()" />
+        <input type="password" v-model="adminPasswordInput" placeholder="密碼"
+          @keyup.enter="isRegisterMode ? registerAdmin() : verifyAdmin()" />
+
         <div class="auth-actions">
           <button class="btn-cancel" @click="cancelAuth">取消</button>
-          <button class="btn-confirm" @click="verifyAdmin">確認</button>
+          <button class="btn-confirm" @click="isRegisterMode ? registerAdmin() : verifyAdmin()">
+            {{ isRegisterMode ? '註冊' : '登入' }}
+          </button>
+        </div>
+
+        <!-- 切換登入/註冊的連結 -->
+        <div class="auth-toggle" style="margin-top: 16px; text-align: center; font-size: 0.9rem;">
+          <a href="#" @click.prevent="isRegisterMode = !isRegisterMode"
+            style="color: #1cb0f6; text-decoration: underline;">
+            {{ isRegisterMode ? '已經有帳號了？切換到登入' : '還沒有帳號？點此註冊' }}
+          </a>
         </div>
       </div>
     </div>
