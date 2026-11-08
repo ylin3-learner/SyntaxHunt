@@ -58,6 +58,11 @@ describe('CloudDatabase LanguageTool warm-up', () => {
 
 describe('CloudDatabase learning logs', () => {
   beforeEach(() => {
+    // 補上 getUser 的 Mock，否則 logEvent 會崩潰
+    supabaseMocks.getUser.mockResolvedValue({
+      data: { user: { id: 'test-teacher-id' } },
+      error: null
+    });
     supabaseMocks.from.mockReset().mockReturnValue({ insert: supabaseMocks.insert });
     supabaseMocks.insert.mockReset();
   });
