@@ -269,7 +269,7 @@ const openQuestionEdit = (id: string) => { const q = localQuestions.value.find(i
 
     <div v-else class="admin-modal">
       <div class="admin-layout">
-        <!-- 👈 將 props.roomCode 傳給 Sidebar -->
+        <!-- 將 props.roomCode 傳給 Sidebar -->
         <QuestionListSidebar v-model:unit-filter="unitFilter" v-model:is-class-panel-expanded="isClassPanelExpanded"
           v-model:is-questions-expanded="isQuestionsExpanded" v-model:is-class-mode-toggle="isClassModeToggle"
           v-model:target-count-input="targetCountInput" v-model:active-unit-input="activeUnitInput"
@@ -306,7 +306,7 @@ const openQuestionEdit = (id: string) => { const q = localQuestions.value.find(i
       </div>
     </div>
 
-    <!-- 👈 QR Modal，使用 props.roomCode -->
+    <!-- QR Modal，使用 props.roomCode -->
     <QrCodeModal :is-open="showQrModal" :room-code="props.roomCode || ''" @close="showQrModal = false" />
 
     <input ref="fileInput" type="file" accept="image/*" style="display: none" @change="handleFileChange" />
@@ -331,10 +331,20 @@ const openQuestionEdit = (id: string) => { const q = localQuestions.value.find(i
   align-items: center;
   z-index: 9999;
   backdrop-filter: blur(4px);
+  padding: 2vh 2vw;
+  box-sizing: border-box;
 }
 
 .admin-layout {
   display: flex;
+  width: 100%;
+  /* 改為 100% 搭配外層 padding */
+  max-width: 1600px;
+  /* 最大寬度放寬到 1600px */
+  height: 100%;
+  /* 高度改為 100% */
+  max-height: 1000px;
+  /* 高度上限 */
   width: 90vw;
   max-width: 1440px;
   height: 85vh;
@@ -343,6 +353,7 @@ const openQuestionEdit = (id: string) => { const q = localQuestions.value.find(i
   overflow: hidden;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
   animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-sizing: border-box; /* 關鍵：防止 padding 撐大容器 */
 }
 
 @keyframes popIn {

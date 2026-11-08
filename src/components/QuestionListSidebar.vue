@@ -14,7 +14,7 @@ defineProps<{
   isClassModeToggle: boolean;
   targetCountInput: number;
   roomCode?: string;
-  activeUnitInput?: string; 
+  activeUnitInput?: string;
 }>();
 
 const emit = defineEmits<{
@@ -32,8 +32,8 @@ const emit = defineEmits<{
   (e: 'new-question'): void;
   (e: 'save-close'): void;
   (e: 'show-qr'): void;
-  (e: 'update:activeUnitInput', value: string): void; // 👈 新增
-  (e: 'lock-unit'): void; // 👈 新增
+  (e: 'update:activeUnitInput', value: string): void; // 新增
+  (e: 'lock-unit'): void; // 新增
 }>();
 
 const isChecked = (event: Event) =>
@@ -77,15 +77,18 @@ const numberValue = (event: Event) =>
         <button type="button" class="btn-reset-progress" @click="emit('reset-progress')">
           🔄 重置全班作答進度
         </button>
-        <!-- 👈 新增：單元鎖定 UI -->
+        <!-- 新增：單元鎖定 UI -->
         <div class="unit-lock" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #ccc;">
           <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #b45309;">🔒 限制學生單元</label>
           <div style="display: flex; gap: 8px;">
-            <select :value="activeUnitInput" @change="emit('update:activeUnitInput', ($event.target as HTMLSelectElement).value)" style="flex: 1; padding: 6px; border-radius: 8px; border: 1px solid #ccc;">
+            <select :value="activeUnitInput"
+              @change="emit('update:activeUnitInput', ($event.target as HTMLSelectElement).value)"
+              style="flex: 1; padding: 6px; border-radius: 8px; border: 1px solid #ccc;">
               <option value="all">📚 全部單元 (不鎖定)</option>
               <option v-for="unit in availableUnits" :key="unit" :value="unit">{{ unit }}</option>
             </select>
-            <button @click="emit('lock-unit')" style="padding: 6px 12px; background: #1cb0f6; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">發布</button>
+            <button @click="emit('lock-unit')"
+              style="padding: 6px 12px; background: #1cb0f6; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">發布</button>
           </div>
         </div>
       </div>
@@ -147,13 +150,18 @@ const numberValue = (event: Event) =>
 
 <style scoped>
 .sidebar {
-  width: 320px;
+  width: 340px;
+  /* 稍微加寬到 340px */
+  min-width: 300px;
+  /* 給個最小寬度 */
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
   background: #f7f9fc;
   border-right: 1px solid #e5e7eb;
+  overflow: hidden;
+  /* 關鍵：防止子元素撐爆側邊欄 */
 }
 
 .sidebar-header,
@@ -257,6 +265,7 @@ const numberValue = (event: Event) =>
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
+  min-width: 0;
 }
 
 .unit-filter label {
@@ -268,6 +277,7 @@ const numberValue = (event: Event) =>
 
 .grammar-select {
   min-width: 0;
+  width: 100%;
   flex: 1;
   padding: 8px;
   border: 1px solid #cbd5e1;
@@ -282,6 +292,8 @@ const numberValue = (event: Event) =>
   gap: 12px;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  /* 關鍵：隱藏橫向滾動條 */
   padding: 16px;
 }
 
@@ -289,6 +301,7 @@ const numberValue = (event: Event) =>
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
 }
 
 .question-item {
@@ -300,6 +313,8 @@ const numberValue = (event: Event) =>
   border-radius: 16px;
   background: #fff;
   cursor: pointer;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .question-item:hover,
@@ -330,6 +345,7 @@ const numberValue = (event: Event) =>
   flex-direction: column;
   gap: 2px;
   padding-right: 20px;
+  min-width: 0;
 }
 
 .q-noun {
@@ -339,6 +355,7 @@ const numberValue = (event: Event) =>
 }
 
 .q-desc {
+  display: block;
   overflow: hidden;
   color: #777;
   font-size: .85rem;
@@ -391,7 +408,12 @@ const numberValue = (event: Event) =>
 }
 
 .q-actions {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  /* 按鈕太長時允許換行 */
+  gap: 6px;
   margin-top: 4px;
   padding-top: 12px;
   border-top: 1px dashed #eee;
@@ -475,6 +497,7 @@ const numberValue = (event: Event) =>
   margin-bottom: 12px;
   transition: all 0.2s;
 }
+
 .btn-show-qr:hover {
   background: #1cb0f6;
   color: white;

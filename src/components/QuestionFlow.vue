@@ -32,6 +32,15 @@ const availableUnits = computed(() => [...new Set([
   ...props.questions.map(question => question.unit?.trim()).filter((unit): unit is string => !!unit),
   ...createdUnits.value,
 ])].sort((a, b) => a.localeCompare(b)));
+// 根據當前選擇的單元 (activeUnit) 過濾題目
+const filteredQuestions = computed(() => {
+  // 如果沒有選單元 (未分類)
+  if (activeUnit.value === '') {
+    return props.questions.filter(q => !q.unit?.trim());
+  }
+  // 否則過濾出屬於該單元的題目
+  return props.questions.filter(q => q.unit?.trim() === activeUnit.value);
+});
 const selectedQuestions = computed(() =>
   props.questions.filter(question => selectedQuestionIds.value.has(question.id))
 );
@@ -61,17 +70,27 @@ onUnmounted(() => {
 const moveQuestionTo = (sourceId: string, targetId: string, placement: 'before' | 'after') => {
   if (sourceId === targetId) return;
 
+  // 1. 先複製完整的陣列
   const reordered = [...props.questions];
-  const sourceIndex = reordered.findIndex(question => question.id === sourceId);
-  if (sourceIndex === -1) return;
+  
+  const sourceIndex = reordered.findIndex(q => q.id === sourceId);
+  const targetIndex = reordered.findIndex(q => q.id === targetId);
+  
+  if (sourceIndex === -1 || targetIndex === -1) return;
 
+  // 2. 拔出要被移動的題目
   const [question] = reordered.splice(sourceIndex, 1);
-  if (!question) return;
+  
+  // 3. 重新計算目標位置（因為拔除後，目標的 index 可能會改變）
+  const newTargetIndex = reordered.findIndex(q => q.id === targetId);
+  if (newTargetIndex === -1) return;
 
-  const targetIndex = reordered.findIndex(item => item.id === targetId);
-  if (targetIndex === -1) return;
-
-  reordered.splice(targetIndex + (placement === 'after' ? 1 : 0), 0, question);
+  // 4. 插入新位置
+  reordered.splice(newTargetIndex + (placement === 'after' ? 1 : 0), 0, question);
+  
+  // 5. 重新分配該單元所有題目的 sortOrder (如果你有依賴此欄位)
+  // （目前你的邏輯應該是依賴陣列的 index，所以直接 emit 即可）
+  
   emit('reorder', reordered);
 };
 
@@ -239,7 +258,7 @@ const copySelectedToUnit = () => {
     </section>
 
     <section ref="flowCanvas" class="flow-canvas" role="list" aria-label="題目作答流程">
-      <div v-for="(q, index) in props.questions" :key="q.id" class="flow-node-wrap">
+      <div v-for="(q, index) in filteredQuestions" :key="q.id" class="flow-node-wrap">
         <article class="flow-node" role="listitem" tabindex="0" draggable="true"
           :class="{
             'is-dragging': draggedQuestionId === q.id,
@@ -285,7 +304,7 @@ const copySelectedToUnit = () => {
         </div>
       </div>
 
-      <div v-if="props.questions.length === 0" class="flow-empty">
+      <div v-if="filteredQuestions.length === 0" class="flow-empty">
         <span>◇</span>
         <strong>流程目前是空的</strong>
         <p>先回到備課中心新增題目，節點就會出現在這裡。</p>
@@ -738,6 +757,7 @@ const copySelectedToUnit = () => {
   line-height: 1.4;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .node-select {
