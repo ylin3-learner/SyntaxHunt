@@ -127,6 +127,36 @@ graph TD
     LT_Proxy --> LanguageTool
 ```
 
+### 題目路由資料流 (Student Question Routing)
+
+這張圖展示了系統如何根據「班級模式」，決定將哪些題目渲染給學生。
+
+```mermaid
+flowchart TD
+    subgraph Data ["☁️ 雲端題庫"]
+        QB[Question Bank<br>已依單元分類]
+    end
+
+    subgraph App ["📱 學生端 (App.vue)"]
+        Start((進入頁面)) --> Load[載入題庫]
+        Load --> ModeCheck{當前模式?}
+        
+        ModeCheck -->|自學模式| ShowSelector[顯示單元下拉選單]
+        ShowSelector --> UserSelect[學生點選單元]
+        UserSelect --> Filter1[過濾出該單元題目]
+        
+        ModeCheck -->|上課模式| LockUI[隱藏下拉選單<br>鎖定畫面]
+        LockUI --> TeacherPush[接收老師廣播]
+        TeacherPush --> AutoSwitch[自動切換至該題所屬單元]
+        
+        Filter1 --> Render[渲染當前題目]
+        AutoSwitch --> Render
+    end
+    
+    QB -. "Fetch" .-> Load
+    Render --> End((開始作答))
+```
+
 ---
 
 ## 🔒 多租戶與安全性 (教師資料隔離)
@@ -186,6 +216,7 @@ sequenceDiagram
 - **片語塊視覺化**：多字片語顯示為不可分割的藍色磚塊。
 - **無標籤空間拼圖**：巨觀拖拉階段只顯示圖片，不顯示文字，避免洩題。
 - **文字比對發音面板**：透過 Deepgram 辨識發音，精準畫線標示漏讀單字。
+- **單元選擇器 (自學模式)**：在自由進度模式下，學生可透過頂部的下拉選單，自由選擇想複習的單元。但當老師開啟「上課模式」時，選單會自動隱藏，並鎖定為老師當前推播的題目單元。
 
 ### 給老師（Teacher Admin）
 - **進度監控面板 (Presence Dashboard)**：輸入目標人數，系統會即時統計「已完成人數」，並顯示高亮進度條。

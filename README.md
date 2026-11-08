@@ -132,6 +132,36 @@ graph TD
     LT_Proxy --> LanguageTool
 ```
 
+### Data Flow: Student Question Routing
+
+This diagram illustrates how questions are routed based on the classroom mode.
+
+```mermaid
+flowchart TD
+    subgraph Data ["☁️ Cloud Question Bank"]
+        QB[Question Bank<br>Grouped by Units]
+    end
+
+    subgraph App ["📱 Student App (App.vue)"]
+        Start((Enter App)) --> Load[Load Questions]
+        Load --> ModeCheck{Classroom Mode?}
+        
+        ModeCheck -->|Self-Paced| ShowSelector[Show Unit Selector]
+        ShowSelector --> UserSelect[Student Selects Unit]
+        UserSelect --> Filter1[Filter Questions by Unit]
+        
+        ModeCheck -->|Class Mode Lock| LockUI[Hide Selector<br>Lock UI]
+        LockUI --> TeacherPush[Receive Teacher Broadcast]
+        TeacherPush --> AutoSwitch[Auto-switch to Pushed Question's Unit]
+        
+        Filter1 --> Render[Render Current Question]
+        AutoSwitch --> Render
+    end
+    
+    QB -. "Fetch" .-> Load
+    Render --> End((Start Playing))
+```
+
 ---
 
 ## 🔒 Multi-Tenancy & Security (Teacher Isolation)
@@ -194,6 +224,7 @@ sequenceDiagram
 - **Phrase Chunking Visuals**: Multi-word units appear as distinct blue tiles.
 - **Speech Playback**: Hear the sentence through a native English voice or Deepgram TTS.
 - **Pronunciation Practice**: Record your voice for Deepgram STT transcription and word-by-word comparison.
+- **Unit Selector (Self-Paced Mode)**: Students can use the dropdown menu to filter questions by specific curriculum units. However, when the teacher enables Class Mode, this selector is hidden, and the system automatically locks to the question pushed by the teacher.
 
 ### For Teachers (Teacher Admin)
 - **Presence Dashboard**: Input the target student count. Watch the live progress bar update in real-time. Seat codes are displayed in the grid.
