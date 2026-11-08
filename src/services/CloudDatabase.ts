@@ -20,6 +20,7 @@ export interface LearningLog {
   status?: 'PENDING' | 'SUCCESS' | 'FAILED' | null;
   diagnosis?: DiagnosticSignal | null;
   created_at?: string;
+  teacher_id?: string;
 }
 
 export type LanguageToolMatch = LanguageToolDiagnosticData;
@@ -139,16 +140,29 @@ export const CloudDatabase = {
   // 寫入學習軌跡
   async logEvent(log: LearningLog): Promise<void> {
     try {
-      console.log('🚀 準備寫入軌跡:', log);
-      // 如果 learning_logs 也有 RLS，你可能需要根據 schema 決定是否補上 teacher_id
-      const { error } = await supabase.from('learning_logs').insert([log]);
+      // 1. 優先從 sessionStorage 拿 (學生端)
+      let teacherId = sessionStorage.getItem('teacher_id');
+
+      // 2. 如果沒有，嘗試從 Auth 拿 (老師端)
+      if (!teacherId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) teacherId = user.id;
+      }
+
+      // 3. 如果真的都沒有，就放棄寫入，避免寫入 NULL
+      if (!teacherId) {
+        console.warn('⚠️ 找不到 teacher_id，取消寫入軌跡。');
+        return;
+      }
+
+      // 4. 把 teacher_id 補進資料中
+      const logWithTeacher = { ...log, teacher_id: teacherId };
+
+      console.log('🚀 準備寫入軌跡:', logWithTeacher);
+      const { error } = await supabase.from('learning_logs').insert([logWithTeacher]);
+
       if (error) {
-        console.error('寫入紀錄失敗:', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-        });
+        console.error('寫入紀錄失敗:', error);
         return;
       }
       console.info('[作答紀錄] 寫入成功:', {
@@ -160,21 +174,18 @@ export const CloudDatabase = {
     }
   },
 
-  // 讀取所有學習軌跡
+  // 讀取軌跡：只抓自己的
   async fetchLogs(): Promise<LearningLog[]> {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      let query = supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return []; // 老師未登入不給看
+
+      const { data, error } = await supabase
         .from('learning_logs')
         .select('*')
+        .eq('teacher_id', user.id) // 嚴格過濾
         .order('created_at', { ascending: false });
 
-      // 如果有登入，且你的 learning_logs 有 teacher_id 欄位，可以加上過濾
-      // if (session) {
-      //   query = query.eq('teacher_id', session.user.id);
-      // }
-
-      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     } catch (e) {
@@ -186,19 +197,14 @@ export const CloudDatabase = {
   // 批次刪除所有學習軌跡
   async clearAllLogs(): Promise<boolean> {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return false;
 
-      let query = supabase
+      const { error } = await supabase
         .from('learning_logs')
         .delete()
-        .neq('id', 0);
+        .eq('teacher_id', user.id); // 嚴格過濾
 
-      // 如果有登入，且你的 learning_logs 有 teacher_id 欄位，可以加上過濾
-      // if (session) {
-      //   query = query.eq('teacher_id', session.user.id);
-      // }
-
-      const { error } = await query;
       if (error) throw error;
       return true;
     } catch (error) {
