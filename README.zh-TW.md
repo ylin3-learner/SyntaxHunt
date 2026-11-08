@@ -4,7 +4,7 @@
 
 一套以「認知歷程管線」為核心、專為 K-12 設計的互動式英語文法學習工具。
 
-本專案以 **Vue 3、TypeScript、Vite 與 Supabase** 打造，教學主題為**後位修飾（關係子句與介系詞片語）**，特別針對母語干擾（中文為前位修飾、英文為後位修飾）與結構性迷思（例如 `who she` 這類多餘代名詞）。教師也可建立 `BUILD`、`REDUCE` 或 `MORPH` 通用文法題，並透過本地規則引擎及 LanguageTool 進階診斷辨識作答錯誤。
+本專案以 **Vue 3、TypeScript、Vite 與 Supabase** 打造，教學主題為**後位修飾（關係子句與介系詞片語）**，特別針對母語干擾與結構性迷思。教師也可建立 `BUILD`、`REDUCE` 或 `MORPH` 通用文法題，並透過本地規則引擎及 LanguageTool 進階診斷辨識作答錯誤。
 
 範例課程以一節 45 分鐘的**國三（115 iE5 Unit 5：*The Man Who Shook Hands with Me Is My Favorite Star*）**為設計情境。
 
@@ -48,7 +48,7 @@ flowchart TD
     Data["📊 即時錯誤軌跡"] -.-> Teacher((教師數據儀表板))
     Micro -.-> Data
 
-    subgraph ClassroomMgmt ["🎓 班級經營 (全新功能)"]
+    subgraph ClassroomMgmt ["🎓 班級經營"]
         ClassMode["🔒 上課模式<br>鎖定學生進度"]
         Presence["📊 進度監控 (Presence)<br>即時統計完成人數"]
         SelfPace["🟢 自學模式<br>允許自由前進"]
@@ -59,84 +59,87 @@ flowchart TD
     SelfPace -.-> Practice
 ```
 
-1. **片語預習與測驗 (Chunk Phrase Quiz)**：學生看圖聽發音，從相似片語中選出正確的。
-2. **空間建構 (Macro Drag)**：學生親手把「無文字標籤」的圖片塊拖過中線，建立英文後位修飾的空間語序感。
-3. **標準題與轉換題 (Standard & Reduce)**：包含聽力輸入、聚焦形式（使用獨創的**減法垃圾桶**機制）、語音輸出與意識提升。
-4. **通用文法畫布 (General Grammar Canvas)**：20 個課綱章節共用 `BUILD`（語序結構）、`MORPH`（字形變化）、`REDUCE`（刪減合併）、`MATRIX_GATE`（句法特徵）、`PRAGMATIC_HP`（語情互動）及 `GRAVITY_SWITCH`（假設語氣）六種畫布。章節／考點提供預設畫布，教師可逐題覆寫；題目設定儲存在既有 JSONB，不需新增資料表或 AI 模型。
-
 ---
 
 ## 🏗️ 系統架構圖 (System Architecture)
 
-本系統具備高度解耦特性，透過 **Supabase** 作為中樞，將前端 Vue 3 應用、教師端、以及外部的 AI 語音服務完美串接。
+本系統具備高度解耦特性，採用 **領域驅動設計 (DDD)** 與 **整潔架構 (Clean Architecture)**，透過 **Supabase** 作為中樞，將前端 Vue 3 應用、教師端、以及外部的 AI 語音服務完美串接。
 
 ```mermaid
 graph TD
     subgraph Client ["Frontend (Vue 3 + TypeScript)"]
         direction TB
-        AdminUI["👩‍🏫 Teacher Admin<br>(TeacherAdmin.vue)"]
-        StudentUI["👨‍🎓 Student Interface<br>(App.vue)"]
+        AdminUI["👩‍🏫 教師備課中心<br>(TeacherAdmin.vue)"]
+        StudentUI["👨‍🎓 學生介面<br>(App.vue)"]
         
-        subgraph Composables ["Core Logic (Composables)"]
-            Timer["⏱️ useQuizTimer"]
-            Focus["👁️ useFocusMonitor"]
-            Sound["🔊 useSound"]
-            Speech["🗣️ useSpeech"]
+        subgraph Components ["UI 組件"]
+            Forms["表單<br>(Grammar/Standard)"]
+            Stages["遊戲階段<br>(Preview/Input/Macro/Micro)"]
+        end
+
+        subgraph Composables ["核心邏輯 (Composables)"]
+            QuizFlow["🎮 useQuizFlow"]
+            QuestionForm["📝 useQuestionForm"]
+            Auth["🔐 useAdminAuth"]
             Sync["📡 useClassroomSync"]
+        end
+
+        subgraph Domain ["領域層"]
+            Builder["⚙️ QuestionBuilder"]
+            Rules["📏 GrammarRules"]
         end
     end
 
     subgraph Supabase ["Supabase Cloud Backend"]
-        DB[("PostgreSQL")]
+        AuthProvider[("Auth (JWT)")]
+        DB[("PostgreSQL 含 RLS 保護")]
         Realtime[("Realtime WebSocket")]
         subgraph EdgeFunctions ["Edge Functions (Deno)"]
             Action_Proxy["teacher-action"]
             TTS_Proxy["deepgram-tts"]
             STT_Proxy["edge-stt"]
-            LT_Proxy["lt-proxy<br>(LanguageTool Proxy)"]
+            LT_Proxy["lt-proxy"]
         end
     end
 
-    subgraph External ["External Services & Hosting"]
+    subgraph External ["外部服務"]
         Deepgram["Deepgram API"]
-        subgraph Render ["Render (Free Tier)"]
-            LanguageTool["Self-hosted LanguageTool<br>(Docker)"]
-            KeepAlive["GitHub Actions<br>(Cron Job Ping)"]
-        end
+        LanguageTool["自架 LanguageTool<br>(Docker)"]
     end
 
-    BrowserTTS["Browser SpeechSynthesis"]
+    BrowserTTS["瀏覽器 SpeechSynthesis"]
 
     %% Data Flow
-    AdminUI -- "1. Action Request (with Pwd)" --> Action_Proxy
-    Action_Proxy -- "2. Update State" --> DB
-    DB -- "3. Postgres Changes" --> Realtime
-    Realtime -- "4. Sync State" --> Sync
-    Sync -- "5. Update UI & Timer" --> StudentUI
+    AdminUI -- "1. 登入驗證 (Email/密碼)" --> AuthProvider
+    AdminUI -- "2. 發送請求 (JWT)" --> Action_Proxy
+    Action_Proxy -- "3. 更新狀態" --> DB
+    DB -- "4. Postgres 變更" --> Realtime
+    Realtime -- "5. 同步狀態" --> Sync
+    Sync -- "6. 更新 UI 與計時器" --> StudentUI
     
-    StudentUI -- "Native TTS" --> BrowserTTS
-    StudentUI -- "Fallback TTS" --> TTS_Proxy
+    StudentUI -- "原生 TTS" --> BrowserTTS
+    StudentUI -- "備用 TTS" --> TTS_Proxy
+    StudentUI -- "STT 請求" --> STT_Proxy
+    StudentUI -- "進階文法檢查" --> LT_Proxy
+    
     TTS_Proxy --> Deepgram
-    
-    StudentUI -- "STT Request" --> STT_Proxy
     STT_Proxy --> Deepgram
-    
-    StudentUI -- "Advanced grammar check" --> LT_Proxy
     LT_Proxy --> LanguageTool
-    KeepAlive -. "Prevent Cold Start" .-> LanguageTool
-
-    StudentUI -.-> Composables
-    AdminUI -.-> Speech
 ```
 
 ---
 
-## 🎙️ 跨平台混合式語音架構 (Hybrid TTS & STT)
+## 🔒 多租戶與安全性 (教師資料隔離)
 
-為了支援不同語音包環境，語音播放會優先使用可用的原生英文語音，並可透過 Supabase Edge Function 呼叫 Deepgram。
+本系統嚴格實作多租戶架構，確保每位教師只能看到並修改自己的題庫與班級狀態。
 
-- **文字轉語音 (TTS)**：若有可用的原生英文語音，優先使用；否則透過 `deepgram-tts` Edge Function 呼叫 **Deepgram TTS**。Deepgram 請求失敗時不會自動改用原生語音。
-- **語音轉文字 (STT)**：使用瀏覽器 `MediaRecorder` 錄音，再將錄音傳至 `edge-stt` Edge Function，由 **Deepgram STT** 轉錄。若辨識失敗，學生仍可播放自己的錄音並繼續；系統不會自動改用瀏覽器語音辨識。
+- **Supabase Auth**：教師透過 Email 與密碼登入 (`signInWithPassword`)。
+- **資料庫 Schema**：`questions`、`learning_logs`、`classroom_state` 皆包含 `teacher_id UUID REFERENCES auth.users(id) DEFAULT auth.uid()` 欄位。
+- **資料列級別安全 (RLS)**：
+  - **教師**：只能對 `auth.uid() = teacher_id` 的資料進行 `SELECT`、`INSERT`、`UPDATE`、`DELETE`。
+  - **學生**：**不會**直接存取 `questions` 表。學生端題庫來自 `localStorage` 或預設題目，並透過 `room_code` 加入老師的 Realtime 頻道。
+- **座號 (Seat Codes)**：學生隨機分配 `S01`–`S30` 的座號並存入 `sessionStorage`，透過 `trackPresence(seatCode)` 傳送給老師端顯示。
+- **頻道隔離**：Realtime 頻道嚴格命名為 `classroom_sync_${teacherId}`，防止跨租戶資料外洩。
 
 ---
 
@@ -153,17 +156,16 @@ sequenceDiagram
     participant S2 as 👨‍🎓 學生 B (Slave)
 
     Note over T,RT: 情境一：老師開啟「上課模式」並設定目標 30 人
-    T->>EF: 開啟上課模式 (Target: 30)
+    T->>EF: 開啟上課模式 (附帶 JWT)
     EF->>RT: 更新 classroom_state (is_class_mode = true)
     RT-->>S: 收到同步狀態 (isClassMode = true)
     RT-->>S2: 收到同步狀態 (isClassMode = true)
 
     Note over S,RT: 情境二：學生作答與 Presence 進度追蹤
     S->>S: 完成題目 (handleSuccess)
-    S->>RT: track({ status: 'completed' })
+    S->>RT: track({ status: 'completed', seatCode: 'S01' })
     RT-->>T: 觸發 Presence Sync (更新完成人數: 1)
-    RT-->>S2: (學生B 還在作答，狀態維持 answering)
-
+    
     Note over S,T: 情境三：上課模式鎖定
     S->>S: 點擊「下一關」
     S-->>S: 按鈕 Disabled (等待老師發送)
@@ -179,162 +181,30 @@ sequenceDiagram
 ## ✨ 主要功能
 
 ### 給學生
-- **減法垃圾桶 UI（Reduce 模式）**：學生點擊多餘的詞（如 `who`, `is`）丟進垃圾桶。視覺化看著句子縮短，親眼見證文法轉換的過程。
-- **上課模式鎖定 (Class Mode Lock)**：當老師開啟上課模式時，「下一關」按鈕會被禁用，學生必須等待老師統一發送指令，確保全班節奏一致。
+- **減法垃圾桶 UI（Reduce 模式）**：學生點擊多餘的詞丟進垃圾桶，視覺化看著句子縮短。
+- **上課模式鎖定 (Class Mode Lock)**：當老師開啟上課模式時，「下一關」按鈕會被禁用。
 - **片語塊視覺化**：多字片語顯示為不可分割的藍色磚塊。
 - **無標籤空間拼圖**：巨觀拖拉階段只顯示圖片，不顯示文字，避免洩題。
 - **文字比對發音面板**：透過 Deepgram 辨識發音，精準畫線標示漏讀單字。
 
 ### 給老師（Teacher Admin）
-- **進度監控面板 (Presence Dashboard)**：輸入目標人數，系統會即時統計「已完成人數」，並顯示高亮進度條（如 `5 / 30 人`），讓老師一眼掌握全班狀況。
+- **進度監控面板 (Presence Dashboard)**：輸入目標人數，系統會即時統計「已完成人數」，並顯示高亮進度條。
 - **上課模式開關 (Class Mode Toggle)**：一鍵鎖定全班進度，禁止學生偷跑。
 - **漏斗式出題（Funnel Authoring）**：用 `[ ]` 框出要保留的片語，系統自動視覺化「保留」與「丟棄」的字。
-- **語意控制 (Person vs. Thing)**：在出題表單中提供專屬切換鈕，讓老師明確指定先行詞是「人」或「物」。這徹底移除了過去脆弱的字串比對，確保本地規則引擎能精準判斷 `who` 與 `which` 的錯誤。
-- **視覺化題目流程與單元資料夾**：開啟全螢幕節點畫布，以連線檢視及調整題目順序；可拖曳節點重新排序，或選取節點後按 `Alt` + `←` / `→` 微調。
-- **單元批次整理**：先建立單元資料夾，再將單題拖入資料夾，或勾選多題後批次移入。未選取的題目會留在「未分類」收件匣；要在不同單元重用題目時，可選擇「複製到」以保留原題。也能直接從選取的單元新增已帶入單元名稱的新題。整理變更會立即儲存到本機與雲端；按 **完成編排** 返回備課中心，最後按 **完成備課，開始上課** 儲存題庫並結束編輯。
+- **語意控制 (Person vs. Thing)**：明確指定先行詞是「人」或「物」，確保本地規則引擎能精準判斷 `who` 與 `which`。
+- **視覺化題目流程與單元資料夾**：開啟全螢幕節點畫布，以連線檢視及調整題目順序。
 - **主從遠端控制**：老師可一鍵推送題目、強制重置計時器，或隨時點擊 `+30s` 為全班加時。
 
 ### 如何使用通用文法題
 
 1. 開啟 **教師備課中心**，在題目編輯器選擇 **通用文法題**。
-2. 先選課綱章節，再選具體文法考點。系統會推薦唯一互動模式、學習焦點與推薦理由；老師不能任意切換模式。
-3. 輸入來源句與精確的正確答案。`REDUCE` 的來源句填完整句，答案填刪減後的句子。
-4. 點選 **本地切詞**，或手動拆解句子。若要將多個字詞視為一塊，請在來源句用中括號標示，例如 `[in a blue uniform]`。在膠囊預覽中檢查並編輯拆解結果。
-5. 使用 `MORPH` 考點時，只勾選一個可變形目標字塊，並輸入逗號分隔的形式，例如 `go, goes, went`。學生會看到固定句子，點擊該字詞選擇形式。切詞使用 compromise.js 與不規則動詞 JSON 表；必要時請手動補齊或修正形式。
-6. 點選 **加入題庫**。若要指定學生目前作答的題目，請在該題列按 **發送給全班**；或按 **完成備課** 儲存題庫並關閉編輯器（之後可重新開啟教師備課中心再發送）。`BUILD` 會打亂組句字磚，`PRAGMATIC_HP` 會打亂語情題字庫，`MATRIX_GATE` 只打亂候選動詞。`MORPH` 與 `GRAVITY_SWITCH` 固定句子；`REDUCE` 保留來源句順序，讓學生聚焦刪減與簡化。
+2. 先選課綱章節，再選具體文法考點。
+3. 輸入來源句與精確的正確答案。
+4. 點選 **本地切詞**，或手動拆解句子。
+5. 使用 `MORPH` 考點時，只勾選一個可變形目標字塊，並輸入逗號分隔的形式。
+6. 點選 **加入題庫**。若要指定學生目前作答的題目，請在該題列按 **發送給全班**。
 
-> **教師登入提醒：**教師登入現使用 Supabase Auth（`supabase.auth.signInWithPassword`，Email + 密碼）。登入成功後，`isAdminAuthenticated` 會被設定並儲存在 `sessionStorage`。舊的固定 `admin123` 示範密碼僅作為 `joinRoom('admin123', studentId)` 的佔位符 teacherId，直到提供真正的教師帳號為止。這不是安全的身分驗證，請勿將此教師介面直接公開部署至正式環境。
-
-## 📷 UI 畫面截圖
-
-以下是使用代表性課程資料，從實際 Vue UI 擷取的畫面。文法畫布為實際元件，教師介面則由應用程式直接擷取。
-
-| 學生課程畫面 | 教師登入 |
-| :---: | :---: |
-| ![學生課程介面](docs/images/student-ui.png) | ![教師登入對話框](docs/images/teacher-auth.png) |
-
-| 教師出題編輯器 | 題目流程與單元資料夾 | 教師數據分析 |
-| :---: | :---: | :---: |
-| ![教師出題編輯器](docs/images/teacher-admin.png) | ![題目流程畫布](docs/images/teacher-flow.png) | ![教師分析儀表板](docs/images/teacher-analytics.png) |
-
-| `BUILD` — 打亂字磚組句 | `REDUCE` — 保留來源語序並移除字塊 |
-| :---: | :---: |
-| ![BUILD 畫布：字磚已打亂](docs/images/canvas-build.png) | ![REDUCE 畫布：來源句保留原順序](docs/images/canvas-reduce.png) |
-
-| `MORPH` — 固定句子並選擇字形 | `GRAVITY_SWITCH` — 固定條件句 |
-| :---: | :---: |
-| ![MORPH 固定句型畫布](docs/images/canvas-morph.png) | ![GRAVITY_SWITCH 條件句畫布](docs/images/canvas-gravity-switch.png) |
-
-| `MATRIX_GATE` — 打亂候選字卡 | `PRAGMATIC_HP` — 打亂語情字庫 |
-| :---: | :---: |
-| ![MATRIX_GATE 特徵選擇介面](docs/images/canvas-matrix-gate.png) | ![PRAGMATIC_HP 語情互動介面](docs/images/canvas-pragmatic-hp.png) |
-
----
-
-## 🔬 文法規則引擎與診斷
-
-`src/rules/grammarRules.ts` 透過註冊表執行規則，檢查關係代名詞後的重複代名詞、依先行詞判斷主謂一致、*who / which* 選擇、`REDUCE` 題的殘留字、常見主謂一致、`a/an` 選擇及 `MORPH` 字形。概念專屬規則放在 `src/rules/validators/`，由註冊表自動載入。若規則無法給出明確診斷，則以 LCS 字詞序列對齊學生答案與正解，分類遺漏、多餘、替換或語序錯誤。這些是規則式啟發判斷，不是通用英文解析器；主謂一致判斷範圍受本地動詞表限制。
-
-| 診斷碼類別 | 範例 | 本地診斷情境 |
-| :--- | :--- | :--- |
-| `M:*` | `M:VERB`、`M:AUX`、`M:DET`、`M:PREP`、`M:CONJ` | 遺漏必要字詞或連接詞。 |
-| `R:*` | `R:VERB:SVA`、`R:VERB:TENSE`、`R:VERB:FORM`、`R:VERB:MOOD`、`R:RELATIVE`、`R:PREP`、`R:DET`、`R:NOUN:NUM`、`R:CONJ` | 動詞形式、關係代名詞、介系詞、限定詞、名詞單複數或連接詞有誤。 |
-| `U:*` | `U:PRON`、`U:VERB`、`U:RELATIVE`、`U:CONJ` | 多出不必要的代名詞、動詞、關係代名詞或連接詞。 |
-| `O:*` | `O:WRONG_ORDER`、`O:INVERSION` | 字詞順序錯誤，包含倒裝句助動詞位置不正確。 |
-| `UNKNOWN_ERROR` | — | 本地規則無法判定特定錯誤，接續請 LanguageTool 提供建議。 |
-
-本地診斷保留 K-12 迷思錯誤碼及 SST 類別：`Omission`（遺漏）、`Addition`（多加）、`Misformation`（形式錯誤）或 `Misordering`（語序錯誤）。若本地規則無法分類錯誤答案，系統會透過 `lt-proxy` Supabase Edge Function 呼叫 LanguageTool，保留原生訊息、分類、Rule ID、替換建議及字元範圍，並將字元偏移映射回畫面字塊以供高亮。服務逾時（8 秒，以因應 Render 冷啟動）或失敗時會顯示中性提示，並允許學生略過到下一題。`BUILD` 與 `MORPH` 模式也可在尚未填滿所有字塊前檢查目前答案。
-
-教師建立通用文法題時先選課綱章節，再選具體考點；系統依考點提供推薦互動、學習焦點與推薦理由。`BUILD` 只打亂出題字庫、不改儲存的正解；`MORPH` 與 `GRAVITY_SWITCH` 固定句子；`REDUCE` 從來源句原順序開始；`MATRIX_GATE` 只打亂候選字卡；`PRAGMATIC_HP` 打亂語情題字庫。考點目錄將五大句型編到 BUILD，時態／比較級／動名詞／被動形式編到 MORPH，分詞與關係子句簡化及代名詞替換編到 REDUCE，特殊動詞與感官／使役動詞對比編到 MATRIX_GATE，助動詞及情緒語境編到 PRAGMATIC_HP，假設條件句則使用 GRAVITY_SWITCH。MORPH 題以固定句子呈現，學生點擊設定的目標字詞選擇形式，不需要字塊庫或句子卡槽。`autoChunk(sentence, concept)` 使用 compromise.js 確定性切詞與動詞辨識，優先查詢不規則動詞表，並將中括號片語保留為明確字塊；不呼叫 LLM。MORPH 選項以字串陣列儲存，`current_index` 表示初始選取形式，並保留 `morph_options` 舊欄位相容。未標註課綱考點的舊題會保留原本設定與畫布。
-
-### 2026-11-5:
-
-*   **上下文拼接 (Context Stitching)**：送出語言檢查時，系統會自動將 `contextCloze` 的前綴（prefix）與後綴（suffix）與學生的作答組合，還原成完整的句子，避免 LanguageTool 誤判（如首字大寫錯誤）。
-*   **精準偏移映射 (Offset Mapping)**：LanguageTool 回傳的字元偏移量（offset）會先扣除前綴長度，再透過 `mapOffsetToChunkIndex` 精準映射回學生的字塊陣列，確保紅字提示標示在正確的字塊上。
-
-### RuleRegistry 如何串起出題、遊戲介面與診斷
-
-RuleRegistry 是**本地診斷規則的插件註冊點**，不是出題表單或遊戲介面的路由器：
-
-1. **教師出題：**在 Teacher Admin 先選課綱章節，再選具體考點；考點會決定推薦互動、學習焦點與推薦理由。輸入句子和答案後，可用本地 `autoChunk` 切詞（也可手動編輯字塊及變形選項）。`autoChunk` 不會查詢 RuleRegistry。`MORPH` 考點只能設定一個變形目標。
-2. **遊戲介面：**`GrammarCanvas.vue` 依題目儲存的課綱考點、`concept` 與 `ui_mode` 選擇畫布，並不查詢已註冊規則。課綱考點會提供推薦模式；沒有已儲存考點的舊題則保留原本設定。現行路由如下：
-
-   | 題目設定 | 學生互動介面 |
-   | :--- | :--- |
-   | `MODAL_VERB` | 情態語氣壓力計 |
-   | `REDUCE` | 碎紙機式刪減 |
-   | `MORPH` + 已儲存的課綱考點，或舊題的時態／主謂一致／假設語氣／條件句概念 | 固定句子，點擊變形字詞選擇形式 |
-   | `BUILD` | 磁吸式句子卡槽 |
-   | 沒有概念或未符合以上組合 | 舊版畫布 |
-
-   下方 SVG 為**介面示意圖**。即時元件及學生／教師介面截圖請見[UI 畫面截圖](#-ui-畫面截圖)。學生實際看到的畫布依上表路由；一般字磚以點選操作而非拖曳，`REDUCE` 保留的字磚可使用左右箭頭調整詞序。`MORPH` 考點會固定句子，只呈現一個設定好的變形目標，不會同時要求學生排列句子字塊。
-
-   | `BUILD` — 組合句子字塊 | `REDUCE` — 移除多餘字塊 |
-   | :---: | :---: |
-   | ![BUILD 組句介面示意圖](docs/images/grammar-build-ui.svg) | ![REDUCE 刪減介面示意圖](docs/images/grammar-reduce-ui.svg) |
-
-   | `MORPH` — 選擇時態或動詞形式 | `MODAL_VERB` — 選擇情態強度 |
-   | :---: | :---: |
-   | ![固定句子 MORPH 介面：點擊單一目標字詞選擇形式](docs/images/grammar-morph-ui.svg) | ![情態動詞語氣壓力計介面示意圖](docs/images/grammar-modal-ui.svg) |
-3. **作答診斷：**學生送出答案後，`diagnoseGrammar` 執行通用規則，以及符合該題概念的專屬規則。`grammarRules.ts` 會 eager-load `src/rules/validators/*.ts`；每個插件以唯一 ID、驗證函式及可選的概念清單呼叫 `registerGrammarRule`。例如連接詞規則套用於子句概念、倒裝規則套用於問句／倒裝概念、情態動詞形式規則套用於 `MODAL_VERB`。明確的本地診斷訊號會沿用既有迷思回饋與紀錄流程；若本地規則無法分類，則呼叫 LanguageTool，並保留其原生診斷資料。
-
-因此，新增 validator 只會擴充本地診斷，不會自動新增教師表單選項或視覺互動；如需新概念或新畫布，還需視需求更新型別／概念選項及介面路由。新增規則時，將檔案放在 `src/rules/validators/` 並註冊唯一 ID。
-
-### 現有 UI 足以涵蓋 `Grammar_Scope.md` 嗎？
-
-教師出題表單已提供範圍內列出的所有文法概念，但這**不代表每種文法差異都有完整的遊戲建模或診斷能力**。目前對照如下：
-
-| 文法範圍 | 現有互動 | 覆蓋情況與限制 |
-| :--- | :--- | :--- |
-| 句子單位、S/V/O/C、五大句型 | `BUILD` | 可組合指定正解，但不會標示文法角色，也沒有各句型專屬題目機制。 |
-| 主謂一致、時態與狀態 | `MORPH` 或 `BUILD` | 可由教師設定字形選項並依正解判斷；`MORPH` 聚焦固定句中的單一目標字詞，但尚未完整建模所有時態／狀態組合。 |
-| 問句與倒裝 | `BUILD` | 可組合問句／倒裝句；本地倒裝診斷是啟發式規則，並非通用問句解析器。 |
-| 連接詞、名詞／形容詞／副詞子句 | `BUILD`／`REDUCE` | 可組合或刪減教師設定的字塊；確定性切詞不會辨識子句邊界或文法角色，教師可用中括號指定片語並編輯生成的字塊。 |
-| 假設語氣與條件句 | `MORPH`／`BUILD` | 可練習教師提供的形式與語序，但沒有專門呈現兩個子句關係的條件句互動；本地語氣診斷僅涵蓋少數形式。 |
-| 情態動詞（目前範圍文件之外的額外概念） | 情態強度計加 `BUILD` | 強度軸僅為粗略提示，無法涵蓋情態動詞依語境而變的所有語意；本地檢查主要針對情態動詞後接原形。 |
-
-**建議：**若要開始練習這些範圍，不需要立刻新增頂層遊戲題型；`BUILD`、`REDUCE`、`MORPH` 已涵蓋組合、移除與變形三種基本操作。但目前也不足以宣稱已完整支援 K–12 文法。建議先在既有模式補強 S/V/O/C 與子句結構鷹架、豐富時態／狀態選項、增加雙子句條件句提示，並擴充診斷規則。只有當某概念無法用字塊組合、刪減或形式選擇表達時，才需要新增獨立遊戲題型。
-
-### 實作與部署進度（2026-11-07）
-
-自適應畫布、舊題轉接器、compromise.js 本地切詞、本地規則引擎及 LanguageTool 診斷鏈路均已實作。
-
-**班級管理與教師隔離（新功能）：**
-- `questions`、`learning_logs`、`classroom_state` 現皆有 `teacher_id UUID REFERENCES auth.users(id) DEFAULT auth.uid()` 欄位。
-- `learning_logs` 額外新增 `seat_code TEXT` 欄位。
-- 三張表皆啟用 RLS，並建立 `auth.uid() = teacher_id` 的存取 Policy（僅限 authenticated 使用者）。
-- `useClassroomSync.joinRoom(onReceive, teacherId, studentId)` 現將 Realtime 頻道限定為 `classroom_sync_${teacherId}`，避免不同教師共用同一個 Presence 頻道。
-- 學生會取得隨機座號（`S01`–`S30`）並儲存在 `sessionStorage`，透過 `trackCompleted(seatCode)` 傳送，並在 Presence 同步中顯示。
-- `TeacherAnalytics.vue` 新增 `selectedSeat` 篩選器（`'ALL'` 或任何觀察到的 `seat_code`），用於縮減 `sstDistribution` 與 `errorTree` 的計算範圍。錯誤答案若沒有明確的本地診斷，瀏覽器會呼叫 Supabase `lt-proxy` Edge Function，再由代理轉送文字至已設定的 Render  LanguageTool，並回傳原生診斷供畫面顯示與紀錄。代理已處理瀏覽器 `POST` 預檢；若未設定 `LANGUAGETOOL_URL`，會明確回傳設定錯誤。舊題載入畫布時才轉接，不會改寫 `questions` 資料表。
-
-教師密碼驗證成功後，系統會自動透過相同代理送出一段有效短句，預熱 LanguageTool 服務。此請求不會建立學習紀錄；即使預熱失敗，也不會阻擋教師進入系統。
-
-### 自架 LanguageTool (Render)
-1. 在 Render 建立一個新的 Web Service，選擇 **Deploy an existing image**，填入 `docker.io/erikvl87/languagetool:latest`。
-2. 設定環境變數以防 OOM：
-   - `Java_Xms=128m`
-   - `Java_Xmx=320m`
-   - `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=60.0 -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m`
-3. 部署成功後，將 Render 提供的 URL（加上 `/v2/check`）設定到 Supabase Secrets：
-   ```bash
-   npx supabase secrets set LANGUAGETOOL_URL=https://your-render-url.onrender.com/v2/check
-   npx supabase functions deploy lt-proxy
-   ```
-
----
-
-## 🛠️ 技術棧與工程
-
-- **前端**：Vue 3（Composition API）+ Vite + TypeScript
-- **本地 NLP**：compromise.js + `english-verbs-irregular`
-- **診斷引擎**：Local Rule Registry + LCS algorithm + LanguageTool (Deep Semantic Check)
-- **後端與資料庫**：Supabase（PostgreSQL、Edge Functions、Realtime Presence）
-- **基礎設施**: Render (Docker / LanguageTool) + GitHub Actions (Keep-Alive)
-- **語音 (TTS & STT)**：可用的原生 `SpeechSynthesis` 語音；Deepgram TTS／STT 透過 Edge Functions 呼叫
-- **拖曳**：原生 Pointer Events 與瀏覽器 HTML Drag and Drop API
-
-### 🛡️ 基礎設施與防冷啟動 (Infrastructure & Keep-Alive)
-為達成零營運成本，本系統將 LanguageTool 部署於 Render 免費方案，並透過 GitHub Actions (`keep-alive.yml`) 每 10 分鐘發送一次 `POST` 請求進行保活。此機制確保課堂上的文法診斷請求不會遭遇 30-60 秒的冷啟動延遲
+> **教師登入提醒：**教師登入已全面改為 Supabase Auth（`signInWithPassword`，Email + 密碼）。**舊的 `admin123` 示範密碼已移除**。請務必先到 Supabase 後台的 Authentication 建立教師帳號，才能登入系統。
 
 ---
 
@@ -348,30 +218,19 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### Supabase 設定
-1. 請先建立應用程式使用的基礎資料表；此程式庫未包含建立這些資料表的遷移：
-   - `questions`：`id`、`data`、`created_at`。
-   - `learning_logs`：`id`、`student_name`、`question_id`、`error_code`、`created_at`。資料表建好後，請套用遷移新增 `sst`、`status`、`diagnosis`、`source`、`category`、`rule_id` 等診斷欄位。
-   - `classroom_state`：`id`、`current_question_id`、`timer_end_time`、`is_class_mode`、`target_count`、`updated_at`。新增 `id = 'current_state'` 的資料列，並為此表開啟 Realtime。
-
-   請依部署需求設定前端 Supabase anon key 所需的資料表存取政策。前端會直接讀寫題庫與學習紀錄；教師課堂狀態則透過 `teacher-action` Edge Function 更新。
-2. 套用資料庫遷移並部署 Edge Functions：
+1. 建立基礎資料表 (`questions`, `learning_logs`, `classroom_state`)。
+2. 套用最新的多租戶與 RLS 遷移腳本：
    ```bash
-   npx supabase link --project-ref <你的 Supabase project ref>
    npx supabase db push
+   ```
+3. 部署 Edge Functions：
+   ```bash
    npx supabase functions deploy deepgram-tts
    npx supabase functions deploy edge-stt
    npx supabase functions deploy teacher-action
    npx supabase functions deploy lt-proxy
    ```
-   遷移 `20261107120000_add_teacher_id_and_seat_code.sql` 會將 `teacher_id` 新增到 `questions`、`learning_logs`、`classroom_state`，將 `seat_code` 新增到 `learning_logs`，對三張表啟用 RLS，並建立 `auth.uid() = teacher_id` 的存取 Policy。
-3. 設定服務所需的 Secrets：
-   ```bash
-   npx supabase secrets set DEEPGRAM_API_KEY=your_deepgram_key
-   npx supabase secrets set LANGUAGETOOL_URL=https://lt-proxy-xxx.run.app/v2/check
-   ```
-   `LANGUAGETOOL_URL` 僅在啟用 LanguageTool 診斷時需要。示範版請勿設定 `TEACHER_PASSWORD`，以使用固定的 `admin123`；若設定其他值，會與前端密碼不符。
-
-若寫入 `learning_logs` 出現 HTTP 400，請先檢查瀏覽器 console 的 Supabase `code` 與 `message`，並確認 migration 已套用到目前前端連線的同一個 Supabase 專案。若錯誤指出欄位不在 schema cache，先確認資料表已有該欄位；若欄位已存在，再於 Supabase SQL Editor 執行 `notify pgrst, 'reload schema';` 更新 API schema cache。
+4. 到 **Supabase Dashboard -> Authentication -> Users** 建立一組教師帳號。
 
 ### 開發與測試
 ```bash
