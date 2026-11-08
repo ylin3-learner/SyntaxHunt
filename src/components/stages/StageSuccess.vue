@@ -47,6 +47,17 @@ const isLastQuestion = computed(() => props.currentIndex >= props.questionBankLe
 </template>
 
 <style scoped>
+.success-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start; /* 改為 flex-start 避免撐開 */
+  flex: 1;
+  text-align: center;
+  animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  padding: 10px 0 40px 0; /* 底部留白 */
+  width: 100%;
+}
 .confetti {
   font-size: 2rem;
   margin-bottom: 12px;

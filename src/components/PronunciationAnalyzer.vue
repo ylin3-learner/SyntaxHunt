@@ -217,11 +217,6 @@ onUnmounted(() => {
   border-bottom-color: #46a302;
 }
 
-.btn-skip.is-primary:active {
-  border-bottom-width: 0;
-  transform: translateY(4px);
-}
-
 .analyzer-container {
   display: flex;
   flex-direction: column;
@@ -229,7 +224,8 @@ onUnmounted(() => {
   width: 100%;
   max-width: 600px;
   margin: 0 auto;
-  gap: 20px;
+  gap: 16px;
+  /* 稍微縮小 gap */
 }
 
 .sentence-display {
@@ -237,31 +233,33 @@ onUnmounted(() => {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  font-size: 1.4rem;
-  line-height: 1.8;
+  gap: 6px;
+  font-size: 1.3rem;
+  /* 稍微縮小字體 */
+  line-height: 1.6;
   color: #333;
   background: #f9f9f9;
-  padding: 16px 24px;
+  padding: 12px 16px;
   border-radius: 12px;
   border: 2px dashed #ccc;
   text-align: center;
   width: 100%;
   box-sizing: border-box;
+  margin-bottom: 8px;
 }
 
 .sentence-display .highlight {
   color: #ea2b2b;
   font-weight: 800;
   background: #ffe6e6;
-  padding: 2px 8px;
+  padding: 2px 6px;
   border-radius: 6px;
 }
 
 .pause-marker {
   display: inline-block;
-  width: 4px;
-  height: 24px;
+  width: 3px;
+  height: 20px;
   background: #1cb0f6;
   border-radius: 2px;
 }
@@ -271,8 +269,9 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   background: #f0f0f0;
-  padding: 6px 12px;
+  padding: 4px 12px;
   border-radius: 20px;
+  margin-bottom: 8px;
 }
 
 .speed-label {
@@ -284,7 +283,7 @@ onUnmounted(() => {
 .speed-selector button {
   background: none;
   border: none;
-  padding: 4px 12px;
+  padding: 4px 10px;
   border-radius: 12px;
   font-weight: bold;
   color: #777;
@@ -300,16 +299,18 @@ onUnmounted(() => {
 
 .controls {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
+  width: 100%;
 }
 
 button {
-  padding: 12px 20px;
+  padding: 10px 16px;
+  /* 縮小 padding 避免擁擠 */
   border-radius: 12px;
   font-weight: bold;
-  font-size: 1rem;
+  font-size: 0.95rem;
   cursor: pointer;
   border: none;
   transition: all 0.1s;
@@ -343,37 +344,33 @@ button:active {
   transform: translateY(4px);
 }
 
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .result-panel {
   width: 100%;
   background: white;
   border: 2px solid #e5e5e5;
   border-radius: 16px;
-  padding: 20px;
+  padding: 16px;
   text-align: left;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  margin-top: 10px;
 }
 
 .word-comparison {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .target-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  font-size: 1.2rem;
-  line-height: 1.6;
+  gap: 6px;
+  font-size: 1.1rem;
+  line-height: 1.4;
 }
 
 .word {
-  padding: 4px 8px;
+  padding: 2px 6px;
   border-radius: 6px;
   transition: all 0.3s;
 }
@@ -392,12 +389,12 @@ button:disabled {
 
 .result-line {
   border-top: 2px dashed #eee;
-  padding-top: 16px;
+  padding-top: 12px;
 }
 
 .status-text {
   font-weight: bold;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .status-text.success {
@@ -410,9 +407,9 @@ button:disabled {
 
 .transcript-text {
   color: #555;
-  font-size: 1.1rem;
+  font-size: 1rem;
   background: #f9f9f9;
-  padding: 12px;
+  padding: 10px;
   border-radius: 8px;
   margin: 0;
 }

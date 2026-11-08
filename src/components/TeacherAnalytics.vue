@@ -735,6 +735,8 @@ const errorTree = computed<ErrorNode[]>(() => {
     display: flex;
     flex-direction: column;
     align-items: center;
+    margin-top: 30px;
+    position: relative;
 }
 
 .mindmap-root {
@@ -742,6 +744,7 @@ const errorTree = computed<ErrorNode[]>(() => {
     flex-direction: column;
     align-items: center;
     margin-bottom: 20px;
+    z-index: 2; 
 }
 
 .root-node {
@@ -752,6 +755,7 @@ const errorTree = computed<ErrorNode[]>(() => {
     font-weight: bold;
     font-size: 1.1rem;
     box-shadow: 0 4px 12px rgba(28, 176, 246, 0.3);
+    white-space: nowrap;
 }
 
 .root-line {
