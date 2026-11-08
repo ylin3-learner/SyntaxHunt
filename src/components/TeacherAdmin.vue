@@ -12,8 +12,9 @@ import QuestionListSidebar from './QuestionListSidebar.vue';
 import QuestionEditor from './QuestionEditor.vue';
 import GrammarQuestionForm from './forms/GrammarQuestionForm.vue';
 import StandardQuestionForm from './forms/StandardQuestionForm.vue';
+import QrCodeModal from './QrCodeModal.vue';
 
-const props = defineProps<{ currentQuestions: QuestionData[]; }>();
+const props = defineProps<{ currentQuestions: QuestionData[]; roomCode?: string; }>();
 const emit = defineEmits<{
   (e: 'update', questions: QuestionData[]): void;
   (e: 'batch-import', questions: QuestionData[]): void;
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 }>();
 
 // ---- 列表與 UI 狀態 ----
+const showQrModal = ref(false);
 const showQuestionFlow = ref(false);
 const localQuestions = ref<QuestionData[]>(JSON.parse(JSON.stringify(props.currentQuestions)));
 const unitFilter = ref<'all' | 'unclassified' | `unit:${string}`>('all');
@@ -66,7 +68,13 @@ const {
   props
 );
 
+// 只需要 updateClassMode 與 sendResetProgress 來操作
 const { updateClassMode, sendResetProgress } = useClassroomSync();
+
+const handleShowQr = () => {
+  showQrModal.value = true;
+};
+
 const handleModeChange = () => {
   updateClassMode(isClassModeToggle.value, targetCountInput.value);
 };
@@ -94,7 +102,7 @@ const handleChapterChange = () => {
 };
 
 const handleCanvasModeChange = () => {
-  // 保留空實作或交由 useQuestionForm 處理
+  // 保留空實作
 };
 
 const editQuestion = (q: QuestionData) => {
@@ -253,24 +261,22 @@ const openQuestionEdit = (id: string) => { const q = localQuestions.value.find(i
 
     <div v-else class="admin-modal">
       <div class="admin-layout">
+        <!-- 👈 將 props.roomCode 傳給 Sidebar -->
         <QuestionListSidebar v-model:unit-filter="unitFilter" v-model:is-class-panel-expanded="isClassPanelExpanded"
           v-model:is-questions-expanded="isQuestionsExpanded" v-model:is-class-mode-toggle="isClassModeToggle"
           v-model:target-count-input="targetCountInput" :questions="localQuestions"
           :filtered-questions="filteredQuestions" :available-units="availableUnits" :editing-id="form.editingId"
-          @open-flow="showQuestionFlow = true" @mode-change="handleModeChange" @reset-progress="sendResetProgress"
-          @edit="editQuestion" @push="handleSaveAndPush" @delete="deleteQuestion" @new-question="resetForm"
-          @save-close="saveAllAndClose" />
+          :room-code="props.roomCode" @open-flow="showQuestionFlow = true" @mode-change="handleModeChange"
+          @reset-progress="sendResetProgress" @edit="editQuestion" @push="handleSaveAndPush" @delete="deleteQuestion"
+          @new-question="resetForm" @save-close="saveAllAndClose" @show-qr="handleShowQr" />
 
-        <!-- 右側編輯器 -->
         <QuestionEditor :title="isEditing ? '✏️ 編輯題目' : '🆕 新增題目'" :question-type="form.questionType"
           @update:question-type="form.questionType = $event">
-
           <div class="form-group">
             <label for="question-unit">單元名稱</label>
             <input id="question-unit" v-model="form.unitName" type="text" placeholder="例如：Unit 1" />
           </div>
 
-          <!-- 文法題表單 -->
           <GrammarQuestionForm v-if="form.questionType === 'grammar'" :form="form" :errors="errors"
             :topicsInSelectedChapter="topicsInSelectedChapter" :selectedGrammarTopic="selectedGrammarTopic"
             :recommendedUiLabel="recommendedUiLabel" :handleChapterChange="handleChapterChange"
@@ -279,7 +285,6 @@ const openQuestionEdit = (id: string) => { const q = localQuestions.value.find(i
             :handleMorphTargetToggle="handleMorphTargetToggle" :updateMorphOptions="updateMorphOptions"
             :handleCanvasModeChange="handleCanvasModeChange" />
 
-          <!-- 其他題型表單 -->
           <StandardQuestionForm v-else :form="form" :activeUploadTarget="activeUploadTarget"
             :triggerUpload="triggerUpload" :handleFileChange="handleFileChange" :toggleDistractor="toggleDistractor"
             :isDistractorActive="isDistractorActive" @update:activeUploadTarget="activeUploadTarget = $event" />
@@ -292,7 +297,9 @@ const openQuestionEdit = (id: string) => { const q = localQuestions.value.find(i
       </div>
     </div>
 
-    <!-- 隱藏的 File Input 留在父層或子層都可以，這裡留在父層 -->
+    <!-- 👈 QR Modal，使用 props.roomCode -->
+    <QrCodeModal :is-open="showQrModal" :room-code="props.roomCode || ''" @close="showQrModal = false" />
+
     <input ref="fileInput" type="file" accept="image/*" style="display: none" @change="handleFileChange" />
     <input ref="distractorFileInput" type="file" accept="image/*" style="display: none" @change="handleFileChange" />
     <input ref="modifierFileInput" type="file" accept="image/*" style="display: none" @change="handleFileChange" />
@@ -300,7 +307,7 @@ const openQuestionEdit = (id: string) => { const q = localQuestions.value.find(i
 </template>
 
 <style scoped>
-/* 這裡的 CSS 就只剩下排版框架了，原本那 400 行表單樣式已經搬到子組件囉！ */
+/* 保持不變 */
 .admin-modal {
   position: fixed;
   top: 0;
@@ -341,7 +348,6 @@ const openQuestionEdit = (id: string) => { const q = localQuestions.value.find(i
   }
 }
 
-/* 編輯器標題列與底部按鈕的樣式 (若 QuestionEditor 尚未封裝，保留在此) */
 .form-group {
   margin-bottom: 24px;
   display: flex;

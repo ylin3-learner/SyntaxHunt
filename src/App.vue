@@ -21,7 +21,7 @@ import { CloudDatabase } from './services/CloudDatabase';
 import { defaultQuestions } from './data/questions';
 
 import { useFocusMonitor } from './composables/useFocusMonitor';
-import { useClassroomSync } from './composables/useClassroomSync';
+import { useClassroomSync, currentRoomCode } from './composables/useClassroomSync';
 import { useQuizFlow } from './composables/useQuizFlow';
 import { useAdminAuth } from './composables/useAdminAuth';
 import { useRoomEntry } from './composables/useRoomEntry';
@@ -107,7 +107,7 @@ const handleRealtimeEvent = (event: string, payload: any) => {
   }
   if (event === 'SYNC_ERROR') {
     realtimeNotice.value = '班級同步暫時無法使用；本機作答仍可繼續。';
-    const errorMsg = payload.message?.message || JSON.stringify(payload.message)|| '未知錯誤';
+    const errorMsg = payload.message?.message || JSON.stringify(payload.message) || '未知錯誤';
     console.error('班級同步錯誤:', errorMsg);
   }
   if (event === 'SYNC_STATE') {
@@ -349,9 +349,9 @@ const handleTimeoutNext = () => quizFlow.nextQuestion();
       </div>
     </div>
 
-    <TeacherAdmin v-if="showAdmin" :currentQuestions="questionBank" @update="updateQuestionBank"
-      @batch-import="handleBatchQuestionImport" @sync-local="handleLocalSync" @push="handlePushQuestion"
-      @close="showAdmin = false" />
+    <TeacherAdmin v-if="showAdmin" :currentQuestions="questionBank" :room-code="currentRoomCode"
+      @update="updateQuestionBank" @batch-import="handleBatchQuestionImport" @sync-local="handleLocalSync"
+      @push="handlePushQuestion" @close="showAdmin = false" />
 
     <DebugConsole v-if="isDebugMode" />
   </div>
