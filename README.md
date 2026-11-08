@@ -168,6 +168,21 @@ flowchart TD
 
 ---
 
+## 🎨 Core UI Modes (Pedagogical Canvas Design)
+
+To address different cognitive loads and grammar concepts across chapters, the system employs 6 distinct UI modes. The student interface automatically selects the most appropriate interactive canvas based on the question's `grammarTopicId` or `concept`, preventing a single generic interface from causing learning interference.
+
+| Core UI Mode | Targeted Chapters / Concepts | Why it fits? | Deprecated/Merged Old Modes |
+| :--- | :--- | :--- | :--- |
+| **1. `BUILD` (Magnetic Slots)** | Ch.1 (Sentence Patterns), Ch.17 (Conjunctions), Ch.18 (Noun Clauses), Ch.19 (Patterns), Ch.15 (Inversion), Ch.16 (Relative Clauses - Assembly) | Handles **word order and structure**. Any task requiring arranging chunks into the correct sequence uses `BUILD`. | Old `MacroDragCanvas` is absorbed here. |
+| **2. `MORPH` (Origami Morph)** | Ch.2 (Tenses), Ch.9 (Comparatives), Ch.10 (Gerunds), Ch.12 (Passive Voice) | Handles **morphological changes**. Click a chunk to switch forms; the rest of the sentence remains fixed. | Old `MorphChoiceCanvas`, `TimelineMorphCanvas` are consolidated. |
+| **3. `REDUCE` (Shredder)** | Ch.7 (Participle Clauses), Ch.16 (Relative Clauses - Reduction), Ch.18 (Pronoun Replacement) | Handles **deletion and merging**. Discard redundant words or merge two words. | Old `ShredderReduceCanvas`. |
+| **4. `MATRIX_GATE` (Feature Lock)** | Ch.13 (Special Verbs like spend/cost), Ch.14 (Sensory/Causative Verbs) | Handles **syntactic constraints of confusable words**. Students must select the correct feature toggle to unlock the word cards. | New mode. Replaces the old guess-and-check `BUILD` tasks. |
+| **5. `PRAGMATIC_HP` (Pragmatic HP)** | Ch.4 (Modals/Auxiliaries), Ch.11 (Emotive Verbs) | Handles **tone and social distance**. VADER analyzes offensiveness, causing HP loss or gain. | New mode. |
+| **6. `GRAVITY_SWITCH` (Gravity Switch)** | Ch.20 (Subjunctive/Unreal Conditionals) | Handles **unreal contexts**. Switch the toggle, the sentence floats, and the tense steps back. | New mode. |
+
+---
+
 ## 🔒 Multi-Tenancy & Security (Teacher Isolation)
 
 This application strictly implements multi-tenancy to ensure teachers can only see and modify their own questions and classroom states.
