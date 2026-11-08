@@ -90,6 +90,7 @@ export interface Chunk {
   morph_options?: string[]; // 變形選項池 (例如：['go', 'goes', 'went', 'gone'])
   options?: string[];   // 新版變形選項；保留 morph_options 以相容既有題庫
   current_index?: number; // 初始選項索引；作答中的選取狀態由畫布持有
+  hint?: string; // 新增：元語言提示 (例如：「非現實假設」)
 }
 
 // ==========================================

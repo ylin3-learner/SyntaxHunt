@@ -87,10 +87,21 @@ const toggleMorphMenu = (chunk: Chunk) => {
   activeMorphId.value = activeMorphId.value === chunk.id ? null : chunk.id;
 };
 
-const selectMorph = (chunk: Chunk, newText: string) => {
+// 紀錄當前反饋
+const morphFeedback = ref<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+const selectMorph = (chunk: Chunk, newText: string, hintText?: string) => {
   chunk.text = newText;
   const options = chunk.options ?? chunk.morph_options ?? [];
   chunk.current_index = Math.max(0, options.indexOf(newText));
+
+  // 顯性反饋：顯示元語言提示
+  const isCorrect = props.question.correctAnswer.includes(newText);
+  morphFeedback.value = {
+    text: hintText || (isCorrect ? `✅ 正確！這裡使用 ${newText} 表示非現實假設。` : `❌ 這裡不符合假設語氣喔，再想想看。`),
+    type: isCorrect ? 'success' : 'error'
+  };
+
   activeMorphId.value = null;
   resetState();
   void checkAnswer();
@@ -324,164 +335,120 @@ const handleOutsideClick = () => {
 
 <template>
   <div class="grammar-canvas" @click="handleOutsideClick">
-    <div v-if="isFixedMorph" class="fixed-morph-instruction">
-      點擊紫色字詞，直接選擇適合的變形；句子順序已固定，不需要排列字塊。
-    </div>
-    <!-- 克漏字上下文 -->
-    <div class="cloze-context" v-if="question.contextCloze && !isFixedMorph">
-      <span class="cloze-text">{{ question.contextCloze.prefix }}</span>
-      <div class="cloze-blanks-container">
-        <template v-if="question.ui_mode !== 'REDUCE'">
-          <span v-for="(_, index) in question.correctAnswer.length" :key="index" class="cloze-blank-slot"
-            :class="{ 'has-text': answerArea[index] }">
-            {{ answerArea[index] ? answerArea[index].text.replace(/[\[\]]/g, '') : '' }}
-          </span>
-        </template>
-        <template v-else>
-          <span v-for="(tile, index) in answerArea" :key="index" class="cloze-blank-slot has-text">
-            {{ tile.text.replace(/[\[\]]/g, '') }}
-          </span>
-          <span v-if="answerArea.length === 0" class="cloze-blank-slot placeholder"
-            style="min-width: 100px; border-bottom: 3px dashed #1cb0f6; height: 38px;"></span>
-        </template>
-      </div>
-      <span class="cloze-text">{{ question.contextCloze.suffix }}</span>
-    </div>
 
-    <!-- 作答區 -->
-    <div v-if="isFixedMorph" class="fixed-morph-sentence"
-      :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
+    <!-- ======== 1. FIXED MORPH (膠囊化句子) ======== -->
+    <div v-if="isFixedMorph" class="fixed-morph-sentence" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
       <span v-if="question.contextCloze" class="fixed-context">{{ question.contextCloze.prefix }}</span>
+
       <template v-for="(chunk, index) in answerArea" :key="chunk.id">
         <span v-if="index > 0 && !question.contextCloze" class="fixed-word-space"> </span>
+
+        <!-- 這裡的 fixed-morph-token 是定位的基準點 -->
         <span v-if="chunk.can_morph" class="fixed-morph-token">
-          <button type="button" class="tile can-morph"
-            :class="{ 'tile-error': isError(index), 'tile-success': isSuccess, 'tile-wrong': isWrong }"
-            :aria-label="`變形字詞：${chunk.text.replace(/[\[\]]/g, '')}`"
-            :aria-expanded="activeMorphId === chunk.id"
-            @click.stop="toggleMorphMenu(chunk)">
+          <button type="button" class="morph-capsule" @click.stop="toggleMorphMenu(chunk)">
             {{ chunk.text.replace(/[\[\]]/g, '') }}
           </button>
-          <div v-if="activeMorphId === chunk.id" class="morph-menu">
+
+          <!-- 選擇 + 理由的雙層選單 -->
+          <div v-if="activeMorphId === chunk.id" class="morph-menu explicit-menu">
+            <div class="menu-title">選擇正確形式：</div>
             <button v-for="option in (chunk.options ?? chunk.morph_options)" :key="option" type="button"
-              @click.stop="selectMorph(chunk, option)">
-              {{ option }}
+              @click.stop="selectMorph(chunk, option, option === 'were' ? '「與現在事實相反」的假設語氣，be 動詞一律用 were。' : undefined)">
+              <strong class="option-text">{{ option }}</strong>
+              <!-- 提示文字 (如果有設定) -->
+              <span v-if="option === 'were'" class="option-hint">非現實假設 → were</span>
+              <span v-if="option === 'could'" class="option-hint">非現實能力 → could</span>
             </button>
           </div>
         </span>
-        <span v-else class="fixed-sentence-token"
-          :class="{ 'tile-error': isError(index), 'tile-success': isSuccess, 'tile-wrong': isWrong }">
+
+        <!-- 固定文字 -->
+        <span v-else class="fixed-sentence-token" :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }">
           {{ chunk.text.replace(/[\[\]]/g, '') }}
         </span>
       </template>
+
       <span v-if="question.contextCloze" class="fixed-context">{{ question.contextCloze.suffix }}</span>
+
+      <!-- 反饋氣泡移出迴圈，作為整句的提示 -->
+      <Transition name="fade">
+        <div v-if="morphFeedback" class="morph-feedback" :class="morphFeedback.type">
+          {{ morphFeedback.text }}
+        </div>
+      </Transition>
     </div>
-    <div v-else class="answer-area" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
-      <template v-if="question.ui_mode !== 'REDUCE'">
+
+    <!-- ======== 2. REDUCE (句子形式，只保留可點擊刪除的字) ======== -->
+    <div v-else-if="question.ui_mode === 'REDUCE'" class="reduce-sentence-mode" :class="{ 'shake': isWrong }">
+
+      <div class="sentence-display">
+        <template v-for="(tile, index) in answerArea" :key="tile.id">
+          <!-- 若該字磚被標記為可移除 (draggable)，顯示為按鈕 -->
+          <button v-if="tile.draggable" type="button" class="removable-word"
+            :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }" @click="discardTile(tile)">
+            {{ tile.text.replace(/[\[\]]/g, '') }}
+            <span class="remove-hint">×</span>
+          </button>
+
+          <!-- 若不可移除，直接顯示為純文字 -->
+          <span v-else class="fixed-word" :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }">
+            {{ tile.text.replace(/[\[\]]/g, '') }}
+          </span>
+        </template>
+      </div>
+
+      <!-- 垃圾桶區塊 -->
+      <div class="trash-zone-wrapper">
+        <div class="trash-label">🗑️ 已移除的字塊（{{ trashArea.length }}）· 點擊還原</div>
+        <div class="trash-area">
+          <div v-for="tile in trashArea" :key="tile.id" class="trash-tile">
+            <span>{{ tile.text.replace(/[\[\]]/g, '') }}</span>
+            <button type="button" class="trash-restore-button" @click="restoreTile(tile)">還原 ↶</button>
+          </div>
+          <div v-if="trashArea.length === 0" class="trash-placeholder">
+            點擊上方有底線的字詞即可移除。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== 3. BUILD (原本的插槽模式) ======== -->
+    <div v-else class="build-mode-wrapper">
+      <div class="answer-area" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
         <div v-for="(_, index) in answerSlotCount" :key="index" class="answer-slot">
           <div v-if="answerArea[index]" class="tile-wrapper">
-            <div class="tile" :class="{
-              'tile-error': isError(index),
-              'tile-success': isSuccess,
-              'tile-wrong': isWrong,
-              'tile-chunk': answerArea[index].text.startsWith('['),
-              'can-morph': answerArea[index].can_morph
-            }"
+            <div class="tile"
+              :class="{ 'tile-error': isError(index), 'tile-success': isSuccess, 'tile-chunk': answerArea[index].text.startsWith('['), 'can-morph': answerArea[index].can_morph }"
               @click.stop="answerArea[index].can_morph ? toggleMorphMenu(answerArea[index]) : unselectTile(answerArea[index])">
               {{ answerArea[index].text.replace(/[\[\]]/g, '') }}
             </div>
-            <button v-if="answerArea[index].can_morph" type="button" class="tile-remove" aria-label="移除字塊"
-              @click.stop="unselectTile(answerArea[index])">×</button>
-            <!-- 變形下拉選單 -->
             <div v-if="activeMorphId === answerArea[index].id" class="morph-menu">
               <button v-for="opt in (answerArea[index].options ?? answerArea[index].morph_options)" :key="opt"
-                type="button"
-                @click.stop="selectMorph(answerArea[index], opt)">
+                type="button" @click.stop="selectMorph(answerArea[index], opt)">
                 {{ opt }}
               </button>
             </div>
           </div>
           <div v-else class="empty-slot"></div>
         </div>
-      </template>
-      <template v-else>
-        <div v-for="(tile, index) in answerArea" :key="tile.id" class="tile is-reduce-mode" :class="{
-          'tile-error': isError(index),
-          'tile-success': isSuccess,
-          'tile-wrong': isWrong,
-          'tile-chunk': tile.text.startsWith('[')
-        }">
-          <span class="reduce-tile-text">{{ tile.text.replace(/[\[\]]/g, '') }}</span>
-          <div class="reduce-tile-actions">
-            <button type="button" class="reduce-reorder-button" :disabled="index === 0 || isSuccess"
-              :aria-label="`將「${tile.text.replace(/[\[\]]/g, '')}」往左移`" @click="moveReducedTile(tile, -1)">←</button>
-            <button type="button" class="reduce-reorder-button" :disabled="index === answerArea.length - 1 || isSuccess"
-              :aria-label="`將「${tile.text.replace(/[\[\]]/g, '')}」往右移`" @click="moveReducedTile(tile, 1)">→</button>
-            <button type="button" class="reduce-discard-button" :disabled="isSuccess"
-              :aria-label="`移除「${tile.text.replace(/[\[\]]/g, '')}」`" @click="discardTile(tile)">移除</button>
-          </div>
+      </div>
+      <div class="word-bank">
+        <div v-for="tile in wordBank" :key="tile.id" class="tile"
+          :class="{ 'tile-chunk': tile.text.startsWith('['), 'can-morph': tile.can_morph }" @click="selectTile(tile)">
+          {{ tile.text.replace(/[\[\]]/g, '') }}
         </div>
-      </template>
+      </div>
     </div>
-    <button v-if="question.ui_mode !== 'REDUCE' && !isFixedMorph && answerArea.length > 0
-      && answerArea.length < question.correctAnswer.length && signals.length === 0
-      && !isCheckingLanguageTool" type="button" class="check-answer-button" @click.stop="checkAnswer(true)">
-      檢查目前答案
-    </button>
 
-    <!-- 錯誤提示 -->
+    <!-- 錯誤提示與其他共用 UI (保持不變) -->
     <div v-if="signals.length > 0" class="alert-bubble">
       <div class="alert-icon">⚠️</div>
       <div class="alert-messages">
         <div v-for="(s, index) in signals" :key="`${s.code}-${index}`">
           <p>{{ s.message }}</p>
-          <p v-if="s.category" class="diagnosis-meta">
-            {{ s.source === 'languagetool' ? 'LanguageTool' : '本地診斷' }} · {{ s.category }}
-            <span v-if="s.ruleId"> · {{ s.ruleId }}</span>
-          </p>
-          <p v-if="s.replacements?.length" class="diagnosis-replacements">
-            建議：<span v-for="replacement in s.replacements.slice(0, 5)" :key="replacement.value">
-              {{ replacement.value }}
-            </span>
-          </p>
-          <p v-if="s.hint" class="hint-text">💡 {{ s.hint }}</p>
+          <p v-if="s.category" class="diagnosis-meta">{{ s.source === 'languagetool' ? 'LanguageTool' : '本地診斷' }} ·
+            {{ s.category }}</p>
         </div>
-      </div>
-    </div>
-    <div v-else-if="isWrong" class="gentle-alert">
-      <p>順序好像不太對喔，使用左右箭頭調整，或點擊多餘字磚退回看看！</p>
-    </div>
-    <div v-if="remoteStatus" class="remote-status" role="status" :aria-busy="!canContinue">
-      <span>{{ remoteStatus }}</span>
-      <button v-if="canContinue" type="button" class="continue-button" @click="emit('continue')">
-        下一題（略過）
-      </button>
-    </div>
-
-    <!-- 垃圾桶 (Reduce) -->
-    <div v-if="question.ui_mode === 'REDUCE'" class="trash-zone-wrapper">
-      <div class="reduce-instructions">
-        <strong>怎麼操作</strong>
-        <span>用 <b>← →</b> 調整詞序；按字塊上的 <b>移除</b> 刪除多餘詞；需要時到下方垃圾桶按 <b>還原</b>。</span>
-      </div>
-      <div class="trash-label">🗑️ 已移除的字塊（{{ trashArea.length }}）· 點擊還原</div>
-      <div class="trash-area">
-        <div v-for="tile in trashArea" :key="tile.id" class="trash-tile">
-          <span>{{ tile.text.replace(/[\[\]]/g, '') }}</span>
-          <button type="button" class="trash-restore-button" :aria-label="`還原「${tile.text.replace(/[\[\]]/g, '')}」`"
-            @click="restoreTile(tile)">還原 ↶</button>
-        </div>
-        <div v-if="trashArea.length === 0" class="trash-placeholder">
-          尚未移除字塊。按上方字塊的「移除」後，可在這裡還原。
-        </div>
-      </div>
-    </div>
-
-    <!-- 字庫 (Build/Morph) -->
-    <div v-if="question.ui_mode !== 'REDUCE' && !isFixedMorph" class="word-bank">
-      <div v-for="tile in wordBank" :key="tile.id" class="tile"
-        :class="{ 'tile-chunk': tile.text.startsWith('['), 'can-morph': tile.can_morph }" @click="selectTile(tile)">
-        {{ tile.text.replace(/[\[\]]/g, '') }}
       </div>
     </div>
   </div>
@@ -493,83 +460,222 @@ const handleOutsideClick = () => {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  min-height: 300px;
+  min-height: 200px;
   position: relative;
 }
 
-.fixed-morph-instruction {
-  padding: 12px 16px;
-  border: 1px solid #e9d5ff;
-  border-radius: 12px;
-  background: #faf5ff;
-  color: #6b21a8;
-  font-weight: 700;
-}
-
+/* === FIXED MORPH 膠囊樣式 === */
 .fixed-morph-sentence {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 5px;
-  min-height: 84px;
+  gap: 8px 6px;
   padding: 20px;
   border: 2px solid #d5e0e8;
   border-radius: 16px;
   background: #ffffff;
-  font-size: clamp(1.15rem, 3vw, 1.65rem);
-  line-height: 1.7;
-  transition: background 0.2s, border-color 0.2s;
+  font-size: clamp(1.2rem, 3vw, 1.8rem);
+  line-height: 1.8;
+  /* 稍微加大行高，避免選單擋住下一行 */
+  transition: all 0.2s;
 }
 
 .fixed-context {
   color: #526879;
 }
 
-.fixed-word-space {
-  width: 0;
+.fixed-sentence-token {
+  padding: 4px 2px;
 }
 
+/* 關鍵：父容器必須是 relative，選單才能以此為基準向下展開 */
 .fixed-morph-token {
   position: relative;
   display: inline-flex;
 }
 
-.fixed-morph-token .tile {
-  padding: 5px 12px;
+/* 膠囊按鈕 */
+.morph-capsule {
+  padding: 2px 16px;
+  border: 2px solid #9c27b0;
+  border-radius: 999px;
+  background: #f3e8ff;
+  color: #9c27b0;
+  font-size: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.morph-capsule:hover {
+  background: #e9d5ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(156, 39, 176, 0.2);
+}
+
+/* 選單絕對定位在膠囊正下方 */
+.capsule-menu {
+  position: absolute;
+  top: 100%;
+  /* 從膠囊底部開始 */
+  left: 50%;
+  /* 水平置中 */
+  transform: translateX(-50%);
+  margin-top: 8px;
+  /* 與膠囊保持一點距離 */
+
+  display: flex;
+  flex-direction: column;
+  min-width: 100px;
+  background: white;
+  border: 2px solid #9c27b0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(156, 39, 176, 0.15);
+  z-index: 50;
+  /* 確保不被其他字塊蓋住 */
+  overflow: hidden;
+  animation: slideDown 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.capsule-menu button {
+  display: block;
+  width: 100%;
+  padding: 12px 20px;
   border: 0;
-  font: inherit;
+  background: #ffffff;
+  color: #333;
+  font-weight: bold;
+  font-size: 1.1rem;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.2s;
 }
 
-.fixed-sentence-token {
-  padding: 2px 1px;
-  border-radius: 6px;
+.capsule-menu button:hover,
+.capsule-menu button:focus-visible {
+  background: #f3e8ff;
+  color: #9c27b0;
 }
 
-.fixed-morph-sentence.success-bg {
-  border-color: #58cc02;
-  background: #f0fff0;
+/* === REDUCE 句子模式 === */
+.reduce-sentence-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px;
+  background: #fafafa;
+  border-radius: 16px;
+  border: 2px dashed #e5e5e5;
 }
 
-.fixed-morph-sentence.shake {
-  animation: shake 0.4s;
+.sentence-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: clamp(1.2rem, 3vw, 1.8rem);
+  align-items: center;
+  line-height: 1.6;
 }
 
-.answer-area,
-.word-bank,
+.fixed-word {
+  color: #333;
+}
+
+.removable-word {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border: 2px solid #ff4b4b;
+  border-radius: 8px;
+  background: #fff0f0;
+  color: #ea2b2b;
+  font-size: inherit;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.removable-word:hover {
+  background: #ffdfe0;
+  transform: scale(1.05);
+}
+
+.remove-hint {
+  font-size: 1.2rem;
+  opacity: 0.6;
+}
+
+.trash-zone-wrapper {
+  border-top: 2px dashed #eee;
+  padding-top: 20px;
+}
+
+.trash-label {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: #6b7280;
+  margin-bottom: 12px;
+}
+
 .trash-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 60px;
+  padding: 16px;
+  background: #fff;
+  border: 2px dashed #ccc;
+  border-radius: 12px;
+  justify-content: center;
+}
+
+.trash-tile {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid #d5d9de;
+  border-radius: 8px;
+  background: #f0f0f0;
+  color: #999;
+}
+
+.trash-restore-button {
+  border: 1px solid #1cb0f6;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: #fff;
+  color: #1cb0f6;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.trash-placeholder {
+  color: #999;
+  font-size: 0.9rem;
+}
+
+/* ==========================================
+   3. BUILD (磁吸插槽) - 👈 這是被漏掉的關鍵
+   ========================================== */
+.build-mode-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.answer-area {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   min-height: 80px;
   padding: 16px;
   border-radius: 16px;
-  transition: all 0.3s;
-}
-
-.answer-area {
   border-bottom: 4px dashed #e5e5e5;
   background: #fdfdfd;
   align-items: center;
+  transition: all 0.3s;
 }
 
 .answer-area.success-bg {
@@ -578,8 +684,15 @@ const handleOutsideClick = () => {
 }
 
 .word-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 80px;
+  padding: 16px;
   border: 2px solid #e5e5e5;
+  border-radius: 16px;
   background: #ffffff;
+  transition: all 0.3s;
 }
 
 .answer-slot {
@@ -605,73 +718,7 @@ const handleOutsideClick = () => {
   position: relative;
 }
 
-.tile-remove {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 50%;
-  background: #ff4b4b;
-  color: #fff;
-  font-weight: bold;
-  cursor: pointer;
-  z-index: 2;
-}
-
-.remote-status {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 12px;
-  background: #f1f3f5;
-  color: #68717b;
-}
-
-.check-answer-button {
-  align-self: flex-start;
-  padding: 8px 14px;
-  border: 1px solid #b9ddf1;
-  border-radius: 8px;
-  background: #e8f6ff;
-  color: #155e87;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.diagnosis-meta {
-  margin: 4px 0;
-  color: #68717b;
-  font-size: .85rem;
-}
-
-.diagnosis-replacements {
-  margin: 6px 0;
-}
-
-.diagnosis-replacements span {
-  display: inline-block;
-  margin: 2px 6px 2px 0;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #e7f5ff;
-  color: #155e87;
-}
-
-.continue-button {
-  padding: 8px 14px;
-  border: 1px solid #c5cbd1;
-  border-radius: 8px;
-  background: #fff;
-  color: #4b5560;
-  font-weight: 700;
-  cursor: pointer;
-}
-
+/* 共用字磚樣式 */
 .tile {
   padding: 12px 20px;
   background-color: #ffffff;
@@ -712,6 +759,10 @@ const handleOutsideClick = () => {
   background-color: #f3e8ff;
   color: #9c27b0;
 }
+
+/* ==========================================
+   共用狀態與選單
+   ========================================== */
 
 .tile-error {
   background-color: #ffdfe0 !important;
@@ -1068,5 +1119,68 @@ const handleOutsideClick = () => {
   .cloze-context {
     font-size: 1.1rem;
   }
+}
+
+.explicit-menu {
+  min-width: 220px;
+  padding: 8px;
+  background: #ffffff;
+  border: 2px solid #9c27b0;
+  border-radius: 12px;
+}
+
+.menu-title {
+  font-size: 0.8rem;
+  color: #777;
+  margin-bottom: 8px;
+  padding-left: 8px;
+}
+
+.explicit-menu button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.explicit-menu button:hover {
+  background: #f3e8ff;
+  border-color: #d8b4fe;
+}
+
+.option-text {
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.option-hint {
+  font-size: 0.8rem;
+  color: #7c3aed;
+  font-weight: normal;
+  margin-top: 4px;
+}
+
+.morph-feedback {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: 1rem;
+  animation: slideDown 0.3s ease;
+  flex-basis: 100%;
+  /* 關鍵：確保在 flex 容器中獨佔一行 */
+  box-sizing: border-box;
+}
+
+.morph-feedback.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.morph-feedback.error {
+  background: #fee2e2;
+  color: #991b1b;
 }
 </style>
