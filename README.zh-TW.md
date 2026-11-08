@@ -205,7 +205,7 @@ sequenceDiagram
 5. 使用 `MORPH` 考點時，只勾選一個可變形目標字塊，並輸入逗號分隔的形式。
 6. 點選 **加入題庫**。若要指定學生目前作答的題目，請在該題列按 **發送給全班**。
 
-> **教師登入提醒：**教師登入已全面改為 Supabase Auth（`signInWithPassword`，Email + 密碼）。**舊的 `admin123` 示範密碼已移除**。請務必先到 Supabase 後台的 Authentication 建立教師帳號，才能登入系統。
+> **教師登入提醒：**教師登入已全面改為 Supabase Auth（`signInWithPassword`，Email + 密碼）。現在您可以直接在登入彈窗中點擊「**點此註冊**」來建立新的教師帳號，或者到 Supabase 後台手動新增。
 
 ---
 

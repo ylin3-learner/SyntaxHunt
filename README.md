@@ -214,7 +214,7 @@ sequenceDiagram
 5. For a `MORPH` topic, mark exactly one changeable chunk and provide its comma-separated forms.
 6. Click **Add to question bank** and **Send to class** to make it active.
 
-> **Teacher Access Note:** Teacher sign-in uses Supabase Auth (`signInWithPassword`). The legacy fixed `admin123` demo password has been **removed**. You must create a teacher account in the Supabase Authentication dashboard and log in with Email + Password. 
+> **Teacher Access Note:** Teacher sign-in uses Supabase Auth (`signInWithPassword`). You can now **register a new teacher account directly from the login modal** by clicking "Sign up". Alternatively, you can create accounts manually in the Supabase Dashboard.
 
 ---
 
