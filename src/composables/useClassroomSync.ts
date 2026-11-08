@@ -63,9 +63,11 @@ export function useClassroomSync() {
                         const { data, error } = await supabase
                             .from('classroom_state')
                             .select('*')
-                            .eq('id', 'current_state')
-                            .single();
-                        if (error) throw error;
+                            .eq('teacher_id', teacherId) // 使用傳入的 teacherId
+                            .maybeSingle();              // 使用 maybeSingle 避免 0 rows 錯誤
+                        if (error) {
+                            throw error;
+                        }
                         if (data) {
                             onReceive('SYNC_STATE', {
                                 id: data.current_question_id,
@@ -114,33 +116,39 @@ export function useClassroomSync() {
         }
     };
 
-    const sendPush = async (q: any, endTime: number | null, password: string) => {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        await fetch(`${supabaseUrl}/functions/v1/teacher-action`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password, action: 'PUSH_QUESTION', payload: { questionId: q.id, timerEndTime: endTime } })
+    const sendPush = async (q: any, endTime: number | null) => {
+        const { data } = await supabase.functions.invoke('teacher-action', {
+            body: { action: 'PUSH_QUESTION', payload: { questionId: q.id, timerEndTime: endTime } }
+        });
+        return data?.roomCode;
+    };
+
+    const sendAddTime = async (newEndTime: number) => {
+        await supabase.functions.invoke('teacher-action', {
+            body: { action: 'ADD_TIME', payload: { newEndTime } }
         });
     };
 
-    const sendAddTime = async (newEndTime: number, password: string) => {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        await fetch(`${supabaseUrl}/functions/v1/teacher-action`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password, action: 'ADD_TIME', payload: { newEndTime } })
+    const updateClassMode = async (isClassMode: boolean, targetCount: number) => {
+        const { data } = await supabase.functions.invoke('teacher-action', {
+            body: { action: 'UPDATE_SETTINGS', payload: { isClassMode, targetCount } }
         });
+        return data?.roomCode;
     };
 
-    const updateClassMode = async (isClassMode: boolean, targetCount: number, password: string) => {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        await fetch(`${supabaseUrl}/functions/v1/teacher-action`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                password, action: 'UPDATE_SETTINGS', payload: { isClassMode, targetCount }
-            })
-        });
+    const findTeacherByRoomCode = async (code: string) => {
+        try {
+            const { data, error } = await supabase
+                .from('classroom_state')
+                .select('teacher_id')
+                .eq('room_code', code.toUpperCase())
+                .maybeSingle();
+
+            if (error || !data) return null;
+            return data.teacher_id;
+        } catch (err) {
+            return null;
+        }
     };
 
     const leaveRoom = () => {
@@ -148,5 +156,5 @@ export function useClassroomSync() {
         reportSyncError = null;
     };
 
-    return { joinRoom, trackCompleted, trackAnswering, sendResetProgress, sendPush, sendAddTime, updateClassMode, leaveRoom };
+    return { joinRoom, trackCompleted, trackAnswering, sendResetProgress, sendPush, sendAddTime, updateClassMode, leaveRoom, findTeacherByRoomCode };
 }

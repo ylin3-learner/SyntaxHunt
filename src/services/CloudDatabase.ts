@@ -27,10 +27,19 @@ export type LanguageToolMatch = LanguageToolDiagnosticData;
 export const CloudDatabase = {
   // 從雲端抓取題庫
   async fetchQuestions(): Promise<QuestionData[] | null> {
+    // 👈 改用 getUser 檢查真實登入狀態
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.log('💡 未登入教師身分，使用本機題庫。');
+      return null;
+    }
+
     try {
       const { data, error } = await supabase
         .from('questions')
         .select('data, created_at')
+        .eq('teacher_id', user.id) // 👈 使用 user.id
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -44,10 +53,7 @@ export const CloudDatabase = {
         };
       });
       questions.sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
-      console.log('☁️ 雲端題庫讀取順序:', questions.map(question => ({
-        id: question.id,
-        sortOrder: question.sortOrder,
-      })));
+      console.log('☁️ 雲端題庫讀取順序:', questions.map(q => ({ id: q.id, sortOrder: q.sortOrder })));
       return questions;
     } catch (error) {
       console.error('無法連線到雲端資料庫:', error);
@@ -57,19 +63,33 @@ export const CloudDatabase = {
 
   // 將題庫存到雲端（包含同步刪除）
   async saveQuestions(questions: QuestionData[]): Promise<boolean> {
+    // 👈 改用 getUser 檢查真實登入狀態
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.log('💡 未登入教師身分（或 Session 已過期），已跳過雲端儲存，僅保留本機進度。');
+      return true;
+    }
+
+    const teacherId = user.id;
+
     try {
-      // 1. 先取得雲端現有的所有題目 ID
+      // 1. 先取得「該老師」雲端現有的所有題目 ID
       const { data: cloudData, error: fetchError } = await supabase
         .from('questions')
-        .select('id');
-      
+        .select('id')
+        .eq('teacher_id', teacherId);
+
       if (fetchError) throw fetchError;
 
       const cloudIds = cloudData?.map(d => d.id) || [];
       const localIds = questions.map(q => q.id);
+
+      // 2. 組裝寫入資料，補上 teacher_id
       const rows = questions.map((question, sortOrder) => ({
         id: question.id,
         data: { ...question, sortOrder },
+        teacher_id: teacherId,
       }));
 
       console.log('☁️ 準備儲存題庫順序:', rows.map(row => ({
@@ -77,20 +97,21 @@ export const CloudDatabase = {
         sortOrder: row.data.sortOrder,
       })));
 
-      // 2. 找出「雲端有，但本地已經被刪除」的 ID
+      // 3. 找出「該老師的雲端有，但本地已經被刪除」的 ID
       const idsToDelete = cloudIds.filter(id => !localIds.includes(id));
 
-      // 3. 如果有需要刪除的題目，執行批次刪除
+      // 4. 執行批次刪除 (只會刪到自己的)
       if (idsToDelete.length > 0) {
         const { error: deleteError } = await supabase
           .from('questions')
           .delete()
-          .in('id', idsToDelete);
-        
+          .in('id', idsToDelete)
+          .eq('teacher_id', teacherId);
+
         if (deleteError) throw deleteError;
       }
 
-      // 4. 執行 upsert（更新既有的，插入新的）
+      // 5. 執行 upsert
       if (questions.length > 0) {
         const { error: upsertError } = await supabase
           .from('questions')
@@ -114,6 +135,7 @@ export const CloudDatabase = {
   async logEvent(log: LearningLog): Promise<void> {
     try {
       console.log('🚀 準備寫入軌跡:', log);
+      // 如果 learning_logs 也有 RLS，你可能需要根據 schema 決定是否補上 teacher_id
       const { error } = await supabase.from('learning_logs').insert([log]);
       if (error) {
         console.error('寫入紀錄失敗:', {
@@ -136,11 +158,18 @@ export const CloudDatabase = {
   // 讀取所有學習軌跡
   async fetchLogs(): Promise<LearningLog[]> {
     try {
-      const { data, error } = await supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      let query = supabase
         .from('learning_logs')
         .select('*')
         .order('created_at', { ascending: false });
 
+      // 如果有登入，且你的 learning_logs 有 teacher_id 欄位，可以加上過濾
+      // if (session) {
+      //   query = query.eq('teacher_id', session.user.id);
+      // }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data || [];
     } catch (e) {
@@ -152,11 +181,19 @@ export const CloudDatabase = {
   // 批次刪除所有學習軌跡
   async clearAllLogs(): Promise<boolean> {
     try {
-      const { error } = await supabase
+      const { data: { session } } = await supabase.auth.getSession();
+
+      let query = supabase
         .from('learning_logs')
         .delete()
         .neq('id', 0);
 
+      // 如果有登入，且你的 learning_logs 有 teacher_id 欄位，可以加上過濾
+      // if (session) {
+      //   query = query.eq('teacher_id', session.user.id);
+      // }
+
+      const { error } = await query;
       if (error) throw error;
       return true;
     } catch (error) {
