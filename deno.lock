@@ -35,7 +35,6 @@
         "npm:typescript@5",
         "npm:vite@6",
         "npm:vitest@2",
-        "npm:vue-draggable-plus@~0.6.1",
         "npm:vue@^3.4.0"
       ]
     }
