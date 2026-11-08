@@ -11,6 +11,7 @@ const supabaseMocks = vi.hoisted(() => ({
   delete: vi.fn(),
   in: vi.fn(),
   invoke: vi.fn(),
+  getUser: vi.fn(), // 新增 mock
 }));
 
 vi.mock('../src/services/supabaseClient', () => ({
@@ -18,6 +19,9 @@ vi.mock('../src/services/supabaseClient', () => ({
     from: supabaseMocks.from,
     functions: {
       invoke: supabaseMocks.invoke,
+    },
+    auth: {
+      getUser: supabaseMocks.getUser, // 綁定 mock
     },
   },
 }));
@@ -43,7 +47,7 @@ describe('CloudDatabase LanguageTool warm-up', () => {
 
   it('surfaces warm-up failures without rejecting the caller', async () => {
     const error = new Error('proxy unavailable');
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => { });
     supabaseMocks.invoke.mockResolvedValue({ data: null, error });
 
     await expect(CloudDatabase.warmLanguageTool()).resolves.toBeUndefined();
@@ -65,7 +69,7 @@ describe('CloudDatabase learning logs', () => {
       details: null,
       hint: null,
     };
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => { });
     supabaseMocks.insert.mockResolvedValue({ error });
 
     await CloudDatabase.logEvent({
@@ -87,21 +91,44 @@ describe('CloudDatabase question order', () => {
   beforeEach(() => {
     cloudRows = [];
     cloudIds = [];
+
+    // 預設為已登入狀態
+    supabaseMocks.getUser.mockResolvedValue({
+      data: { user: { id: 'test-teacher-id' } },
+      error: null
+    });
+
     supabaseMocks.from.mockReset().mockReturnValue({
       select: supabaseMocks.select,
       upsert: supabaseMocks.upsert,
       delete: supabaseMocks.delete,
     });
+
+    // 支援鏈式呼叫：select(...).eq(...).order(...)
     supabaseMocks.select.mockImplementation((columns: string) => {
       const selection = columns === 'id'
         ? { data: cloudIds.map(id => ({ id })), error: null }
         : { data: cloudRows, error: null };
-      return Object.assign(Promise.resolve(selection), { order: supabaseMocks.order });
+
+      const mockChain = {
+        eq: vi.fn(() => mockChain),
+        order: supabaseMocks.order,
+        then: (onFulfilled: any, onRejected: any) => Promise.resolve(selection).then(onFulfilled, onRejected)
+      };
+      return mockChain;
     });
+
     supabaseMocks.order.mockImplementation(() => Promise.resolve({ data: cloudRows, error: null }));
     supabaseMocks.upsert.mockResolvedValue({ error: null });
-    supabaseMocks.delete.mockReturnValue({ in: supabaseMocks.in });
-    supabaseMocks.in.mockResolvedValue({ error: null });
+
+    // 支援 delete().in(...).eq(...)
+    const deleteChain = {
+      in: vi.fn(() => deleteChain),
+      eq: vi.fn().mockResolvedValue({ error: null }),
+      then: (onFulfilled: any, onRejected: any) => Promise.resolve({ error: null }).then(onFulfilled, onRejected)
+    };
+    supabaseMocks.delete.mockReturnValue(deleteChain);
+    supabaseMocks.in.mockReturnValue(deleteChain);
   });
 
   it('restores questions in their persisted sort order', async () => {
@@ -137,9 +164,10 @@ describe('CloudDatabase question order', () => {
 
     await expect(CloudDatabase.saveQuestions(questions)).resolves.toBe(true);
 
+    // 預期參數新增了 teacher_id
     expect(supabaseMocks.upsert).toHaveBeenCalledWith([
-      { id: 'later', data: { ...questions[0], sortOrder: 0 } },
-      { id: 'first', data: { ...questions[1], sortOrder: 1 } },
+      { id: 'later', data: { ...questions[0], sortOrder: 0 }, teacher_id: 'test-teacher-id' },
+      { id: 'first', data: { ...questions[1], sortOrder: 1 }, teacher_id: 'test-teacher-id' },
     ], { onConflict: 'id' });
   });
 });
