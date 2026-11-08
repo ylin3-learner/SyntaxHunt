@@ -62,11 +62,17 @@ serve(async (req) => {
 
     // 5. 根據 action 更新對應老師的資料 (使用 teacher_id 查詢，而不是 id)
     const now = new Date().toISOString()
-    
+
     if (action === 'PUSH_QUESTION') {
       await supabaseClient.from('classroom_state').update({
         current_question_id: payload.questionId,
         timer_end_time: payload.timerEndTime,
+        updated_at: now,
+      }).eq('teacher_id', teacherId)
+    }
+    else if (action === 'SET_ACTIVE_UNIT') {
+      await supabaseClient.from('classroom_state').update({
+        active_unit: payload.unit,
         updated_at: now,
       }).eq('teacher_id', teacherId)
     }

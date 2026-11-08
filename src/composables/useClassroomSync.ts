@@ -5,7 +5,6 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 let channel: RealtimeChannel | null = null;
 let reportSyncError: ((message: string) => void) | null = null;
 
-// 提升為模組級別的全域狀態，確保所有組件共用同一個值
 export const currentRoomCode = ref('');
 
 export function useClassroomSync() {
@@ -31,7 +30,8 @@ export function useClassroomSync() {
                     id: newState.current_question_id,
                     timerEndTime: newState.timer_end_time,
                     isClassMode: newState.is_class_mode,
-                    targetCount: newState.target_count
+                    targetCount: newState.target_count,
+                    activeUnit: newState.active_unit // 新增
                 });
             })
             .on('broadcast', { event: 'RESET_PROGRESS' }, () => {
@@ -71,9 +71,9 @@ export function useClassroomSync() {
                                 id: data.current_question_id,
                                 timerEndTime: data.timer_end_time,
                                 isClassMode: data.is_class_mode,
-                                targetCount: data.target_count
+                                targetCount: data.target_count,
+                                activeUnit: data.active_unit // 新增
                             });
-                            // 順便從雲端把 roomCode 抓回來（如果前端重整的話）
                             if (data.room_code) currentRoomCode.value = data.room_code;
                         }
                     } catch (error) {
@@ -130,6 +130,13 @@ export function useClassroomSync() {
         return data?.roomCode;
     };
 
+    // 新增：發布鎖定單元
+    const sendActiveUnit = async (unit: string) => {
+        await supabase.functions.invoke('teacher-action', {
+            body: { action: 'SET_ACTIVE_UNIT', payload: { unit } }
+        });
+    };
+
     const findTeacherByRoomCode = async (code: string) => {
         try {
             const { data, error } = await supabase
@@ -155,10 +162,11 @@ export function useClassroomSync() {
         trackCompleted,
         trackAnswering,
         sendResetProgress,
-        currentRoomCode, // 雖然是全域，但保留在 return 中方便組件使用
+        currentRoomCode,
         sendPush,
         sendAddTime,
         updateClassMode,
+        sendActiveUnit, // 新增
         leaveRoom,
         findTeacherByRoomCode
     };

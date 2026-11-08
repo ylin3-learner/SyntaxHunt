@@ -69,7 +69,15 @@ const {
 );
 
 // 只需要 updateClassMode 與 sendResetProgress 來操作
-const { updateClassMode, sendResetProgress } = useClassroomSync();
+const { updateClassMode, sendResetProgress, sendActiveUnit } = useClassroomSync();
+
+const activeUnitInput = ref('all');
+
+// 新增發布方法
+const handleLockUnit = () => {
+  sendActiveUnit(activeUnitInput.value);
+  alert(`已成功鎖定學生單元：${activeUnitInput.value === 'all' ? '全部' : activeUnitInput.value}`);
+};
 
 const handleShowQr = () => {
   showQrModal.value = true;
@@ -264,11 +272,12 @@ const openQuestionEdit = (id: string) => { const q = localQuestions.value.find(i
         <!-- 👈 將 props.roomCode 傳給 Sidebar -->
         <QuestionListSidebar v-model:unit-filter="unitFilter" v-model:is-class-panel-expanded="isClassPanelExpanded"
           v-model:is-questions-expanded="isQuestionsExpanded" v-model:is-class-mode-toggle="isClassModeToggle"
-          v-model:target-count-input="targetCountInput" :questions="localQuestions"
-          :filtered-questions="filteredQuestions" :available-units="availableUnits" :editing-id="form.editingId"
-          :room-code="props.roomCode" @open-flow="showQuestionFlow = true" @mode-change="handleModeChange"
-          @reset-progress="sendResetProgress" @edit="editQuestion" @push="handleSaveAndPush" @delete="deleteQuestion"
-          @new-question="resetForm" @save-close="saveAllAndClose" @show-qr="handleShowQr" />
+          v-model:target-count-input="targetCountInput" v-model:active-unit-input="activeUnitInput"
+          :questions="localQuestions" :filtered-questions="filteredQuestions" :available-units="availableUnits"
+          :editing-id="form.editingId" :room-code="props.roomCode" @open-flow="showQuestionFlow = true"
+          @mode-change="handleModeChange" @reset-progress="sendResetProgress" @edit="editQuestion"
+          @push="handleSaveAndPush" @delete="deleteQuestion" @new-question="resetForm" @save-close="saveAllAndClose"
+          @show-qr="handleShowQr" @lock-unit="handleLockUnit" />
 
         <QuestionEditor :title="isEditing ? '✏️ 編輯題目' : '🆕 新增題目'" :question-type="form.questionType"
           @update:question-type="form.questionType = $event">

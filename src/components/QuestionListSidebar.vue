@@ -14,6 +14,7 @@ defineProps<{
   isClassModeToggle: boolean;
   targetCountInput: number;
   roomCode?: string;
+  activeUnitInput?: string; 
 }>();
 
 const emit = defineEmits<{
@@ -31,6 +32,8 @@ const emit = defineEmits<{
   (e: 'new-question'): void;
   (e: 'save-close'): void;
   (e: 'show-qr'): void;
+  (e: 'update:activeUnitInput', value: string): void; // 👈 新增
+  (e: 'lock-unit'): void; // 👈 新增
 }>();
 
 const isChecked = (event: Event) =>
@@ -74,6 +77,17 @@ const numberValue = (event: Event) =>
         <button type="button" class="btn-reset-progress" @click="emit('reset-progress')">
           🔄 重置全班作答進度
         </button>
+        <!-- 👈 新增：單元鎖定 UI -->
+        <div class="unit-lock" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #ccc;">
+          <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #b45309;">🔒 限制學生單元</label>
+          <div style="display: flex; gap: 8px;">
+            <select :value="activeUnitInput" @change="emit('update:activeUnitInput', ($event.target as HTMLSelectElement).value)" style="flex: 1; padding: 6px; border-radius: 8px; border: 1px solid #ccc;">
+              <option value="all">📚 全部單元 (不鎖定)</option>
+              <option v-for="unit in availableUnits" :key="unit" :value="unit">{{ unit }}</option>
+            </select>
+            <button @click="emit('lock-unit')" style="padding: 6px 12px; background: #1cb0f6; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">發布</button>
+          </div>
+        </div>
       </div>
     </section>
 
