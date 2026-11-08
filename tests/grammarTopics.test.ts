@@ -43,7 +43,7 @@ describe('grammar topic recommendations', () => {
     });
     expect(getGrammarTopic('have-get-cost')?.defaultCanvasMode).toBe('MATRIX_GATE');
     expect(getGrammarTopic('modal-obligation')?.defaultCanvasMode).toBe('PRAGMATIC_HP');
-    expect(getGrammarTopic('sense-passive-pattern')?.defaultCanvasMode).toBe('PRAGMATIC_HP');
+    expect(getGrammarTopic('emotion-verbs')?.defaultCanvasMode).toBe('PRAGMATIC_HP');
     expect(getGrammarTopic('subjunctive-present-unreal')?.defaultCanvasMode).toBe('GRAVITY_SWITCH');
     expect(getGrammarTopic('pronoun-role')?.defaultCanvasMode).toBe('BUILD');
     expect(getGrammarTopic('participle-clause')?.defaultCanvasMode).toBe('REDUCE');
