@@ -1,11 +1,14 @@
+import { ref } from 'vue';
 import { supabase } from '../services/supabaseClient';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 let channel: RealtimeChannel | null = null;
 let reportSyncError: ((message: string) => void) | null = null;
 
+// 提升為模組級別的全域狀態，確保所有組件共用同一個值
+export const currentRoomCode = ref('');
+
 export function useClassroomSync() {
-    // @joinRoom 開始：加入課室即時頻道，頻道由 teacherId 隔離
     const joinRoom = (
         onReceive: (event: string, payload: any) => void,
         teacherId: string,
@@ -17,7 +20,6 @@ export function useClassroomSync() {
             channel = null;
         }
 
-        // 頻道名稱依教師 ID 隔離，避免不同班級串頻道
         const channelName = `classroom_sync_${teacherId}`;
 
         channel = supabase.channel(channelName, {
@@ -32,11 +34,9 @@ export function useClassroomSync() {
                     targetCount: newState.target_count
                 });
             })
-            // 新增：接收老師的重置廣播
             .on('broadcast', { event: 'RESET_PROGRESS' }, () => {
                 onReceive('RESET_PROGRESS', {});
             })
-            // 取得所有學生的狀態（包含座號）
             .on('presence', { event: 'sync' }, () => {
                 const presenceState = channel?.presenceState() || {};
                 const students = Object.entries(presenceState).flatMap(([key, presences]) =>
@@ -63,11 +63,9 @@ export function useClassroomSync() {
                         const { data, error } = await supabase
                             .from('classroom_state')
                             .select('*')
-                            .eq('teacher_id', teacherId) // 使用傳入的 teacherId
-                            .maybeSingle();              // 使用 maybeSingle 避免 0 rows 錯誤
-                        if (error) {
-                            throw error;
-                        }
+                            .eq('teacher_id', teacherId)
+                            .maybeSingle();
+                        if (error) throw error;
                         if (data) {
                             onReceive('SYNC_STATE', {
                                 id: data.current_question_id,
@@ -75,6 +73,8 @@ export function useClassroomSync() {
                                 isClassMode: data.is_class_mode,
                                 targetCount: data.target_count
                             });
+                            // 順便從雲端把 roomCode 抓回來（如果前端重整的話）
+                            if (data.room_code) currentRoomCode.value = data.room_code;
                         }
                     } catch (error) {
                         const message = error instanceof Error ? error.message : String(error);
@@ -84,9 +84,7 @@ export function useClassroomSync() {
                 }
             });
     };
-    // @joinRoom 結束
 
-    // @trackPresence 開始：更新自身在線狀態，並可攜帶 seatCode
     const trackPresence = async (status: 'completed' | 'answering', seatCode?: string) => {
         if (!channel) return;
         try {
@@ -101,15 +99,9 @@ export function useClassroomSync() {
         }
     };
 
-    // @trackCompleted 開始：標記學生完成作答，攜帶 seatCode
     const trackCompleted = (seatCode?: string) => trackPresence('completed', seatCode);
-    // @trackCompleted 結束
-
-    // @trackAnswering 開始：標記學生正在作答，攜帶 seatCode
     const trackAnswering = (seatCode?: string) => trackPresence('answering', seatCode);
-    // @trackAnswering 結束
 
-    // 新增：老師廣播重置全班進度
     const sendResetProgress = () => {
         if (channel) {
             channel.send({ type: 'broadcast', event: 'RESET_PROGRESS' });
@@ -120,6 +112,7 @@ export function useClassroomSync() {
         const { data } = await supabase.functions.invoke('teacher-action', {
             body: { action: 'PUSH_QUESTION', payload: { questionId: q.id, timerEndTime: endTime } }
         });
+        if (data?.roomCode) currentRoomCode.value = data.roomCode;
         return data?.roomCode;
     };
 
@@ -133,6 +126,7 @@ export function useClassroomSync() {
         const { data } = await supabase.functions.invoke('teacher-action', {
             body: { action: 'UPDATE_SETTINGS', payload: { isClassMode, targetCount } }
         });
+        if (data?.roomCode) currentRoomCode.value = data.roomCode;
         return data?.roomCode;
     };
 
@@ -156,5 +150,16 @@ export function useClassroomSync() {
         reportSyncError = null;
     };
 
-    return { joinRoom, trackCompleted, trackAnswering, sendResetProgress, sendPush, sendAddTime, updateClassMode, leaveRoom, findTeacherByRoomCode };
+    return {
+        joinRoom,
+        trackCompleted,
+        trackAnswering,
+        sendResetProgress,
+        currentRoomCode, // 雖然是全域，但保留在 return 中方便組件使用
+        sendPush,
+        sendAddTime,
+        updateClassMode,
+        leaveRoom,
+        findTeacherByRoomCode
+    };
 }

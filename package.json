@@ -28,6 +28,7 @@
     "english-verbs-irregular": "^3.4.0",
     "fastest-levenshtein": "^1.0.16",
     "html2canvas": "^1.4.1",
+    "qrcode.vue": "^3.11.0",
     "vue": "^3.4.0"
   },
   "allowScripts": {
