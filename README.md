@@ -223,7 +223,8 @@ sequenceDiagram
 ## ✨ Key Features
 
 ### For Students
-- **Trash Can Subtraction UI (Reduce Mode)**: Students see the complete sentence and physically discard redundant words into a trash can.
+- **Sentence-based Subtraction UI (Reduce Mode)**: Students read a natural sentence and simply click on underlined redundant words to discard them into the trash can. The UI removes all drag-and-drop or reordering complexities, ensuring a single pedagogical focus on deletion.
+- **Inline Morphing Capsules (Morph Mode)**: The sentence remains fixed. Clicking a purple "capsule" word reveals a dropdown directly beneath it to select the correct morphological form, eliminating visual clutter and reducing cognitive load.
 - **Class Mode Lock**: When the teacher enables Class Mode, the "Next" button is disabled. Students must wait for the teacher's push command.
 - **Phrase Chunking Visuals**: Multi-word units appear as distinct blue tiles.
 - **Speech Playback**: Hear the sentence through a native English voice or Deepgram TTS.
@@ -246,7 +247,7 @@ sequenceDiagram
 
 1. Open **Teacher Admin** and select **General Grammar** in the question editor.
 2. Choose a curriculum chapter and a specific grammar topic.
-3. Enter the source sentence and the exact target answer.
+3. **Standard & Reduce**: Features Input Processing, Focus on Form using a unique **"Trash Can" subtraction mechanic**, Prosody Output, and Consciousness-Raising. The UI strictly isolates the target grammar point without unnecessary interactions.
 4. Click **Local chunking** or split the sentence manually.
 5. For a `MORPH` topic, mark exactly one changeable chunk and provide its comma-separated forms.
 6. Click **Add to question bank** and **Send to class** to make it active.
