@@ -6,6 +6,7 @@ import { useClassroomSync } from '../composables/useClassroomSync';
 import { autoChunk } from '../rules/autoChunk';
 import { useQuestionForm } from '../composables/useQuestionForm';
 import { compressImageToBase64 } from '../infrastructure/ImageService';
+import { CloudDatabase } from '../services/CloudDatabase';
 
 import QuestionFlow from './QuestionFlow.vue';
 import QuestionListSidebar from './QuestionListSidebar.vue';
@@ -245,9 +246,25 @@ const deleteQuestion = (id: string) => {
     if (form.value.editingId === id) resetForm();
   }
 };
-const handleSaveAndPush = (id: string) => {
+const handleSaveAndPush = async (id: string) => {
+  console.log('🚀 [Teacher] 準備派送題目，ID:', id);
+  console.log('🚀 [Teacher] 本地題庫目前有幾題:', localQuestions.value.length);
+
   if (form.value.editingId === id) resetForm();
-  setTimeout(() => { emit('sync-local', localQuestions.value); emit('push', id); }, 50);
+
+  // 先將最新的本地題庫（包含剛建好的新題）寫入雲端資料庫
+  console.log('☁️ [Teacher] 派送前，正在將題庫寫入雲端...');
+  const success = await CloudDatabase.saveQuestions(localQuestions.value);
+
+  if (!success) {
+    alert('⚠️ 題目儲存至雲端失敗，請檢查網路連線後再嘗試派送。');
+    return;
+  }
+
+  // 確保寫入成功後，才更新本地狀態並發送廣播
+  emit('sync-local', localQuestions.value);
+  emit('push', id);
+  console.log('🚀 [Teacher] 已寫入雲端並發出派送廣播！');
 };
 const saveAllAndClose = () => {
   if (localQuestions.value.length === 0) { alert('題庫不能為空'); return; }
@@ -353,7 +370,8 @@ const openQuestionEdit = (id: string) => { const q = localQuestions.value.find(i
   overflow: hidden;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
   animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-sizing: border-box; /* 關鍵：防止 padding 撐大容器 */
+  box-sizing: border-box;
+  /* 關鍵：防止 padding 撐大容器 */
 }
 
 @keyframes popIn {

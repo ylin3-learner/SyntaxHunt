@@ -6,7 +6,8 @@ import { getQuestionCanvasMode, getQuestionUiMode } from '../rules/types';
 import { CloudDatabase } from '../services/CloudDatabase';
 import { useQuizTimer } from './useQuizTimer';
 import { useSound } from '../utils/useSound';
-import { useClassroomSync } from './useClassroomSync';
+// 確保留言這行，從正確的路徑引入 currentTeacherId
+import { useClassroomSync, currentTeacherId } from './useClassroomSync';
 
 export function useQuizFlow() {
   const currentIndex = ref(0);
@@ -191,25 +192,48 @@ export function useQuizFlow() {
     questionBank.value = updatedQuestions;
   };
 
-  const handlePushQuestion = (id: string) => {
-    const targetQ = questionBank.value.find(q => q.id === id);
-    if (targetQ) {
-      if (unitFilter.value !== 'all' && targetQ.unit !== unitFilter.value) {
-        unitFilter.value = targetQ.unit || 'all';
-      }
-      const idx = filteredQuestions.value.findIndex(q => q.id === id);
-      if (idx !== -1) {
-        currentIndex.value = idx;
-        checkAndSetInitialStage();
-        trackAnswering();
+  // 修正：使用 async 並加入防禦性載入
+  const handlePushQuestion = async (id: string) => {
+    console.log(`🎯 [Student] 開始處理推播題目，目標 ID: ${id}`);
 
-        if (targetQ.isTimed && targetQ.timeLimit) {
-          setTimeout(() => { startTimer(targetQ.timeLimit!); }, 150);
-        } else {
-          clearTimer();
-        }
-        sendPush(targetQ, targetQ.timeLimit ? Date.now() + targetQ.timeLimit * 1000 : null);
+    let targetQ = questionBank.value.find(q => q.id === id);
+    console.log(`🎯 [Student] 本地題庫 (${questionBank.value.length} 題) 尋找結果:`, targetQ ? '找到了' : '找不到');
+
+    // 防禦性載入：如果本地找不到，強制從雲端拉取
+    if (!targetQ && currentTeacherId.value) {
+      console.log(`📡 [Student] 本地找不到，強制從雲端拉取題庫 (Teacher: ${currentTeacherId.value})...`);
+      const freshQuestions = await CloudDatabase.fetchQuestions(currentTeacherId.value);
+      console.log(`📡 [Student] 雲端回傳題庫數量:`, freshQuestions?.length);
+
+      if (freshQuestions) {
+        questionBank.value = freshQuestions;
+        fixAntecedentNumbers();
+        targetQ = freshQuestions.find(q => q.id === id);
+        console.log(`🎯 [Student] 重新尋找結果:`, targetQ ? '找到了' : '還是找不到');
       }
+    }
+
+    if (!targetQ) {
+      console.error(`❌ [Student] 嚴重錯誤：無法載入推播的題目 ID: ${id}`);
+      return;
+    }
+
+    // 正常切換 UI 邏輯
+    if (unitFilter.value !== 'all' && targetQ.unit !== unitFilter.value) {
+      unitFilter.value = targetQ.unit || 'all';
+    }
+    const idx = filteredQuestions.value.findIndex(q => q.id === id);
+    if (idx !== -1) {
+      currentIndex.value = idx;
+      checkAndSetInitialStage();
+      trackAnswering();
+
+      if (targetQ.isTimed && targetQ.timeLimit) {
+        setTimeout(() => { startTimer(targetQ.timeLimit!); }, 150);
+      } else {
+        clearTimer();
+      }
+      sendPush(targetQ, targetQ.timeLimit ? Date.now() + targetQ.timeLimit * 1000 : null);
     }
   };
 

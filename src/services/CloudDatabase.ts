@@ -74,7 +74,7 @@ export const CloudDatabase = {
 
     if (authError || !user) {
       console.log('💡 未登入教師身分（或 Session 已過期），已跳過雲端儲存，僅保留本機進度。');
-      return true;
+      return false; // 改為 false，讓上層知道寫入失敗！
     }
 
     const teacherId = user.id;
@@ -97,11 +97,6 @@ export const CloudDatabase = {
         data: { ...question, sortOrder },
         teacher_id: teacherId,
       }));
-
-      console.log('☁️ 準備儲存題庫順序:', rows.map(row => ({
-        id: row.id,
-        sortOrder: row.data.sortOrder,
-      })));
 
       // 3. 找出「該老師的雲端有，但本地已經被刪除」的 ID
       const idsToDelete = cloudIds.filter(id => !localIds.includes(id));
@@ -133,7 +128,7 @@ export const CloudDatabase = {
       return true;
     } catch (error) {
       console.error('儲存到雲端失敗:', error);
-      return false;
+      return false; // 發生任何錯誤也回傳 false
     }
   },
 

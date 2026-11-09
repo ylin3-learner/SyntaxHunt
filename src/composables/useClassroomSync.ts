@@ -6,6 +6,8 @@ let channel: RealtimeChannel | null = null;
 let reportSyncError: ((message: string) => void) | null = null;
 
 export const currentRoomCode = ref('');
+// 關鍵：確保這行在最外層，與 currentRoomCode 同級
+export const currentTeacherId = ref('');
 
 export function useClassroomSync() {
     const joinRoom = (
@@ -13,7 +15,10 @@ export function useClassroomSync() {
         teacherId: string,
         studentId: string = 'anonymous'
     ) => {
+        // 記錄 teacherId
+        currentTeacherId.value = teacherId;
         reportSyncError = (message) => onReceive('SYNC_ERROR', { message });
+
         if (channel) {
             supabase.removeChannel(channel);
             channel = null;
@@ -26,12 +31,18 @@ export function useClassroomSync() {
         })
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'classroom_state' }, (payload) => {
                 const newState = payload.new;
+
+                console.log('📡 [Student] 收到 Realtime 資料庫變更！', {
+                    newQuestionId: newState.current_question_id,
+                    timerEndTime: newState.timer_end_time,
+                });
+
                 onReceive('SYNC_STATE', {
                     id: newState.current_question_id,
                     timerEndTime: newState.timer_end_time,
                     isClassMode: newState.is_class_mode,
                     targetCount: newState.target_count,
-                    activeUnit: newState.active_unit // 新增
+                    activeUnit: newState.active_unit
                 });
             })
             .on('broadcast', { event: 'RESET_PROGRESS' }, () => {
@@ -72,7 +83,7 @@ export function useClassroomSync() {
                                 timerEndTime: data.timer_end_time,
                                 isClassMode: data.is_class_mode,
                                 targetCount: data.target_count,
-                                activeUnit: data.active_unit // 新增
+                                activeUnit: data.active_unit
                             });
                             if (data.room_code) currentRoomCode.value = data.room_code;
                         }
@@ -109,9 +120,17 @@ export function useClassroomSync() {
     };
 
     const sendPush = async (q: any, endTime: number | null) => {
-        const { data } = await supabase.functions.invoke('teacher-action', {
+        console.log('📡 [Teacher] 正在呼叫 Edge Function (teacher-action)...', { id: q.id, endTime });
+        const { data, error } = await supabase.functions.invoke('teacher-action', {
             body: { action: 'PUSH_QUESTION', payload: { questionId: q.id, timerEndTime: endTime } }
         });
+
+        if (error) {
+            console.error('❌ [Teacher] Edge Function 呼叫失敗:', error);
+        } else {
+            console.log('✅ [Teacher] Edge Function 呼叫成功，回應:', data);
+        }
+
         if (data?.roomCode) currentRoomCode.value = data.roomCode;
         return data?.roomCode;
     };
@@ -130,7 +149,6 @@ export function useClassroomSync() {
         return data?.roomCode;
     };
 
-    // 新增：發布鎖定單元
     const sendActiveUnit = async (unit: string) => {
         await supabase.functions.invoke('teacher-action', {
             body: { action: 'SET_ACTIVE_UNIT', payload: { unit } }
@@ -166,7 +184,7 @@ export function useClassroomSync() {
         sendPush,
         sendAddTime,
         updateClassMode,
-        sendActiveUnit, // 新增
+        sendActiveUnit,
         leaveRoom,
         findTeacherByRoomCode
     };
