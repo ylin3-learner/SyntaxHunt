@@ -187,7 +187,6 @@ flowchart TD
 - **Teacher-in-the-Loop**: Teachers can inject hyper-specific feedback via L2 without writing complex code.
 - **Graceful Degradation**: A failing external API (LanguageTool) will never break the student's flow, falling back safely to L5.
 - **Fully Tested**: 100% test coverage on the pipeline's short-circuit logic and timeout fallback mechanisms using Vitest.
-```
 
 ---
 
