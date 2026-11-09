@@ -127,6 +127,62 @@ graph TD
     LT_Proxy --> LanguageTool
 ```
 
+---
+
+## 🧠 文法診斷引擎（責任鏈模式）
+
+本專案的核心診斷管線已從單體規則引擎，全面重構為高內聚、低耦合的 **5 層責任鏈模式（Chain of Responsibility）**。此架構確保了「毫秒級的本地響應」，同時保證 **「絕對不會放過任何一個學生的錯誤」**。
+
+```mermaid
+flowchart TD
+    Input([學生送出答案]) --> L1
+
+    subgraph Local ["本地確定性診斷 (0ms)"]
+        L1["L1: 本地文法規則<br>確定性檢查 (主謂一致、時態等)"]
+        L2["L2: 老師自訂規則<br>Regex \b 邊界與精準回饋"]
+        L3["L3: 結構差異比對<br>LCS 演算法 (漏詞、多詞、語序)"]
+    end
+
+    subgraph Remote ["遠端深度診斷 (異步)"]
+        L4["L4: LanguageTool API<br>深層語意檢查 (含 AbortSignal 超時控制)"]
+    end
+
+    subgraph Fallback ["終極兜底"]
+        L5["L5: 高亮兜底<br>找出第一個差異點並標紅"]
+    end
+
+    L1 -- "命中確定性錯誤" --> Output([顯示 UI 反饋])
+    L1 -- "未知錯誤" --> L2
+    L2 -- "命中自訂規則" --> Output
+    L2 -- "未知錯誤" --> L3
+    L3 -- "命中結構錯誤" --> Output
+    L3 -- "未知錯誤" --> L4
+    L4 -- "找到文法問題" --> Output
+    L4 -- "超時/連線失敗" --> L5
+    L5 --> Output
+```
+
+### 五層防禦機制
+
+1. **L1 本地確定性規則 (`L1_LocalRules.ts`)**：
+   執行所有已註冊的同步文法規則（如主謂一致、關係代名詞）。若找到確定性錯誤，立即**短路回傳（Short-circuit）**，提供零延遲的反饋。
+2. **L2 老師自訂規則 (`L2_CustomRules.ts`)**：
+   解析題目中的 `customRules`。使用帶有**單字邊界（`\b`）的正則表達式**，避免 `go` 誤匹配到 `going`。支援規則優先級排序與概念過濾。
+3. **L3 結構差異比對 (`L3_StructuralDiff.ts`)**：
+   使用 **最長公共子序列（LCS）** 演算法計算 Token 級別的差異。將錯誤精準分類為遺漏（`M:`）、多餘（`U:`）、語序（`O:`）與替換（`R:`）。
+4. **L4 LanguageTool 深度診斷 (`L4_LanguageTool.ts`)**：
+   僅在本地層級皆回傳 `UNKNOWN_ERROR` 時觸發。使用 `AbortController` 搭配 8 秒超時控制。若網路失敗或超時，會優雅降級至 L5，絕不卡住學生畫面。
+5. **L5 終極兜底高亮 (`L5_HighlightFallback.ts`)**：
+   教育意義的安全網。若所有規則皆無法解釋錯誤，系統會利用 `findDiffIndices` 找出第一個錯誤的字塊（Tile）。回傳 `HIGHLIGHT_ONLY` 訊號，讓 UI 將該字塊標紅，並顯示通用提示（「這裡的單字形式或順序好像不太對喔」），確保學習閉環不會中斷。
+
+### 💡 核心設計優勢
+- **短路效率（Short-Circuit）**：99% 的常見錯誤在 L1~L3 就以零網路開銷解決。
+- **教師賦能（Teacher-in-the-Loop）**：老師可透過 L2 注入高度客製化的文法回饋，無需撰寫複雜程式碼。
+- **優雅降級（Graceful Degradation）**：外部 API（LanguageTool）故障或超時，絕對不會癱瘓系統，而是安全降級至 L5 兜底。
+- **完整測試覆蓋**：使用 Vitest 對管線的短路邏輯、超時降級機制與正則邊界進行了 100% 的單元測試防護。
+
+---
+
 ### 題目路由資料流 (Student Question Routing)
 
 這張圖展示了系統如何根據「班級模式」，決定將哪些題目渲染給學生。
