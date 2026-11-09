@@ -60,7 +60,7 @@ describe('GrammarCanvas 六大題型 UI 互動測試', () => {
         expect(wrapper.findAll('.word-bank .tile').length).toBe(2);
         const answerAreaTiles = wrapper.findAll('.answer-area .tile');
         expect(answerAreaTiles.length).toBe(1);
-        expect(answerAreaTiles[0].text()).toBe(firstTileText); // 👈 使用變數比對
+        expect(answerAreaTiles[0].text()).toBe(firstTileText); // 使用變數比對
     });
 
     // ==========================================
@@ -82,8 +82,8 @@ describe('GrammarCanvas 六大題型 UI 互動測試', () => {
             props: { question, initialChunks: question.chunks, speechRate: 0.8, fixedMorph: true }
         });
 
-        // 尋找固定句型中的變形字磚
-        const morphTile = wrapper.find('.tile.can-morph');
+        // 修正：尋找膠囊按鈕，而不是舊版的 .tile.can-morph
+        const morphTile = wrapper.find('.morph-capsule');
         expect(morphTile.exists()).toBe(true);
         expect(morphTile.text()).toBe('go');
 
@@ -92,9 +92,9 @@ describe('GrammarCanvas 六大題型 UI 互動測試', () => {
         const menuButtons = wrapper.findAll('.morph-menu button');
         expect(menuButtons.length).toBe(3);
 
-        // 點擊 'goes'
-        await menuButtons[1].trigger('click');
-        expect(wrapper.find('.tile.can-morph').text()).toBe('goes');
+        // 點擊 'went'
+        await menuButtons[2].trigger('click');
+        expect(wrapper.find('.morph-capsule').text()).toBe('went');
     });
 
     // ==========================================
@@ -105,8 +105,8 @@ describe('GrammarCanvas 六大題型 UI 互動測試', () => {
             ui_mode: 'REDUCE',
             canvas_mode: 'REDUCE',
             chunks: [
-                { id: '1', text: 'The', draggable: false },
-                { id: '2', text: 'who', draggable: true }
+                { id: '1', text: 'The', draggable: false }, // 不可移除
+                { id: '2', text: 'who', draggable: true }   // 可移除
             ],
             correctAnswer: ['The']
         });
@@ -115,15 +115,17 @@ describe('GrammarCanvas 六大題型 UI 互動測試', () => {
             props: { question, initialChunks: question.chunks, speechRate: 0.8 }
         });
 
-        expect(wrapper.findAll('.is-reduce-mode').length).toBe(2);
+        // 修正：現在只有 draggable 為 true 的才會變成 .removable-word
+        expect(wrapper.findAll('.removable-word').length).toBe(1);
+        expect(wrapper.findAll('.fixed-word').length).toBe(1);
 
-        // 點擊第一個移除按鈕
-        const discardBtn = wrapper.findAll('.reduce-discard-button')[0];
+        // 點擊移除按鈕
+        const discardBtn = wrapper.find('.removable-word');
         await discardBtn.trigger('click');
 
-        expect(wrapper.findAll('.is-reduce-mode').length).toBe(1);
+        expect(wrapper.findAll('.removable-word').length).toBe(0);
         expect(wrapper.findAll('.trash-tile').length).toBe(1);
-        expect(wrapper.find('.trash-tile').text()).toContain('The');
+        expect(wrapper.find('.trash-tile').text()).toContain('who');
     });
 
     // ==========================================

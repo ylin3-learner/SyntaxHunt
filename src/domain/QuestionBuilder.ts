@@ -1,4 +1,4 @@
-import type { CanvasMode, Chunk, GrammarConcept, QuestionData, UIMode } from '../rules/types';
+import type { CanvasMode, Chunk, GrammarConcept, QuestionData, UIMode, CustomGrammarRule } from '../rules/types';
 import { autoChunk } from '../rules/autoChunk';
 import { getGrammarTopic } from '../rules/grammarTopics';
 
@@ -13,6 +13,9 @@ export interface FormPayload {
 
     selectedChapter: number;
     uiMode: UIMode;
+
+    // 新增這裡，為了解決 FormPayload 找不到 customRules 的錯誤
+    customRules?: CustomGrammarRule[];
 
     selectedCanvasMode: CanvasMode;
     selectedGrammarTopicId: string;
@@ -131,6 +134,7 @@ export const buildQuestion = (form: FormPayload): { question?: QuestionData; err
             isTimed: form.isTimedForm,
             timeLimit: form.isTimedForm ? form.timeLimitForm : undefined,
             explanation: form.explanationTitle || form.explanationDesc ? { title: form.explanationTitle, desc: form.explanationDesc } : undefined,
+            customRules: form.customRules, // 將自訂規則加入題目資料中
             ...(form.selectedCanvasMode === 'PRAGMATIC_HP' ? { pragmatic_target: { statusGap: form.statusGap, npcLabel: form.npcLabel.trim() || undefined } } : {}),
             ...(form.selectedCanvasMode === 'MATRIX_GATE' ? {
                 matrix_config: {

@@ -19,22 +19,24 @@ const emit = defineEmits<{
 
 const isIrrealis = ref(false);
 
-// 切換現實/假設模式 (只有 GRAVITY_SWITCH 會用到)
 const toggleGravity = () => {
   isIrrealis.value = !isIrrealis.value;
 };
 
-// 根據是否為假設模式，調整傳入底層的字塊
 const adjustedChunks = computed(() => {
   return props.initialChunks.map(chunk => {
-    return { ...chunk };
+    const newChunk = { ...chunk };
+    if (isIrrealis.value) {
+      if (newChunk.text === 'am') newChunk.text = 'were';
+      if (newChunk.text === 'will') newChunk.text = 'would';
+    }
+    return newChunk;
   });
 });
 </script>
 
 <template>
   <section class="morph-strategy" :class="{ 'gravity-irreal': isIrrealis }">
-    <!-- 只有在 GRAVITY_SWITCH 情境才顯示切換開關 -->
     <div v-if="strategy === 'timeline' && ['SUBJUNCTIVE', 'CONDITIONALS'].includes(question.concept ?? '')"
       class="gravity-control">
       <span>{{ isIrrealis ? '🌌 假設模式：非現實語境' : '🌍 現實模式：真實發生' }}</span>
@@ -43,16 +45,41 @@ const adjustedChunks = computed(() => {
       </button>
     </div>
 
-    <!-- 這裡原本的 grammar-landmarks (go -> 現實) 已移除 -->
+    <div v-if="strategy === 'timeline'" class="grammar-landmarks">
+      <div class="landmark-item" v-for="chunk in initialChunks.filter(c => c.can_morph)" :key="chunk.id">
+        <span class="lm-from">{{ chunk.text }}</span>
+        <span class="lm-arrow">➔</span>
+        <span class="lm-to">{{ isIrrealis ? '非現實' : '現實' }}</span>
+      </div>
+    </div>
 
-    <!-- 其他全部交給底層的 TileSentenceCanvas，它會處理膠囊與下拉選單 -->
-    <TileSentenceCanvas :question="question" :initial-chunks="adjustedChunks" :speech-rate="speechRate"
-      :fixed-morph="true" :is-irrealis="isIrrealis" @success="emit('success')"
+    <div v-if="strategy === 'timeline' || strategy === 'gauge'" class="timeline-controls">
+      <input type="range" min="0" max="1" step="1" aria-label="Time Range 1" />
+      <input type="range" min="0" max="1" step="1" aria-label="Time Range 2" />
+    </div>
+    <div v-if="question.concept === 'MODAL_VERB'" class="gauge-title">情態語氣壓力計</div>
+
+    <!-- 修正：加上 :key="isIrrealis"，強制重新渲染 -->
+    <TileSentenceCanvas :key="String(isIrrealis)" :question="question" :initial-chunks="adjustedChunks"
+      :speech-rate="speechRate" :fixed-morph="true" @success="emit('success')"
       @misconception="emit('misconception', $event)" @continue="emit('continue')" />
   </section>
 </template>
 
 <style scoped>
+.timeline-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.gauge-title {
+  font-weight: bold;
+  color: #7c3aed;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
 .morph-strategy {
   display: flex;
   flex-direction: column;
