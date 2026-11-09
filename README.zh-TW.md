@@ -275,6 +275,46 @@ sequenceDiagram
 
 ---
 
+## 📋 進度追蹤 (Progress Tracking)
+
+### 🏗️ 責任鏈模式重構 (Chain of Responsibility Refactoring)
+
+**狀態**: ✅ 架構完成，測試大部分通過
+
+本專案已將文法診斷管線從單體 `diagnoseGrammar()` 重構為**責任鏈模式 (Chain of Responsibility)**，達成高內聚、低耦合的架構目標。
+
+#### 📁 新增目錄結構
+```
+src/rules/diagnostics/
+├── pipeline.ts              # 核心管理器：負責註冊與依序執行各層
+├── layers/
+│   ├── L1_LocalRules.ts     # 第一層：現有語法規則 (由 grammarRules.ts 重構)
+│   ├── L2_CustomRules.ts    # 第二層：老師自訂規則 (解析 customRules)
+│   ├── L3_StructuralDiff.ts # 第三層：LCS/編輯距離結構比對
+│   ├── L4_LanguageTool.ts   # 第四層：遠端 LanguageTool 呼叫
+│   └── L5_HighlightFallback.ts # 第五層：終極兜底 (計算高亮 index)
+```
+
+#### 🔄 管線執行邏輯
+1. **L1 (Local Rules)**: 執行所有本地註冊的語法規則，若找到確定性錯誤則短路
+2. **L2 (Custom Rules)**: 檢查題目是否帶有老師自訂規則，進行子字串比對
+3. **L3 (Structural Diff)**: 使用 LCS 演算法比對 student 與 correct token 的結構差異
+4. **L4 (LanguageTool)**: 呼叫遠端 LanguageTool 進行深層語意檢查，超時則回傳空陣列
+5. **L5 (Highlight Fallback)**: 終極兜底，找出第一個差異點並標紅
+
+#### ✨ 新增功能
+- **自訂文法規則 (CustomGrammarRule)**: 教師可在題目中加入 `customRules`，針對特定文法點提供精準回饋
+- **高亮兜底 (Highlight Fallback)**: 當所有規則都無法分類時，自動標出第一個差異字塊
+- **管線短路機制**: 高優先級層找到確定性錯誤後，不再執行低優先級層，提升診斷效率
+
+#### 🧪 測試狀態
+- ✅ `src/rules/diagnostics/pipeline.test.ts` - 管線短路與兜底邏輯測試
+- ✅ `src/rules/diagnostics/layers/L1_LocalRules.test.ts`
+- ✅ `src/rules/diagnostics/layers/L2_CustomRules.test.ts`
+- ✅ `src/rules/diagnostics/layers/L3_StructuralDiff.test.ts`
+
+---
+
 ## 🚀 快速開始
 
 ### 環境設定
