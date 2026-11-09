@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref } from 'vue';
 import type { FormPayload } from '../../domain/QuestionBuilder';
+import type { CustomGrammarRule } from '../../rules/types'; // 👈 引入型別
 import { grammarChapters } from '../../rules/grammarTopics';
 import EditorFormFields from '../EditorFormFields.vue';
 
@@ -20,8 +21,34 @@ const props = defineProps<{
     handleCanvasModeChange: () => void;
 }>();
 
-// 專屬這個表單的 UI 狀態
 const advancedSettingsExpanded = ref(false);
+
+const newRulePattern = ref('');
+const newRuleMessage = ref('');
+
+const addCustomRule = () => {
+    if (!newRulePattern.value.trim() || !newRuleMessage.value.trim()) return;
+
+    if (!props.form.customRules) {
+        props.form.customRules = [];
+    }
+
+    props.form.customRules.push({
+        id: `custom-${Date.now()}`,
+        wrongPattern: newRulePattern.value.split(',').map(s => s.trim()).filter(Boolean),
+        message: newRuleMessage.value.trim(),
+        priority: 100,
+    });
+
+    newRulePattern.value = '';
+    newRuleMessage.value = '';
+};
+
+const removeCustomRule = (id: string) => {
+    if (!props.form.customRules) return;
+    // 👈 補上型別標註 (r: CustomGrammarRule)
+    props.form.customRules = props.form.customRules.filter((r: CustomGrammarRule) => r.id !== id);
+};
 </script>
 
 <template>
@@ -83,6 +110,36 @@ const advancedSettingsExpanded = ref(false);
             <label for="grammar-speech-rate">TTS 語速</label>
             <input id="grammar-speech-rate" v-model.number="form.speechRate" type="number" min="0.5" max="1.5"
                 step="0.1" />
+
+            <!-- Custom Rules Section -->
+            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px dashed #ccc;">
+                <label style="font-weight: bold; color: #0ea5e9;">🎯 自訂診斷規則 (L2 Layer)</label>
+                <p style="font-size: 0.85rem; color: #666; margin-bottom: 12px;">當學生排出指定錯誤時，立刻給予自訂提示，不需等待 LanguageTool。
+                </p>
+
+                <div v-if="form.customRules && form.customRules.length > 0"
+                    style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+                    <div v-for="rule in form.customRules" :key="rule.id"
+                        style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <div>
+                            <strong style="color: #dc2626;">錯誤字詞：{{ rule.wrongPattern.join(', ') }}</strong>
+                            <p style="margin: 4px 0 0; font-size: 0.85rem; color: #475569;">{{ rule.message }}</p>
+                        </div>
+                        <button type="button" @click="removeCustomRule(rule.id)"
+                            style="background: none; border: none; cursor: pointer; color: #ef4444; font-size: 1.2rem;">✕</button>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <input v-model="newRulePattern" type="text" placeholder="錯誤樣式 (逗號分隔，例如：go, goes)"
+                        style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;" />
+                    <input v-model="newRuleMessage" type="text" placeholder="給學生的提示 (例如：注意 yesterday，這裡要用過去式 went 喔！)"
+                        style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;" />
+                    <button type="button" @click="addCustomRule"
+                        style="align-self: flex-start; background: #0ea5e9; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-weight: bold;">＋
+                        新增規則</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -90,7 +147,6 @@ const advancedSettingsExpanded = ref(false);
 </template>
 
 <style scoped>
-/* 搬移相關的共用與專屬樣式 */
 .form-group {
     margin-bottom: 24px;
     display: flex;
