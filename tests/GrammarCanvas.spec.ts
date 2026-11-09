@@ -45,7 +45,7 @@ describe('GrammarCanvas', () => {
 
     await wrapper.find('.fixed-morph-sentence .morph-capsule').trigger('click');
     await wrapper.findAll('.morph-menu button').find(option => option.text() === 'went')!.trigger('click');
-    await nextTick(); 
+    await nextTick();
 
     expect(wrapper.findAll('.fixed-morph-sentence > .fixed-sentence-token, .fixed-morph-token').map(t => t.text())).toEqual(['He', 'went', 'to school']);
     await vi.advanceTimersByTimeAsync(1500);
@@ -76,9 +76,8 @@ describe('GrammarCanvas', () => {
     await nextTick();
 
     await wrapper.find('[aria-label="移除「which」"]').trigger('click');
-    await nextTick(); 
+    await nextTick();
 
-    // 👈 關鍵：等待異步管線跑完
     await flushPromises();
     await nextTick();
 
@@ -111,10 +110,22 @@ describe('GrammarCanvas', () => {
       await wrapper.findAll('.word-bank .tile').find(tile => tile.text() === token)!.trigger('click');
     }
 
+    // 👈 關鍵：因為 BUILD 模式不再即時觸發，所以必須點擊 Check Answer
+    // 而且因為是第一次錯，會顯示溫和提示 (TRY_AGAIN)，不會觸發 LanguageTool
+    await wrapper.find('.check-answer-button').trigger('click');
+    await nextTick();
+
+    // 第一次錯：顯示溫和提示
+    expect(wrapper.text()).toContain('好像還差一點點');
+    expect(CloudDatabase.checkLanguageTool).not.toHaveBeenCalled();
+
+    // 第二次錯：點擊再次檢查，這次會觸發 Pipeline 並呼叫 LanguageTool
+    await wrapper.find('.check-answer-button').trigger('click');
+
     await vi.waitFor(() => expect(CloudDatabase.checkLanguageTool).toHaveBeenCalled());
     await flushPromises();
-    await nextTick(); 
-    
+    await nextTick();
+
     expect(wrapper.emitted('success')).toBeUndefined();
     expect(wrapper.text()).toContain('Use a different fruit.');
     wrapper.unmount();
@@ -122,7 +133,6 @@ describe('GrammarCanvas', () => {
 
   it('lets students continue to the next question when LanguageTool times out', async () => {
     vi.useFakeTimers();
-    // 👈 模擬超時：當 AbortSignal 被觸發時 reject
     vi.mocked(CloudDatabase.checkLanguageTool).mockImplementationOnce((text, signal) => {
       return new Promise((_, reject) => {
         signal?.addEventListener('abort', () => reject(new Error('Aborted')));
@@ -145,9 +155,16 @@ describe('GrammarCanvas', () => {
       await wrapper.findAll('.word-bank .tile').find(tile => tile.text() === token)!.trigger('click');
     }
 
-    await vi.advanceTimersByTimeAsync(8000); // 觸發 8 秒超時
-    await flushPromises(); 
-    await nextTick(); 
+    // 第一次點擊 (溫和提示)
+    await wrapper.find('.check-answer-button').trigger('click');
+    await nextTick();
+
+    // 第二次點擊 (觸發 Pipeline 與超時)
+    await wrapper.find('.check-answer-button').trigger('click');
+
+    await vi.advanceTimersByTimeAsync(8000);
+    await flushPromises();
+    await nextTick();
 
     expect(wrapper.text()).toContain('這裡的單字形式或順序好像不太對喔');
     await wrapper.find('.continue-button').trigger('click');
@@ -174,7 +191,7 @@ describe('GrammarCanvas', () => {
 
     await vi.waitFor(() => expect(wrapper.find('[role="switch"]').exists()).toBe(true));
     await wrapper.find('[role="switch"]').trigger('click');
-    await nextTick(); 
+    await nextTick();
 
     expect(wrapper.find('.morph-strategy').classes()).toContain('gravity-irreal');
     expect(wrapper.find('.fixed-morph-sentence').text()).toContain('were');

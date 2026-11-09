@@ -59,7 +59,6 @@ const adjustedChunks = computed(() => {
     </div>
     <div v-if="question.concept === 'MODAL_VERB'" class="gauge-title">情態語氣壓力計</div>
 
-    <!-- 修正：加上 :key="isIrrealis"，強制重新渲染 -->
     <TileSentenceCanvas :key="String(isIrrealis)" :question="question" :initial-chunks="adjustedChunks"
       :speech-rate="speechRate" :fixed-morph="true" @success="emit('success')"
       @misconception="emit('misconception', $event)" @continue="emit('continue')" />
@@ -67,19 +66,6 @@ const adjustedChunks = computed(() => {
 </template>
 
 <style scoped>
-.timeline-controls {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.gauge-title {
-  font-weight: bold;
-  color: #7c3aed;
-  margin-bottom: 10px;
-  text-align: center;
-}
-
 .morph-strategy {
   display: flex;
   flex-direction: column;
@@ -128,5 +114,54 @@ const adjustedChunks = computed(() => {
   border-color: #a78bfa;
   background: #4c1d95aa;
   color: #f8fafc;
+}
+
+.grammar-landmarks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px dashed #cbd5e1;
+}
+
+.landmark-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.lm-from {
+  color: #64748b;
+  text-decoration: line-through;
+}
+
+.lm-arrow {
+  color: #94a3b8;
+}
+
+.lm-to {
+  color: #1cb0f6;
+  background: #e0f2fe;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.timeline-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.gauge-title {
+  font-weight: bold;
+  color: #7c3aed;
+  margin-bottom: 10px;
+  text-align: center;
 }
 </style>

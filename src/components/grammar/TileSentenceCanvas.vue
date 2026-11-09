@@ -40,6 +40,9 @@ const activeMorphId = ref<string | null>(null);
 const morphFeedback = ref<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 const draggedTileIndex = ref<number | null>(null);
 
+// 👈 追蹤嘗試次數，用於漸進式鷹架
+const attemptCount = ref(0);
+
 const initTiles = () => {
   if (isFixedMorph.value) {
     answerArea.value = JSON.parse(JSON.stringify(props.initialChunks.map(chunk => ({ ...chunk }))));
@@ -85,7 +88,7 @@ const selectMorph = (chunk: Chunk, newText: string, hintText?: string) => {
   };
   activeMorphId.value = null;
   resetState();
-  void checkAnswer();
+  void checkAnswer(true);
 };
 
 const discardTile = (tile: Chunk) => {
@@ -95,7 +98,7 @@ const discardTile = (tile: Chunk) => {
     const [removed] = answerArea.value.splice(index, 1);
     trashArea.value.push(removed);
     resetState();
-    void checkAnswer();
+    void checkAnswer(true);
   }
 };
 
@@ -113,7 +116,7 @@ const handleDrop = (dropIndex: number) => {
   answerArea.value.splice(dropIndex, 0, item);
   draggedTileIndex.value = null;
   resetState();
-  void checkAnswer();
+  void checkAnswer(true);
 };
 
 const restoreTile = (tile: Chunk) => {
@@ -124,7 +127,7 @@ const restoreTile = (tile: Chunk) => {
     answerArea.value.push(restored);
     answerArea.value.sort((a, b) => props.initialChunks.findIndex(c => c.id === a.id) - props.initialChunks.findIndex(c => c.id === b.id));
     resetState();
-    void checkAnswer();
+    void checkAnswer(true);
   }
 };
 
@@ -135,7 +138,7 @@ const selectTile = (tile: Chunk) => {
     wordBank.value.splice(index, 1);
     answerArea.value.push(tile);
     resetState();
-    void checkAnswer();
+    // BUILD 模式：點擊字磚時不立刻檢查
   }
 };
 
@@ -153,38 +156,70 @@ const resetState = () => {
   isWrong.value = false;
   signals.value = [];
   remoteStatus.value = '';
+  // 注意：這裡不重置 attemptCount，讓鷹架層級保留，直到學生答對或換題
 };
 
 const checkAnswer = async (force = false) => {
   const studentTokens = answerArea.value.map(t => t.text);
   const correctTokens = props.question.correctAnswer;
 
-  if (studentTokens.length === 0 && props.question.ui_mode !== 'REDUCE') return;
-
+  // 1. 完全正確
   const cleanCurrent = normalizeAnswer(studentTokens);
   const cleanTarget = normalizeAnswer(correctTokens);
   if (cleanCurrent === cleanTarget) {
     playSuccess();
     isSuccess.value = true;
+    attemptCount.value = 0; // 答對後重置
     speak(studentTokens.map(token => token.replace(/[\[\]]/g, '')).join(' '), { rate: props.speechRate ?? 0.8 });
     successTimeout = setTimeout(() => emit('success'), 1500);
     return;
   }
 
-  if (!force && props.question.ui_mode !== 'REDUCE' && studentTokens.length < correctTokens.length) return;
+  // 2. 長度不足且非強制檢查，直接返回
+  if (props.question.ui_mode === 'BUILD' && studentTokens.length < correctTokens.length && !force) {
+    return;
+  }
 
+  if (props.question.ui_mode === 'BUILD' && studentTokens.length === 0) return;
+
+  // 3. 漸進式鷹架邏輯
+  attemptCount.value++;
+
+  // 👈 關鍵修正：第一次錯誤時，直接回傳溫和提示，不呼叫 Pipeline 與 LanguageTool
+  if (attemptCount.value === 1 && props.question.ui_mode === 'BUILD') {
+    signals.value = [{
+      code: 'TRY_AGAIN',
+      message: '好像還差一點點，檢查看看順序或單字有沒有拼對！',
+      source: 'local',
+      category: 'Soft Warning'
+    }];
+    return;
+  }
+
+  // 第二次以上錯誤：執行 Pipeline
   const ctx = { studentTokens, correctTokens: correctTokens ?? [], question: props.question };
   const pipelineSignals = await runDiagnosisPipeline(ctx);
 
   if (pipelineSignals.length === 0) return;
 
-  const displayed = props.question.ui_mode === 'REDUCE' ? pipelineSignals.slice(0, 1) : pipelineSignals;
-  signals.value = displayed;
-  playError();
-  isWrong.value = true;
+  if (attemptCount.value === 2) {
+    // 第二次錯誤：顯示具體診斷（過濾掉單純高亮的結果）
+    const validSignals = pipelineSignals.filter(s => s.code !== 'HIGHLIGHT_ONLY');
+    signals.value = validSignals.length > 0 ? validSignals : pipelineSignals;
+    playError();
+    isWrong.value = true;
+  } else {
+    // 第三次錯誤：啟動 L5 高亮兜底
+    signals.value = pipelineSignals;
+    playError();
+    isWrong.value = true;
+  }
 
+  const displayed = props.question.ui_mode === 'REDUCE' ? pipelineSignals.slice(0, 1) : pipelineSignals;
   displayed.forEach((signal) => {
-    if (signal.code !== 'HIGHLIGHT_ONLY') emit('misconception', signal.code);
+    if (signal.code !== 'HIGHLIGHT_ONLY' && signal.code !== 'TRY_AGAIN') {
+      emit('misconception', signal.code);
+    }
   });
 };
 
@@ -222,15 +257,12 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
       </Transition>
     </div>
 
-    <!-- 👈 修正：加上 success-bg 綁定 -->
-    <div v-else-if="question.ui_mode === 'REDUCE'" class="reduce-sentence-mode" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
+    <div v-else-if="question.ui_mode === 'REDUCE'" class="reduce-sentence-mode"
+      :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
       <div class="sentence-display">
         <template v-for="(tile, index) in answerArea" :key="tile.id">
-          <button v-if="tile.draggable" type="button" class="removable-word"
-            draggable="true"
-            @dragstart="handleDragStart(index)"
-            @dragover.prevent
-            @drop="handleDrop(index)"
+          <button v-if="tile.draggable" type="button" class="removable-word" draggable="true"
+            @dragstart="handleDragStart(index)" @dragover.prevent @drop="handleDrop(index)"
             :aria-label="'移除「' + tile.text.replace(/[\[\]]/g, '') + '」'"
             :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }" @click="discardTile(tile)">
             {{ tile.text.replace(/[\[\]]/g, '') }} <span class="remove-hint">×</span>
@@ -247,7 +279,8 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
             <span>{{ tile.text.replace(/[\[\]]/g, '') }}</span>
             <button type="button" class="trash-restore-button" @click="restoreTile(tile)">Restore ↶</button>
           </div>
-          <div v-if="trashArea.length === 0" class="trash-placeholder">Click on underlined words above to remove them.</div>
+          <div v-if="trashArea.length === 0" class="trash-placeholder">Click on underlined words above to remove them.
+          </div>
         </div>
       </div>
     </div>
@@ -280,8 +313,8 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
       <button class="check-answer-button" @click="checkAnswer(true)">Check Answer</button>
     </div>
 
-    <div v-if="signals.length > 0" class="alert-bubble">
-      <div class="alert-icon">⚠️</div>
+    <div v-if="signals.length > 0" class="alert-bubble" :class="{ 'soft-warning': signals[0].code === 'TRY_AGAIN' }">
+      <div class="alert-icon">{{ signals[0].code === 'TRY_AGAIN' ? '💡' : '⚠️' }}</div>
       <div class="alert-messages">
         <div v-for="(s, index) in signals" :key="`${s.code}-${index}`">
           <p>{{ s.message }}</p>
@@ -294,26 +327,330 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
       </div>
     </div>
 
-    <button 
-      v-if="signals.length > 0 && (signals[0].code === 'HIGHLIGHT_ONLY' || signals[0].source === 'languagetool')" 
-      class="continue-button" 
-      @click="emit('continue')"
-    >
+    <button v-if="signals.length > 0 && (signals[0].code === 'HIGHLIGHT_ONLY' || signals[0].source === 'languagetool')"
+      class="continue-button" @click="emit('continue')">
       繼續下一題 →
     </button>
   </div>
 </template>
 
 <style scoped>
-.grammar-canvas { display: flex; flex-direction: column; gap: 20px; min-height: 200px; position: relative; }
+.grammar-canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 200px;
+  position: relative;
+}
 
-/* 👈 新增：REDUCE 模式的成功背景 */
+/* === FIXED MORPH STYLES === */
+.fixed-morph-sentence {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 6px;
+  padding: 20px;
+  border: 2px solid #d5e0e8;
+  border-radius: 16px;
+  background: #ffffff;
+  font-size: clamp(1.2rem, 3vw, 1.8rem);
+  line-height: 1.6;
+  transition: all 0.2s;
+}
+
+.fixed-context {
+  color: #526879;
+}
+
+.fixed-sentence-token {
+  padding: 4px 2px;
+}
+
+.fixed-morph-token {
+  position: relative;
+  display: inline-flex;
+}
+
+.morph-capsule {
+  padding: 2px 16px;
+  border: 2px solid #9c27b0;
+  border-radius: 999px;
+  background: #f3e8ff;
+  color: #9c27b0;
+  font-size: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.morph-capsule:hover {
+  background: #e9d5ff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(156, 39, 176, 0.2);
+}
+
+/* === REDUCE STYLES === */
+.reduce-sentence-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px;
+  background: #fafafa;
+  border-radius: 16px;
+  border: 2px dashed #e5e5e5;
+}
+
 .reduce-sentence-mode.success-bg {
   background-color: #f0fff0;
   border-color: #58cc02;
 }
 
-.check-answer-button, .continue-button {
+.sentence-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: clamp(1.2rem, 3vw, 1.8rem);
+  align-items: center;
+  line-height: 1.6;
+}
+
+.fixed-word {
+  color: #333;
+}
+
+.removable-word {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border: 2px solid #ff4b4b;
+  border-radius: 8px;
+  background: #fff0f0;
+  color: #ea2b2b;
+  font-size: inherit;
+  font-weight: bold;
+  cursor: grab;
+  transition: all 0.2s;
+}
+
+.removable-word:active {
+  cursor: grabbing;
+}
+
+.removable-word:hover {
+  background: #ffdfe0;
+  transform: scale(1.05);
+}
+
+.remove-hint {
+  font-size: 1.2rem;
+  opacity: 0.6;
+}
+
+.trash-zone-wrapper {
+  border-top: 2px dashed #eee;
+  padding-top: 20px;
+}
+
+.trash-label {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: #6b7280;
+  margin-bottom: 12px;
+}
+
+.trash-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 60px;
+  padding: 16px;
+  background: #fff;
+  border: 2px dashed #ccc;
+  border-radius: 12px;
+  justify-content: center;
+}
+
+.trash-tile {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid #d5d9de;
+  border-radius: 8px;
+  background: #f0f0f0;
+  color: #999;
+}
+
+.trash-restore-button {
+  border: 1px solid #1cb0f6;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: #fff;
+  color: #1cb0f6;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.trash-placeholder {
+  color: #999;
+  font-size: 0.9rem;
+}
+
+/* === BUILD STYLES === */
+.build-mode-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.answer-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 80px;
+  padding: 16px;
+  border-radius: 16px;
+  border-bottom: 4px dashed #e5e5e5;
+  background: #fdfdfd;
+  align-items: center;
+  transition: all 0.3s;
+}
+
+.answer-area.success-bg {
+  border-bottom-color: #58cc02;
+  background: #f0fff0;
+}
+
+.word-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 80px;
+  padding: 16px;
+  border: 2px solid #e5e5e5;
+  border-radius: 16px;
+  background: #ffffff;
+  transition: all 0.3s;
+}
+
+.answer-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px;
+  min-height: 50px;
+}
+
+.empty-slot {
+  width: 100%;
+  height: 100%;
+  min-width: 60px;
+  min-height: 50px;
+  border-bottom: 3px dashed #ccc;
+  border-radius: 8px;
+  background: #f4f4f4;
+  transition: all 0.2s;
+}
+
+.tile-wrapper {
+  position: relative;
+}
+
+.tile {
+  padding: 12px 20px;
+  background-color: #ffffff;
+  border: 2px solid #e5e5e5;
+  border-bottom-width: 4px;
+  border-radius: 12px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #4b4b4b;
+  transition: all 0.1s;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.tile:hover {
+  background-color: #f7f7f7;
+}
+
+.tile:active {
+  border-bottom-width: 2px;
+  transform: translateY(2px);
+}
+
+.tile-chunk {
+  background-color: #e6f7ff;
+  border-color: #1cb0f6;
+  color: #1899d6;
+  border-radius: 20px;
+  padding: 12px 24px;
+  box-shadow: 0 2px 8px rgba(28, 176, 246, 0.15);
+}
+
+.tile.can-morph {
+  border-color: #9c27b0;
+  background-color: #f3e8ff;
+  color: #9c27b0;
+}
+
+/* === SHARED STYLES === */
+.tile-error {
+  background-color: #ffdfe0 !important;
+  border-color: #ff4b4b !important;
+  color: #ea2b2b !important;
+}
+
+.tile-success {
+  background-color: #d7ffb8 !important;
+  border-color: #58cc02 !important;
+  color: #58cc02 !important;
+}
+
+.morph-menu {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  background: white;
+  border: 2px solid #9c27b0;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+  overflow: hidden;
+  min-width: 100%;
+  max-height: 240px;
+  overflow-y: auto;
+  animation: slideDown 0.2s;
+}
+
+.morph-menu button {
+  display: block;
+  width: 100%;
+  padding: 10px 20px;
+  border: 0;
+  background: #ffffff;
+  font-weight: bold;
+  cursor: pointer;
+  text-align: center;
+  color: #333;
+  transition: background 0.2s;
+}
+
+.morph-menu button:hover,
+.morph-menu button:focus-visible {
+  background: #f3e8ff;
+  color: #9c27b0;
+}
+
+.check-answer-button,
+.continue-button {
   align-self: flex-end;
   padding: 10px 20px;
   background: #58cc02;
@@ -324,8 +661,166 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
   cursor: pointer;
   margin-top: 10px;
 }
-.removable-word { cursor: grab; }
-.removable-word:active { cursor: grabbing; }
 
-/* ... 其他原有 CSS 保持不變 ... */
+.alert-bubble {
+  display: flex;
+  gap: 12px;
+  background-color: #ffdfe0;
+  color: #ea2b2b;
+  padding: 16px;
+  border-radius: 12px;
+  border: 2px solid #ff4b4b;
+  font-weight: 500;
+  animation: slideDown 0.3s ease-out;
+}
+
+/* 👈 溫和提示的樣式 */
+.alert-bubble.soft-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.alert-icon {
+  font-size: 1.5rem;
+}
+
+.alert-messages p {
+  margin: 0 0 4px 0;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes shake {
+
+  10%,
+  90% {
+    transform: translate3d(-2px, 0, 0);
+  }
+
+  20%,
+  80% {
+    transform: translate3d(4px, 0, 0);
+  }
+
+  30%,
+  50%,
+  70% {
+    transform: translate3d(-8px, 0, 0);
+  }
+
+  40%,
+  60% {
+    transform: translate3d(8px, 0, 0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 600px) {
+  .grammar-canvas {
+    gap: 14px;
+    min-height: 0;
+  }
+
+  .answer-area,
+  .word-bank,
+  .trash-area {
+    gap: 8px;
+    min-height: 64px;
+    padding: 10px;
+  }
+
+  .answer-slot,
+  .empty-slot {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .tile {
+    max-width: 100%;
+    padding: 9px 12px;
+    font-size: 1rem;
+  }
+}
+
+.explicit-menu {
+  min-width: 220px;
+  padding: 8px;
+  background: #ffffff;
+  border: 2px solid #9c27b0;
+  border-radius: 12px;
+}
+
+.menu-title {
+  font-size: 0.8rem;
+  color: #777;
+  margin-bottom: 8px;
+  padding-left: 8px;
+}
+
+.explicit-menu button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.explicit-menu button:hover {
+  background: #f3e8ff;
+  border-color: #d8b4fe;
+}
+
+.option-text {
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.option-hint {
+  font-size: 0.8rem;
+  color: #7c3aed;
+  font-weight: normal;
+  margin-top: 4px;
+}
+
+.morph-feedback {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: bold;
+  font-size: 1rem;
+  animation: slideDown 0.3s ease;
+  flex-basis: 100%;
+  box-sizing: border-box;
+}
+
+.morph-feedback.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.morph-feedback.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
 </style>
