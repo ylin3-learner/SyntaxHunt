@@ -73,12 +73,12 @@ describe('GrammarCanvas', () => {
     const buttons = wrapper.findAll('.removable-word');
     await buttons[2].trigger('dragstart');
     await buttons[1].trigger('drop');
-    await nextTick(); 
+    await nextTick();
 
     await wrapper.find('[aria-label="移除「which」"]').trigger('click');
     await nextTick(); 
 
-    // Fix: Wait for the async checkAnswer pipeline to finish
+    // 👈 關鍵：等待異步管線跑完
     await flushPromises();
     await nextTick();
 
@@ -122,7 +122,7 @@ describe('GrammarCanvas', () => {
 
   it('lets students continue to the next question when LanguageTool times out', async () => {
     vi.useFakeTimers();
-    // Fix: Mock the timeout behavior by listening to the AbortSignal
+    // 👈 模擬超時：當 AbortSignal 被觸發時 reject
     vi.mocked(CloudDatabase.checkLanguageTool).mockImplementationOnce((text, signal) => {
       return new Promise((_, reject) => {
         signal?.addEventListener('abort', () => reject(new Error('Aborted')));
@@ -145,7 +145,7 @@ describe('GrammarCanvas', () => {
       await wrapper.findAll('.word-bank .tile').find(tile => tile.text() === token)!.trigger('click');
     }
 
-    await vi.advanceTimersByTimeAsync(8000);
+    await vi.advanceTimersByTimeAsync(8000); // 觸發 8 秒超時
     await flushPromises(); 
     await nextTick(); 
 

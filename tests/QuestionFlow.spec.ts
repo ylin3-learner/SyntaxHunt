@@ -17,14 +17,17 @@ describe('QuestionFlow', () => {
       props: { questions: [first, second], selectedId: null },
     });
 
-    // Fix: Directly manipulate the VM state to bypass JSDOM form/input quirks
+    // 👈 修正：先勾選題目 (此時 activeUnit 還是空字串，題目可見)
+    await wrapper.find('input[type="checkbox"]').setValue(true);
+
+    // 再建立新單元 (這會把 activeUnit 切換到 Unit 1)
     (wrapper.vm as any).unitDraft = 'Unit 1';
-    await (wrapper.vm as any).addUnit();
+    (wrapper.vm as any).addUnit();
     await nextTick();
 
     expect(wrapper.find('.unit-folder.active').text()).toContain('Unit 1');
 
-    await wrapper.find('input[type="checkbox"]').setValue(true);
+    // 點擊移動按鈕
     await wrapper.find('.move-button').trigger('click');
 
     const emittedBatch = wrapper.emitted('batch-import')?.[0];
@@ -36,6 +39,7 @@ describe('QuestionFlow', () => {
     expect(questions[0]).toMatchObject({ id: first.id, unit: 'Unit 1' });
     expect(questions[1]).toMatchObject({ id: second.id, mode: 'reduce' });
     expect(questions[1].unit).toBeUndefined();
+    
     await wrapper.setProps({ questions });
     expect(wrapper.find('.inbox-folder .folder-count').text()).toBe('1');
     expect(wrapper.find('.unit-folder.active .folder-count').text()).toBe('1');
@@ -49,11 +53,19 @@ describe('QuestionFlow', () => {
       props: { questions: [source], selectedId: null },
     });
 
-    (wrapper.vm as any).unitDraft = 'Unit 2';
-    await (wrapper.vm as any).addUnit();
+    // 👈 修正：先切換到 Unit 1 才能看到題目
+    (wrapper.vm as any).activeUnit = 'Unit 1';
     await nextTick();
 
+    // 勾選題目
     await wrapper.find('input[type="checkbox"]').setValue(true);
+
+    // 建立新單元 (activeUnit 會切換到 Unit 2)
+    (wrapper.vm as any).unitDraft = 'Unit 2';
+    (wrapper.vm as any).addUnit();
+    await nextTick();
+
+    // 點擊複製
     await wrapper.find('.copy-button').trigger('click');
 
     const emittedQuestions = wrapper.emitted('batch-import')?.[0]?.[0];
@@ -70,7 +82,7 @@ describe('QuestionFlow', () => {
     });
 
     (wrapper.vm as any).unitDraft = 'Unit 3';
-    await (wrapper.vm as any).addUnit();
+    (wrapper.vm as any).addUnit();
     await nextTick();
 
     await wrapper.find('.add-question-button').trigger('click');
