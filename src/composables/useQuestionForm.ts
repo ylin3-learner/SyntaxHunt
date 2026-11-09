@@ -2,6 +2,7 @@ import { ref, computed } from 'vue';
 import type { CanvasMode, Chunk, GrammarConcept, QuestionData, UIMode, CustomGrammarRule } from '../rules/types';
 import { getGrammarTopic, grammarChapters } from '../rules/grammarTopics';
 import { buildQuestion, type FormPayload } from '../domain/QuestionBuilder';
+import { autoChunkSmart } from '../rules/smartChunker'; // 引入剛剛建立的智慧切詞器
 
 export function useQuestionForm(emit: any, props: any) {
   // 1. 完整定義 FormPayload，補齊 selectedChapter 與 uiMode
@@ -16,7 +17,7 @@ export function useQuestionForm(emit: any, props: any) {
 
     selectedChapter: 19,
     uiMode: 'BUILD',
-    customRules: [],
+    customRules: [], // 確保 customRules 有被初始化
 
     selectedCanvasMode: 'BUILD',
     selectedGrammarTopicId: 'sentence-patterns',
@@ -87,6 +88,39 @@ export function useQuestionForm(emit: any, props: any) {
     errors.value = [];
   };
 
+  // ==========================================
+  // 新增：整合智慧切詞與 autoInfer 的方法
+  // ==========================================
+  const autoChunkGrammarSentence = () => {
+    const source = form.value.grammarSentence.trim();
+    if (!source) return;
+
+    // 呼叫 Strategy Pattern 的協調器，傳入正確答案以觸發 autoInfer 推演
+    const result = autoChunkSmart(
+      source,
+      form.value.grammarConcept,
+      form.value.grammarAnswer // 如果有填答案，就會生成建議規則；若無則優雅降級
+    );
+
+    // 1. 更新字塊 (補上唯一 ID)
+    form.value.grammarChunks = result.chunks.map((c, i) => ({
+      ...c,
+      id: `${form.value.editingId || 'new'}-auto-${i}`
+    }));
+
+    // 2. 自動套用推薦的 UI 模式 (若老師尚未手動調整)
+    if (result.recommendedUiMode) {
+      form.value.uiMode = result.recommendedUiMode;
+    }
+
+    // 3. 將系統建議的規則草稿存入表單狀態，準備讓 UI 顯示「一鍵採用」
+    if (result.suggestedRules.length > 0) {
+      // 這裡可以選擇直接覆蓋舊的 auto 規則，或保留手動規則
+      const manualRules = (form.value.customRules || []).filter(r => !r.id.startsWith('auto-'));
+      form.value.customRules = [...manualRules, ...result.suggestedRules];
+    }
+  };
+
   const saveQuestion = () => {
     const { question, errors: buildErrors } = buildQuestion(form.value);
     if (buildErrors.length > 0) { errors.value = buildErrors; return; }
@@ -153,6 +187,7 @@ export function useQuestionForm(emit: any, props: any) {
     form, errors, showQuestionFlow, isQuestionsExpanded, isClassPanelExpanded,
     isClassModeToggle, targetCountInput, currentRoomCode, activeUploadTarget, uploadTarget,
     isEditing, topicsInSelectedChapter, selectedGrammarTopic,
-    applyGrammarTopic, saveQuestion, resetForm
+    applyGrammarTopic, saveQuestion, resetForm,
+    autoChunkGrammarSentence // 記得將新方法匯出
   };
 }
