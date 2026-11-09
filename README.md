@@ -319,6 +319,15 @@ sequenceDiagram
 
 ---
 
+### 🛡️ Data Consistency & Fault Tolerance (Real-time Broadcast)
+
+To ensure a seamless classroom experience, the real-time broadcast mechanism handles potential race conditions and network desynchronization:
+1. **Zero-Trust Broadcast (Teacher Side)**: The system strictly awaits database confirmation (`await CloudDatabase.saveQuestions`) before broadcasting the new question ID to the classroom. It also intercepts unauthenticated states to prevent false-positive broadcasts.
+2. **Defensive Loading (Student Side)**: If a student receives a pushed `question_id` that does not exist in their local memory (e.g., a newly created question), the client automatically triggers a **Defensive Fetch** to pull the latest question bank from the cloud before switching the UI.
+3. **Graceful Degradation**: If the sync fails completely, the student's local progress and current question remain unaffected, preventing the session from crashing.
+
+---
+
 ## ✨ Key Features
 
 ### For Students
