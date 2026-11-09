@@ -67,7 +67,7 @@ export interface DiagnosticSignal {
   index?: number;
   message: string;
   hint?: string;
-  source?: 'local' | 'languagetool';
+  source?: 'local' | 'languagetool' | 'custom' | 'structural' | 'fallback';
   ruleId?: string;
   category?: string;
   offset?: number;
@@ -141,88 +141,6 @@ export interface ContrastData {
   nounImage?: string;
 }
 
-export interface QuestionData {
-  id: string;
-  sortOrder?: number;
-  unit?: string;
-  grammarTopicId?: string;
-  canvas_mode?: CanvasMode;
-  matrix_config?: MatrixConfig;
-  pragmatic_target?: PragmaticTarget;
-  /** @deprecated Migrate existing question JSON to matrix_config. */
-  status_gap?: number;
-  /** @deprecated Migrate existing question JSON to matrix_config. */
-  matrix_x?: string[];
-  /** @deprecated Migrate existing question JSON to matrix_config. */
-  matrix_y?: string[];
-  /** @deprecated Migrate existing question JSON to matrix_config. */
-  correct_x?: number;
-  /** @deprecated Migrate existing question JSON to matrix_config. */
-  correct_y?: number;
-  /** @deprecated Migrate existing question JSON to matrix_config. */
-  matrix_prompt?: string;
-  /** @deprecated Migrate existing question JSON to matrix_config. */
-  matrix_answer?: string;
-  /** @deprecated Migrate existing question JSON to matrix_config. */
-  matrix_options?: string[];
-
-  /**
-   * 題型分類
-   * grammar: 7-9 年級通用文法題 (靠 chunks 與 correctAnswer 驅動)
-   * standard: 舊版標準題 (保留舊題庫相容性)
-   * contrast: 對比拼圖題 (舊版)
-   * chunk: 片語預覽題 (舊版)
-   */
-  type: 'grammar' | 'standard' | 'contrast' | 'chunk';
-
-  /** 核心：決定 UI 渲染邏輯 */
-  ui_mode?: UIMode;
-
-  /** 文法概念決定情境式教學畫布與對應診斷規則 */
-  concept?: GrammarConcept;
-
-  /** 教學流程控制 */
-  enabledStages?: ('input' | 'macro' | 'micro' | 'pronunciation' | 'noticing')[];
-
-  /** 題目目標資訊 (用於關係子句的先行詞判斷) */
-  targetNoun: string;
-  antecedent: Antecedent;
-
-  /** 通用字塊庫 (取代原本的 initialTiles) */
-  chunks?: Chunk[];
-
-  /** 正確答案的字串陣列 (例如：['He', 'went', 'to', 'school']) */
-  correctAnswer?: string[];
-
-  /** 舊版標準題的 UI 模式，載入舊題庫時保留相容性 */
-  mode?: 'build' | 'reduce';
-
-  /** 克漏字上下文 (若為空則不顯示句子框) */
-  contextCloze?: { prefix: string; suffix: string };
-
-  /** 語音、圖片與計時 */
-  imageUrl?: string;
-  speechRate?: number;
-  isTimed?: boolean;
-  timeLimit?: number;
-
-  /** 教學輔助與回饋 */
-  explanation?: { title: string; desc: string };
-  tags?: string[]; // 對應心智圖標籤 (例如：時態、主被動)
-
-  // ==========================================
-  // 以下為舊版專屬欄位 (為了相容 9 年級舊題庫，新題目不需要填)
-  // ==========================================
-  grammarFeature?: {
-    relative: { label: string; tiles: string[]; correctAnswer: string[]; distractors?: string[] };
-    preposition: { label: string; tiles: string[]; correctAnswer: string[] };
-  };
-  inputData?: { audioText: string; options: { image: string; text: string; isCorrect: boolean }[] };
-  noticingData?: NoticingData;
-  contrastData?: ContrastData;
-  previewData?: { targetImage: string; targetNoun: string; chunkText: string; chunkZh: string; quizOptions?: { text: string; isCorrect: boolean }[] };
-}
-
 export type GrammarQuestionData = QuestionData & {
   type: 'grammar';
   ui_mode: UIMode;
@@ -270,4 +188,126 @@ export function getQuestionChunks(
     text,
     draggable: true,
   }));
+}
+
+// ==========================================
+// 5. 診斷管線 (Chain of Responsibility) 型別
+// ==========================================
+
+/**
+ * 老師自訂文法規則 (L2 使用)
+ * 讓教師在題目中直接定義「錯誤樣式 → 回饋訊息」的對應
+ */
+export interface CustomGrammarRule {
+  id: string;
+  /** 錯誤樣式關鍵字 (子字串比對，不區分大小寫) */
+  wrongPattern: string[];
+  /** 對應的正確形式 (用於 hint 提示) */
+  correctForm?: string;
+  /** 回饋訊息 */
+  message: string;
+  /** 適用概念 (空陣列表示所有概念皆適用) */
+  concepts?: GrammarConcept[];
+  /** 優先級，數字越大越優先 (預設 100) */
+  priority?: number;
+}
+
+/**
+ * 管線傳遞的上下文 (與 RuleContext 相同結構，但專屬於診斷層)
+ */
+export interface DiagnosticContext {
+  studentTokens: string[];
+  correctTokens: string[];
+  question: QuestionData;
+}
+
+/**
+ * 每一層必須實作的介面 (低耦合關鍵)
+ */
+export interface DiagnosticLayer {
+  id: string;
+  priority: number; // L1: 10, L2: 20, L3: 30, L4: 40, L5: 50
+  diagnose(ctx: DiagnosticContext): Promise<DiagnosticSignal[]>;
+}
+
+/**
+ * 擴充 QuestionData，支援老師自訂規則
+ */
+export interface QuestionData {
+  id: string;
+  sortOrder?: number;
+  unit?: string;
+  grammarTopicId?: string;
+  canvas_mode?: CanvasMode;
+  matrix_config?: MatrixConfig;
+  pragmatic_target?: PragmaticTarget;
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  status_gap?: number;
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  matrix_x?: string[];
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  matrix_y?: string[];
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  correct_x?: number;
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  correct_y?: number;
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  matrix_prompt?: string;
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  matrix_answer?: string;
+  /** @deprecated Migrate existing question JSON to matrix_config. */
+  matrix_options?: string[];
+
+  /** 題型分類 */
+  type: 'grammar' | 'standard' | 'contrast' | 'chunk';
+
+  /** 核心：決定 UI 渲染邏輯 */
+  ui_mode?: UIMode;
+
+  /** 文法概念決定情境式教學畫布與對應診斷規則 */
+  concept?: GrammarConcept;
+
+  /** 教學流程控制 */
+  enabledStages?: ('input' | 'macro' | 'micro' | 'pronunciation' | 'noticing')[];
+
+  /** 題目目標資訊 (用於關係子句的先行詞判斷) */
+  targetNoun: string;
+  antecedent: Antecedent;
+
+  /** 通用字塊庫 (取代原本的 initialTiles) */
+  chunks?: Chunk[];
+
+  /** 正確答案的字串陣列 (例如：['He', 'went', 'to', 'school']) */
+  correctAnswer?: string[];
+
+  /** 舊版標準題的 UI 模式，載入舊題庫時保留相容性 */
+  mode?: 'build' | 'reduce';
+
+  /** 克漏字上下文 (若為空則不顯示句子框) */
+  contextCloze?: { prefix: string; suffix: string };
+
+  /** 語音、圖片與計時 */
+  imageUrl?: string;
+  speechRate?: number;
+  isTimed?: boolean;
+  timeLimit?: number;
+
+  /** 教學輔助與回饋 */
+  explanation?: { title: string; desc: string };
+  tags?: string[]; // 對應心智圖標籤 (例如：時態、主被動)
+
+  /** 老師自訂文法規則 (L2 診斷層使用) */
+  customRules?: CustomGrammarRule[];
+
+  // ==========================================
+  // 以下為舊版專屬欄位 (為了相容 9 年級舊題庫，新題目不需要填)
+  // ==========================================
+  grammarFeature?: {
+    relative: { label: string; tiles: string[]; correctAnswer: string[]; distractors?: string[] };
+    preposition: { label: string; tiles: string[]; correctAnswer: string[] };
+  };
+  inputData?: { audioText: string; options: { image: string; text: string; isCorrect: boolean }[] };
+  noticingData?: NoticingData;
+  contrastData?: ContrastData;
+  previewData?: { targetImage: string; targetNoun: string; chunkText: string; chunkZh: string; quizOptions?: { text: string; isCorrect: boolean }[] };
 }
