@@ -188,6 +188,17 @@ flowchart TD
 - **Graceful Degradation**: A failing external API (LanguageTool) will never break the student's flow, falling back safely to L5.
 - **Fully Tested**: 100% test coverage on the pipeline's short-circuit logic and timeout fallback mechanisms using Vitest.
 
+### 🪜 Progressive Scaffolding & Feedback Strategy
+
+To prevent over-scaffolding and reduce student anxiety (lowering the Affective Filter), the UI layer implements a **3-Stage Progressive Feedback Mechanism**. The system no longer aggressively interrupts students upon every drag-and-drop; instead, it waits for the student to explicitly click **"Check Answer"** in BUILD mode.
+
+1. **Stage 1 — Soft Warning (Gentle Nudge)**: 
+   On the first incorrect attempt, the system returns a friendly yellow prompt ("Looks like something is missing, check the order or spelling!"). **No red error shakes, no error sounds, and no API calls (L1-L5) are triggered.**
+2. **Stage 2 — Specific Diagnosis (Rule Engine)**: 
+   If the student tries again, the full diagnostic pipeline (L1 to L4) is executed. The UI displays specific grammar errors (e.g., "Missing preposition 'in'") with red highlighting and shakes to draw attention.
+3. **Stage 3 — Ultimate Highlight Fallback (L5)**: 
+   If the student is still stuck after multiple attempts, the system activates the L5 Highlight Fallback, visually pinpointing the exact wrong tile to ensure the student can eventually progress without frustration.
+
 ---
 
 ### Data Flow: Student Question Routing
