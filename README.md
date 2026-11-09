@@ -134,10 +134,9 @@ graph TD
 
 Here are the code snippets to add to your README files. You can copy and paste these directly into the respective sections (e.g., right after the System Architecture section).
 
-### For `README.md` (English)
+---
 
-```markdown
-## 🧠 Grammar Diagnostic Engine (Chain of Responsibility)
+### 🧠 Grammar Diagnostic Engine (Chain of Responsibility)
 
 The core diagnostic pipeline has been completely refactored from a monolithic rule engine into a highly decoupled, **5-Layer Chain of Responsibility**. This architecture ensures millisecond-level local responses while guaranteeing that *no student mistake is ever left without feedback*.
 
