@@ -319,7 +319,7 @@ sequenceDiagram
 
 ---
 
-### 🛡️ Data Consistency & Fault Tolerance (Real-time Broadcast)
+## 🛡️ Data Consistency & Fault Tolerance (Real-time Broadcast)
 
 To ensure a seamless classroom experience, the real-time broadcast mechanism handles potential race conditions and network desynchronization:
 1. **Zero-Trust Broadcast (Teacher Side)**: The system strictly awaits database confirmation (`await CloudDatabase.saveQuestions`) before broadcasting the new question ID to the classroom. It also intercepts unauthenticated states to prevent false-positive broadcasts.
