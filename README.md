@@ -169,6 +169,21 @@ flowchart TD
     L5 --> Output
 ```
 
+---
+
+### 🤖 Smart Authoring & Human-in-the-Loop (HITL)
+
+To minimize teacher workload while maximizing diagnostic precision, the system includes a **Smart Authoring Pipeline** that bridges the gap between raw NLP and pedagogical rules.
+
+1. **Auto-Infer Engine (`autoInfer.ts`)**: 
+   Based on the full 20-chapter K-12 grammar scope, the system uses heuristic strategies to automatically infer potential grammar points (e.g., SVA, Past Tense, Subjunctive) and generates draft `wrongPattern`s and feedback messages.
+2. **Smart Chunking Strategy (`smartChunker.ts`)**: 
+   Utilizing the **Strategy Pattern**, the system gracefully combines the base `compromise.js` chunking with `autoInfer`. If the inference engine detects a morphology target (like irregular verbs), it upgrades the chunk's properties automatically. If no rules are found, it gracefully degrades to the base chunking without failing.
+3. **Teacher-in-the-Loop Approval**: 
+   The teacher simply clicks "Local Chunking". The system populates the chunks, recommends the optimal UI mode, and presents the inferred rules as "System Suggestions". The teacher can review, tweak, and click **"Accept"** to inject them into the L2 Custom Rules layer.
+4. **Zero Runtime Overhead**: 
+   `autoInfer` and `smartChunker` only run during the *authoring phase*. The student-facing diagnostic pipeline (L1-L5) remains completely untouched, ensuring millisecond-level local execution and absolute stability.
+
 ### The 5 Layers of Defense
 
 1. **L1 — Local Deterministic Rules (`L1_LocalRules.ts`)**: 
