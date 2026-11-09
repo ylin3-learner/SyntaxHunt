@@ -29,7 +29,13 @@ export type GrammarConcept =
   | 'SUBJUNCTIVE'
   | 'CONDITIONALS'
   | 'MODAL_VERB'
-  | 'PAST_TENSE';
+  | 'PAST_TENSE'
+  | 'PREPOSITION'
+  | 'ARTICLE'
+  | 'VERB'
+  | 'GERUND'
+  | 'COMPARISON'
+  | 'PASSIVE_VOICE';
 
 /** 統一的錯誤代碼定義 (結合 ERRANT 標準與自訂擴充) */
 export type DiagnosticCode =

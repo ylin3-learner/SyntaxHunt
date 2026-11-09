@@ -25,6 +25,8 @@ const morphologyConcepts = new Set<GrammarConcept>([
   'CONDITIONALS',
   'MODAL_VERB',
   'PAST_TENSE',
+  'COMPARISON',
+  'PASSIVE_VOICE',
 ]);
 
 const defaultModes: Record<GrammarConcept, UIMode> = {
@@ -41,6 +43,13 @@ const defaultModes: Record<GrammarConcept, UIMode> = {
   CONDITIONALS: 'MORPH',
   MODAL_VERB: 'MORPH',
   PAST_TENSE: 'MORPH',
+
+  PREPOSITION: 'BUILD',
+  ARTICLE: 'BUILD',
+  VERB: 'BUILD',
+  GERUND: 'BUILD',
+  COMPARISON: 'MORPH',
+  PASSIVE_VOICE: 'MORPH',
 };
 
 const irregularForms = irregularVerbs as Record<string, string[][]>;
@@ -94,6 +103,23 @@ export function getVerbForms(verb: string): VerbForms | undefined {
   return getCompromiseForms(infinitive);
 }
 
+// 新增：針對形容詞比較級的簡易推論 (基於常見字尾規則)
+const getAdjectiveForms = (word: string): string[] | undefined => {
+  const normalized = word.trim().toLowerCase().replace(/^[^\w']+|[^\w']+$/g, '');
+  // 基本過濾：太短的字或明顯不是形容詞的字
+  if (normalized.length < 3) return undefined;
+
+  // 假設原形 (透過去除 er/est)
+  let base = normalized;
+  if (base.endsWith('er')) base = base.slice(0, -2);
+  else if (base.endsWith('est')) base = base.slice(0, -3);
+
+  // 處理雙寫子音 (big -> bigger -> biggest)
+  if (base.endsWith(base.slice(-1))) base = base.slice(0, -1);
+
+  return [base, `${base}er`, `${base}est`];
+};
+
 const tokenizeWithCompromise = (sentence: string): string[] => {
   const chunks: string[] = [];
   const parts = sentence.split(/(\[[^\]]+\][.,!?;:]*)/g);
@@ -136,9 +162,27 @@ const applyPhraseDictionary = (tokens: string[], concept: GrammarConcept): strin
 };
 
 const makeChunk = (text: string, index: number, concept: GrammarConcept): Chunk => {
-  const verbForms = morphologyConcepts.has(concept) && !text.startsWith('[')
-    ? getVerbForms(text.replace(/[.,!?;:]+$/, ''))
-    : undefined;
+  if (!morphologyConcepts.has(concept) || text.startsWith('[')) {
+    return { id: `auto-${index}`, text, draggable: true };
+  }
+
+  // 針對比較級 (Ch 9) 使用形容詞規則
+  if (concept === 'COMPARISON') {
+    const adjOptions = getAdjectiveForms(text);
+    if (adjOptions) {
+      return {
+        id: `auto-${index}`,
+        text,
+        draggable: true,
+        can_morph: true,
+        options: adjOptions,
+        current_index: Math.max(0, adjOptions.findIndex(o => o.toLowerCase() === text.toLowerCase())),
+      };
+    }
+  }
+
+  // 其他章節使用動詞規則 (時態、被動、SVA)
+  const verbForms = getVerbForms(text.replace(/[.,!?;:]+$/, ''));
   if (!verbForms) return { id: `auto-${index}`, text, draggable: true };
 
   const options = [
