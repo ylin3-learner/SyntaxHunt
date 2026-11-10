@@ -95,10 +95,13 @@ export function useQuizFlow() {
     if (currentQuestion.value.type === 'contrast') { currentStage.value = 'macro'; console.log('[DEBUG Stage] -> contrast, set macro'); return; }
     if (currentQuestion.value.type === 'chunk') { currentStage.value = 'preview'; console.log('[DEBUG Stage] -> chunk, set preview'); return; }
     if (currentQuestion.value.previewData && getEnabledStages.value.includes('input')) { currentStage.value = 'preview'; console.log('[DEBUG Stage] -> previewData + input, set preview'); return; }
+    
+    // 🔧 修復：當勾選「字磚重組」(micro) 時，優先進入 micro，不被 input / macro 跳過
+    if (getEnabledStages.value.includes('micro')) { currentStage.value = 'micro'; console.log('[DEBUG Stage] -> enabledStages has micro (priority), set micro'); return; }
+    
     else if (getEnabledStages.value.includes('input') && currentQuestion.value.inputData) { currentStage.value = 'input'; console.log('[DEBUG Stage] -> inputData exists, set input'); return; }
     else if (currentQuestion.value.mode === 'reduce' && getEnabledStages.value.includes('micro')) { currentStage.value = 'micro'; console.log('[DEBUG Stage] -> reduce + micro, set micro'); return; }
     else if (getEnabledStages.value.includes('macro')) { currentStage.value = 'macro'; console.log('[DEBUG Stage] -> enabledStages has macro, set macro'); return; }
-    else if (getEnabledStages.value.includes('micro')) { currentStage.value = 'micro'; console.log('[DEBUG Stage] -> enabledStages has micro, set micro'); return; }
     else { currentStage.value = 'success'; console.log('[DEBUG Stage] -> fallback, set success'); }
   };
 
