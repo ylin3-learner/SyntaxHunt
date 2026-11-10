@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import GrammarCanvas from '../GrammarCanvas.vue';
 import type { GrammarQuestionData } from '../../rules/types';
+import { onMounted } from 'vue';
 
 interface Props {
   question: GrammarQuestionData;
@@ -13,6 +14,14 @@ const emit = defineEmits<{
   (e: 'continue', allowClassModeSkip: boolean): void;
   (e: 'misconception', code: string): void;
 }>();
+
+onMounted(() => {
+  console.log('[DEBUG StageMicro] mounted');
+  console.log('[DEBUG StageMicro] question:', props.question);
+  console.log('[DEBUG StageMicro] question.chunks:', props.question.chunks);
+  console.log('[DEBUG StageMicro] question.ui_mode:', props.question.ui_mode);
+  console.log('[DEBUG StageMicro] question.canvas_mode:', props.question.canvas_mode);
+});
 </script>
 
 <template>

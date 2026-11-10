@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { runDiagnosisPipeline } from '../../rules/diagnostics/pipeline';
 import { normalizeAnswer } from '../../utils/textUtils';
 import type { DiagnosticSignal, GrammarQuestionData, Chunk } from '../../rules/types';
@@ -63,6 +63,19 @@ const initTiles = () => {
 };
 
 initTiles();
+
+onMounted(() => {
+  console.log('[DEBUG TileSentenceCanvas] mounted');
+  console.log('[DEBUG TileSentenceCanvas] ui_mode:', props.question.ui_mode);
+  console.log('[DEBUG TileSentenceCanvas] initialChunks length:', props.initialChunks?.length);
+  console.log('[DEBUG TileSentenceCanvas] initialChunks:', props.initialChunks);
+  console.log('[DEBUG TileSentenceCanvas] wordBank initial:', wordBank.value);
+  console.log('[DEBUG TileSentenceCanvas] answerArea initial:', answerArea.value);
+});
+
+watch(() => props.question.ui_mode, (mode) => {
+  console.log('[DEBUG TileSentenceCanvas] ui_mode changed →', mode);
+});
 
 watch(() => props.initialChunks, () => {
   if (isFixedMorph.value) {

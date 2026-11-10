@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from 'vue';
+import { computed, defineAsyncComponent, watch } from 'vue';
 import type { Chunk, GrammarQuestionData } from '../rules/types';
 import { getQuestionCanvasMode } from '../rules/types';
 import { getGrammarTopic } from '../rules/grammarTopics';
@@ -54,6 +54,15 @@ const selectedCanvas = computed(() => {
 });
 const shuffleWordBank = computed(() => canvasMode.value === 'BUILD'
   && (getGrammarTopic(props.question.grammarTopicId)?.shuffleTiles ?? true));
+
+watch(selectedCanvas, (newCanvas) => {
+  const canvasName = newCanvas?.name || String(newCanvas);
+  console.log('[DEBUG GrammarCanvas] selectedCanvas changed →', canvasName);
+  console.log('[DEBUG GrammarCanvas] canvasMode.value:', canvasMode.value);
+  console.log('[DEBUG GrammarCanvas] question.ui_mode:', props.question.ui_mode);
+  console.log('[DEBUG GrammarCanvas] question.canvas_mode:', props.question.canvas_mode);
+  console.log('[DEBUG GrammarCanvas] initialChunks:', props.initialChunks);
+});
 </script>
 
 <template>

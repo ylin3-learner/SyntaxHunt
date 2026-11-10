@@ -96,6 +96,14 @@ const currentStageComponent = computed(() => {
   return comp;
 });
 
+watch(currentStage, (newStage, oldStage) => {
+  console.log(`[DEBUG App] currentStage changed: ${oldStage} → ${newStage}`);
+  console.log('[DEBUG App] currentQuestion:', currentQuestion.value);
+  console.log('[DEBUG App] currentQuestion.chunks:', currentQuestion.value?.chunks);
+  console.log('[DEBUG App] currentQuestion.ui_mode:', currentQuestion.value?.ui_mode);
+  console.log('[DEBUG App] currentQuestion.canvas_mode:', currentQuestion.value?.canvas_mode);
+});
+
 // ---- 生命週期 ----
 const handleGlobalInteraction = () => {
   unlockAudioContext();

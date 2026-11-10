@@ -84,15 +84,22 @@ export function useQuizFlow() {
   };
 
   const checkAndSetInitialStage = () => {
-    if (currentQuestion.value.type === 'grammar') { currentStage.value = 'micro'; return; }
-    if (currentQuestion.value.type === 'contrast') { currentStage.value = 'macro'; return; }
-    if (currentQuestion.value.type === 'chunk') { currentStage.value = 'preview'; return; }
-    if (currentQuestion.value.previewData && getEnabledStages.value.includes('input')) currentStage.value = 'preview';
-    else if (getEnabledStages.value.includes('input') && currentQuestion.value.inputData) currentStage.value = 'input';
-    else if (currentQuestion.value.mode === 'reduce' && getEnabledStages.value.includes('micro')) currentStage.value = 'micro';
-    else if (getEnabledStages.value.includes('macro')) currentStage.value = 'macro';
-    else if (getEnabledStages.value.includes('micro')) currentStage.value = 'micro';
-    else currentStage.value = 'success';
+    console.log('[DEBUG Stage] checkAndSetInitialStage called');
+    console.log('[DEBUG Stage] question.type:', currentQuestion.value?.type);
+    console.log('[DEBUG Stage] question.mode:', currentQuestion.value?.mode);
+    console.log('[DEBUG Stage] enabledStages:', getEnabledStages.value);
+    console.log('[DEBUG Stage] inputData:', currentQuestion.value?.inputData);
+    console.log('[DEBUG Stage] previewData:', currentQuestion.value?.previewData);
+
+    if (currentQuestion.value.type === 'grammar') { currentStage.value = 'micro'; console.log('[DEBUG Stage] -> grammar, set micro'); return; }
+    if (currentQuestion.value.type === 'contrast') { currentStage.value = 'macro'; console.log('[DEBUG Stage] -> contrast, set macro'); return; }
+    if (currentQuestion.value.type === 'chunk') { currentStage.value = 'preview'; console.log('[DEBUG Stage] -> chunk, set preview'); return; }
+    if (currentQuestion.value.previewData && getEnabledStages.value.includes('input')) { currentStage.value = 'preview'; console.log('[DEBUG Stage] -> previewData + input, set preview'); return; }
+    else if (getEnabledStages.value.includes('input') && currentQuestion.value.inputData) { currentStage.value = 'input'; console.log('[DEBUG Stage] -> inputData exists, set input'); return; }
+    else if (currentQuestion.value.mode === 'reduce' && getEnabledStages.value.includes('micro')) { currentStage.value = 'micro'; console.log('[DEBUG Stage] -> reduce + micro, set micro'); return; }
+    else if (getEnabledStages.value.includes('macro')) { currentStage.value = 'macro'; console.log('[DEBUG Stage] -> enabledStages has macro, set macro'); return; }
+    else if (getEnabledStages.value.includes('micro')) { currentStage.value = 'micro'; console.log('[DEBUG Stage] -> enabledStages has micro, set micro'); return; }
+    else { currentStage.value = 'success'; console.log('[DEBUG Stage] -> fallback, set success'); }
   };
 
   const handlePreviewSuccess = () => {
