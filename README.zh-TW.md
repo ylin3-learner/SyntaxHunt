@@ -131,7 +131,91 @@ graph TD
 
 ## 🗺️ UI 架構與資料流（Debug 追蹤指南）
 
-為了讓未來開發或 Debug 時能快速釐清「題目為什麼這樣渲染」，以下是完整的資料流與組件路由層級。
+``` mermaid
+graph TD
+    %% 根組件
+    App["App.vue<br/>(Root & State Controller)"]
+
+    %% ==========================================
+    %% 教師端分支 (Teacher Flow)
+    %% ==========================================
+    App -->|"showAdmin = true"| AdminModal["TeacherAdmin.vue<br/>(Modal & Tabs)"]
+    
+    AdminModal -->|"Active Tab"| Editor["QuestionEditor.vue<br/>(Form Layout)"]
+    
+    Editor -->|"form.questionType"| FormType{"Type?"}
+    FormType -->|"grammar"| GForm["GrammarQuestionForm.vue<br/>(Custom Rules & Canvas)"]
+    FormType -->|"standard / contrast / chunk"| SForm["StandardQuestionForm.vue<br/>(Stages & Toggles)"]
+    
+    %% 教師端儲存流程
+    GForm -.->|"saveQuestion"| Builder["QuestionBuilder.ts<br/>(Data Assembly)"]
+    SForm -.->|"saveQuestion"| Builder
+    Builder -.->|"CloudDatabase.saveQuestions"| DB[(Supabase)]
+    Builder -.->|"emit push event"| WS[(Realtime WebSocket)]
+
+    %% ==========================================
+    %% 學生端分支 (Student Flow)
+    %% ==========================================
+    App -->|"currentStage"| StageRouter{"Stage Router<br/>(useQuizFlow)"}
+    
+    %% 根據自訂的 enabledStages 順序渲染
+    StageRouter -->|"preview"| StagePreview["StagePreview.vue"]
+    StageRouter -->|"input"| StageInput["StageInput.vue"]
+    StageRouter -->|"macro"| StageMacro["StageMacro.vue"]
+    StageRouter -->|"micro"| StageMicro["StageMicro.vue"]
+    StageRouter -->|"success"| StageSuccess["StageSuccess.vue"]
+    
+    %% 微觀階段 (核心)
+    StageMicro -->|"pass question & chunks"| CanvasRouter["GrammarCanvas.vue<br/>(Canvas Dispatcher)"]
+
+    %% ==========================================
+    %% 畫布路由分發 (Canvas Routing)
+    %% ==========================================
+    CanvasRouter -->|"has chunks (BUILD/REDUCE)"| Tile["TileSentenceCanvas.vue<br/>(Core Engine)"]
+    CanvasRouter -->|"canvas_mode: MATRIX_GATE"| Matrix["FeatureMatrixCanvas.vue"]
+    CanvasRouter -->|"canvas_mode: PRAGMATIC_HP"| HP["PragmaticHpCanvas.vue"]
+    CanvasRouter -->|"canvas_mode: GRAVITY_SWITCH"| Gravity["TimelineMorphCanvas.vue"]
+    CanvasRouter -->|"canvas_mode: MORPH"| MorphRouter{"Concept?"}
+    
+    MorphRouter -->|"MODAL_VERB"| Modal["ModalGaugeCanvas.vue"]
+    MorphRouter -->|"SUBJUNCTIVE / TENSE_ASPECT"| Gravity
+    MorphRouter -->|"Others"| Tile
+    
+    CanvasRouter -->|"Legacy BUILD"| Mag["MagneticBuildCanvas.vue"]
+    CanvasRouter -->|"Legacy REDUCE"| Shred["ShredderReduceCanvas.vue"]
+    
+    Mag -.->|"wraps"| Tile
+    Shred -.->|"wraps"| Tile
+
+    %% ==========================================
+    %% TileSentenceCanvas 內部渲染 (UI Modes)
+    %% ==========================================
+    Tile --> TileMode{"ui_mode"}
+    
+    TileMode -->|"BUILD"| ClozeCheck{"has contextCloze?"}
+    ClozeCheck -->|"Yes"| ClozeUI["Cloze (Fill-in-the-blank)"]
+    ClozeCheck -->|"No"| BuildUI["Full Sentence Builder"]
+    
+    TileMode -->|"REDUCE"| ReduceUI["Card + Trash Can"]
+    TileMode -->|"MORPH"| MorphUI["Fixed Sentence + Capsules"]
+
+    %% ==========================================
+    %% 樣式設定 (可選)
+    %% ==========================================
+    classDef root fill:#f9f9f9,stroke:#333,stroke-width:2px;
+    classDef teacher fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    classDef student fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
+    classDef core fill:#e8f5e9,stroke:#388e3c,stroke-width:3px,color:#1b5e20;
+    classDef legacy fill:#eceff1,stroke:#90a4ae,stroke-width:1px,stroke-dasharray: 5 5;
+
+    class App root;
+    class AdminModal,Editor,FormType,GForm,SForm,Builder teacher;
+    class StageRouter,StagePreview,StageInput,StageMacro,StageMicro,StageSuccess,CanvasRouter,Matrix,HP,Gravity,MorphRouter,Modal student;
+    class Tile,ClozeUI,BuildUI,ReduceUI,MorphUI core;
+    class Mag,Shred legacy;
+```
+
+> 為了讓未來開發或 Debug 時能快速釐清「題目為什麼這樣渲染」，以下是完整的資料流與組件路由層級。
 
 ### 1. 學生端渲染流程（App.vue → StageMicro → GrammarCanvas）
 
