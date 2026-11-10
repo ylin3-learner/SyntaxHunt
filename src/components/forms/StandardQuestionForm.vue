@@ -15,6 +15,61 @@ const props = defineProps<{
 const funnelDiscarded = computed(() =>
     props.form.relativeSentence.replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim()
 );
+
+// 所有可能的階段（保持固定順序作為預設/可選項目）
+const allStages = [
+    { value: 'input', label: '聽力輸入', condition: (f: FormPayload) => f.questionType === 'standard' },
+    { value: 'macro', label: '巨觀拖拉', condition: (f: FormPayload) => f.questionType === 'standard' && f.questionMode !== 'reduce' },
+    { value: 'micro', label: '字磚重組', condition: () => true },
+    { value: 'pronunciation', label: '語音練習', condition: () => true },
+    { value: 'noticing', label: '意識提升', condition: () => true },
+] as const;
+
+// 可用的階段（根據條件過濾）
+const availableStages = computed(() =>
+    allStages.filter(s => s.condition(props.form))
+);
+
+// 目前已啟用的階段（陣列順序 = 執行順序）
+const enabledStages = computed(() => props.form.enabledStages);
+
+// 切換階段啟用/停用
+const toggleStage = (stage: string) => {
+    const idx = props.form.enabledStages.indexOf(stage);
+    if (idx === -1) {
+        props.form.enabledStages.push(stage);
+    } else {
+        props.form.enabledStages.splice(idx, 1);
+    }
+};
+
+// 上移
+const moveUp = (idx: number) => {
+    if (idx > 0) {
+        const arr = [...props.form.enabledStages];
+        [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+        props.form.enabledStages = arr;
+    }
+};
+
+// 下移
+const moveDown = (idx: number) => {
+    if (idx < props.form.enabledStages.length - 1) {
+        const arr = [...props.form.enabledStages];
+        [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+        props.form.enabledStages = arr;
+    }
+};
+
+// 檢查階段是否已啟用
+const isStageEnabled = (stage: string) => props.form.enabledStages.includes(stage);
+
+// 取得階段顯示名稱
+const getStageLabel = (stage: string) => {
+    const found = allStages.find(s => s.value === stage);
+    return found ? found.label : stage;
+};
+
 </script>
 
 <template>
@@ -33,14 +88,12 @@ const funnelDiscarded = computed(() =>
 
     <div class="form-group" v-if="form.questionType !== 'chunk'">
         <label>本題教學流程</label>
-        <div class="stage-checkboxes">
-            <label v-if="form.questionType === 'standard'"><input type="checkbox" value="input"
-                    v-model="form.enabledStages">聽力輸入</label>
-            <label v-if="form.questionType === 'standard' && form.questionMode !== 'reduce'"><input type="checkbox"
-                    value="macro" v-model="form.enabledStages"> 巨觀拖拉</label>
-            <label><input type="checkbox" value="micro" v-model="form.enabledStages"> 字磚重組</label>
-            <label><input type="checkbox" value="pronunciation" v-model="form.enabledStages"> 語音練習</label>
-            <label><input type="checkbox" value="noticing" v-model="form.enabledStages"> 意識提升</label>
+        <div class="stage-order">
+            <div v-for="(stage, idx) in enabledStages" :key="stage" class="stage-item">
+                <span class="stage-label">{{ getStageLabel(stage) }}</span>
+                <button @click="moveUp(idx)" class="stage-move-up">▲</button>
+                <button @click="moveDown(idx)" class="stage-move-down">▼</button>
+            </div>
         </div>
     </div>
 
@@ -521,6 +574,44 @@ const funnelDiscarded = computed(() =>
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+.stage-order {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.stage-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.stage-label {
+    font-size: 0.85rem;
+    color: #475569;
+    width: 100px;
+    flex-shrink: 0;
+}
+
+.stage-move-up, .stage-move-down {
+    background: none;
+    border: none;
+    color: #1cb0f6;
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: transform 0.15s;
+}
+
+.stage-move-up:hover, .stage-move-down:hover {
+    transform: scale(1.2);
 }
 
 @media (max-width: 500px) {

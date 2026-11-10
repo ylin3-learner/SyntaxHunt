@@ -83,30 +83,44 @@ export function useQuizFlow() {
     });
   };
 
+  type StageType = 'preview' | 'input' | 'macro' | 'micro' | 'success' | 'noticing';
+
+  // 🔧 輔助：根據 enabledStages 數組順序，取得下一個階段
+  const getNextStageInSequence = (current: StageType | null, enabledStages: StageType[]): StageType | null => {
+    if (!enabledStages.length) return null;
+    if (current === null) return enabledStages[0];
+    const idx = enabledStages.indexOf(current);
+    if (idx === -1 || idx >= enabledStages.length - 1) return null;
+    return enabledStages[idx + 1];
+  };
+
+  // 🔧 輔助：取得初始階段（受題型強制規則限制）
+  const getInitialStage = (question: QuestionData, enabledStages: StageType[]): StageType => {
+    if (question.type === 'grammar') return 'micro';
+    if (question.type === 'contrast') return 'macro';
+    if (question.type === 'chunk') return 'preview';
+    if (enabledStages.length > 0) return enabledStages[0];
+    return 'success';
+  };
+
   const checkAndSetInitialStage = () => {
+    const enabled = getEnabledStages.value as StageType[];
     console.log('[DEBUG Stage] checkAndSetInitialStage called');
     console.log('[DEBUG Stage] question.type:', currentQuestion.value?.type);
     console.log('[DEBUG Stage] question.mode:', currentQuestion.value?.mode);
-    console.log('[DEBUG Stage] enabledStages:', getEnabledStages.value);
+    console.log('[DEBUG Stage] enabledStages (順序):', enabled);
     console.log('[DEBUG Stage] inputData:', currentQuestion.value?.inputData);
     console.log('[DEBUG Stage] previewData:', currentQuestion.value?.previewData);
 
-    if (currentQuestion.value.type === 'grammar') { currentStage.value = 'micro'; console.log('[DEBUG Stage] -> grammar, set micro'); return; }
-    if (currentQuestion.value.type === 'contrast') { currentStage.value = 'macro'; console.log('[DEBUG Stage] -> contrast, set macro'); return; }
-    if (currentQuestion.value.type === 'chunk') { currentStage.value = 'preview'; console.log('[DEBUG Stage] -> chunk, set preview'); return; }
-    if (currentQuestion.value.previewData && getEnabledStages.value.includes('input')) { currentStage.value = 'preview'; console.log('[DEBUG Stage] -> previewData + input, set preview'); return; }
-    
-    // 🔧 修復：當勾選「字磚重組」(micro) 時，優先進入 micro，不被 input / macro 跳過
-    if (getEnabledStages.value.includes('micro')) { currentStage.value = 'micro'; console.log('[DEBUG Stage] -> enabledStages has micro (priority), set micro'); return; }
-    
-    else if (getEnabledStages.value.includes('input') && currentQuestion.value.inputData) { currentStage.value = 'input'; console.log('[DEBUG Stage] -> inputData exists, set input'); return; }
-    else if (currentQuestion.value.mode === 'reduce' && getEnabledStages.value.includes('micro')) { currentStage.value = 'micro'; console.log('[DEBUG Stage] -> reduce + micro, set micro'); return; }
-    else if (getEnabledStages.value.includes('macro')) { currentStage.value = 'macro'; console.log('[DEBUG Stage] -> enabledStages has macro, set macro'); return; }
-    else { currentStage.value = 'success'; console.log('[DEBUG Stage] -> fallback, set success'); }
+    const initial = getInitialStage(currentQuestion.value, enabled);
+    currentStage.value = initial;
+    console.log(`[DEBUG Stage] -> set initial stage: ${initial}`);
   };
 
   const handlePreviewSuccess = () => {
-    currentQuestion.value.type === 'chunk' ? handleSuccess() : currentStage.value = 'input';
+    if (currentQuestion.value.type === 'chunk') { handleSuccess(); return; }
+    const next = getNextStageInSequence('preview', getEnabledStages.value as StageType[]);
+    currentStage.value = next ?? 'success';
   };
 
   const handleChunkWrongAnswer = (option: string) => {
@@ -121,13 +135,8 @@ export function useQuizFlow() {
   };
 
   const handleInputSuccess = () => {
-    if (currentQuestion.value.mode === 'reduce' && getEnabledStages.value.includes('micro')) {
-      currentStage.value = 'micro';
-      return;
-    }
-    if (getEnabledStages.value.includes('macro')) currentStage.value = 'macro';
-    else if (getEnabledStages.value.includes('micro')) currentStage.value = 'micro';
-    else currentStage.value = 'success';
+    const next = getNextStageInSequence('input', getEnabledStages.value);
+    currentStage.value = next ?? 'success';
   };
 
   const handleUnpack = (type: 'relative' | 'preposition') => { currentMode.value = type; currentStage.value = 'micro'; };
