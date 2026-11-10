@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { runDiagnosisPipeline } from '../../rules/diagnostics/pipeline';
 import { normalizeAnswer } from '../../utils/textUtils';
 import type { DiagnosticSignal, GrammarQuestionData, Chunk } from '../../rules/types';
@@ -31,7 +31,7 @@ const answerArea = ref<Chunk[]>([]);
 const trashArea = ref<Chunk[]>([]);
 const wordBank = ref<Chunk[]>([]);
 const isFixedMorph = computed(() => props.fixedMorph || props.question.ui_mode === 'MORPH');
-const answerSlotCount = computed(() => Math.max(props.question.correctAnswer.length, answerArea.value.length));
+const answerSlotCount = computed(() => Math.max(props.question.correctAnswer?.length ?? 0, answerArea.value.length));
 const signals = ref<DiagnosticSignal[]>([]);
 const isSuccess = ref(false);
 const isWrong = ref(false);
@@ -40,9 +40,9 @@ const activeMorphId = ref<string | null>(null);
 const morphFeedback = ref<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 const draggedTileIndex = ref<number | null>(null);
 
-// 👈 追蹤嘗試次數，用於漸進式鷹架
+// 漸進式鷹架：紀錄嘗試次數
 const attemptCount = ref(0);
-// BUILD Cloze 模式：記錄正從字庫拖曳的字磚
+
 const clozeDragged = ref<Chunk | null>(null);
 
 const initTiles = () => {
@@ -64,19 +64,6 @@ const initTiles = () => {
 
 initTiles();
 
-onMounted(() => {
-  console.log('[DEBUG TileSentenceCanvas] mounted');
-  console.log('[DEBUG TileSentenceCanvas] ui_mode:', props.question.ui_mode);
-  console.log('[DEBUG TileSentenceCanvas] initialChunks length:', props.initialChunks?.length);
-  console.log('[DEBUG TileSentenceCanvas] initialChunks:', props.initialChunks);
-  console.log('[DEBUG TileSentenceCanvas] wordBank initial:', wordBank.value);
-  console.log('[DEBUG TileSentenceCanvas] answerArea initial:', answerArea.value);
-});
-
-watch(() => props.question.ui_mode, (mode) => {
-  console.log('[DEBUG TileSentenceCanvas] ui_mode changed →', mode);
-});
-
 watch(() => props.initialChunks, () => {
   if (isFixedMorph.value) {
     answerArea.value = JSON.parse(JSON.stringify(props.initialChunks));
@@ -96,14 +83,14 @@ const selectMorph = (chunk: Chunk, newText: string, hintText?: string) => {
   chunk.text = newText;
   const options = chunk.options ?? chunk.morph_options ?? [];
   chunk.current_index = Math.max(0, options.indexOf(newText));
-  const isCorrect = props.question.correctAnswer.includes(newText);
+  const isCorrect = (props.question.correctAnswer ?? []).includes(newText);
   morphFeedback.value = {
     text: hintText || (isCorrect ? `✅ Correct! Using ${newText} here.` : `❌ This doesn't fit the context, try again.`),
     type: isCorrect ? 'success' : 'error'
   };
   activeMorphId.value = null;
   resetState();
-  void checkAnswer(true);
+  void checkAnswer();
 };
 
 const discardTile = (tile: Chunk) => {
@@ -113,7 +100,7 @@ const discardTile = (tile: Chunk) => {
     const [removed] = answerArea.value.splice(index, 1);
     trashArea.value.push(removed);
     resetState();
-    void checkAnswer(true);
+    void checkAnswer();
   }
 };
 
@@ -131,7 +118,7 @@ const handleDrop = (dropIndex: number) => {
   answerArea.value.splice(dropIndex, 0, item);
   draggedTileIndex.value = null;
   resetState();
-  void checkAnswer(true);
+  void checkAnswer();
 };
 
 const restoreTile = (tile: Chunk) => {
@@ -142,26 +129,8 @@ const restoreTile = (tile: Chunk) => {
     answerArea.value.push(restored);
     answerArea.value.sort((a, b) => props.initialChunks.findIndex(c => c.id === a.id) - props.initialChunks.findIndex(c => c.id === b.id));
     resetState();
-    void checkAnswer(true);
+    void checkAnswer();
   }
-};
-
-// BUILD Cloze：從字庫拖曳字磚進入挖空區
-const handleClozeDragStart = (tile: Chunk) => {
-  clozeDragged.value = tile;
-};
-const handleClozeDragOver = (e: DragEvent) => {
-  e.preventDefault();
-};
-const handleClozeDrop = () => {
-  if (!clozeDragged.value) return;
-  const index = wordBank.value.findIndex(t => t.id === clozeDragged.value!.id);
-  if (index !== -1) {
-    wordBank.value.splice(index, 1);
-    answerArea.value.push(clozeDragged.value!);
-  }
-  clozeDragged.value = null;
-  resetState();
 };
 
 const selectTile = (tile: Chunk) => {
@@ -171,7 +140,6 @@ const selectTile = (tile: Chunk) => {
     wordBank.value.splice(index, 1);
     answerArea.value.push(tile);
     resetState();
-    // BUILD 模式：點擊字磚時不立刻檢查
   }
 };
 
@@ -185,40 +153,65 @@ const unselectTile = (tile: Chunk) => {
   }
 };
 
+const handleClozeDragStart = (tile: Chunk) => {
+  if (isSuccess.value) return;
+  clozeDragged.value = tile;
+};
+
+const handleClozeDragOver = (event: DragEvent) => {
+  event.preventDefault();
+};
+
+const handleClozeDrop = (event: DragEvent) => {
+  event.preventDefault();
+  if (!clozeDragged.value || isSuccess.value) return;
+
+  const tile = clozeDragged.value;
+  const index = wordBank.value.findIndex(t => t.id === tile.id);
+
+  if (index !== -1) {
+    wordBank.value.splice(index, 1);
+    answerArea.value.push(tile);
+    resetState();
+  }
+  clozeDragged.value = null;
+};
+
 const resetState = () => {
   isWrong.value = false;
   signals.value = [];
   remoteStatus.value = '';
-  // 注意：這裡不重置 attemptCount，讓鷹架層級保留，直到學生答對或換題
 };
 
 const checkAnswer = async (force = false) => {
   const studentTokens = answerArea.value.map(t => t.text);
-  const correctTokens = props.question.correctAnswer;
+  const correctTokens = props.question.correctAnswer ?? [];
 
-  // 1. 完全正確
+  if (correctTokens.length === 0) {
+    console.warn('⚠️ [TileSentenceCanvas] correctAnswer 為空，停止診斷。');
+    return;
+  }
+
+  if (studentTokens.length === 0 && props.question.ui_mode !== 'REDUCE') return;
+
   const cleanCurrent = normalizeAnswer(studentTokens);
   const cleanTarget = normalizeAnswer(correctTokens);
+
   if (cleanCurrent === cleanTarget) {
     playSuccess();
     isSuccess.value = true;
-    attemptCount.value = 0; // 答對後重置
+    attemptCount.value = 0; // 答對後重置次數
     speak(studentTokens.map(token => token.replace(/[\[\]]/g, '')).join(' '), { rate: props.speechRate ?? 0.8 });
     successTimeout = setTimeout(() => emit('success'), 1500);
     return;
   }
 
-  // 2. 長度不足且非強制檢查，直接返回
-  if (props.question.ui_mode === 'BUILD' && studentTokens.length < correctTokens.length && !force) {
-    return;
-  }
+  if (!force && props.question.ui_mode !== 'REDUCE' && studentTokens.length < correctTokens.length) return;
 
-  if (props.question.ui_mode === 'BUILD' && studentTokens.length === 0) return;
-
-  // 3. 漸進式鷹架邏輯
+  // 漸進式鷹架邏輯
   attemptCount.value++;
 
-  // 👈 關鍵修正：第一次錯誤時，直接回傳溫和提示，不呼叫 Pipeline 與 LanguageTool
+  // 第一次錯誤：顯示溫和提示，不呼叫 Pipeline
   if (attemptCount.value === 1 && props.question.ui_mode === 'BUILD') {
     signals.value = [{
       code: 'TRY_AGAIN',
@@ -229,26 +222,16 @@ const checkAnswer = async (force = false) => {
     return;
   }
 
-  // 第二次以上錯誤：執行 Pipeline
-  const ctx = { studentTokens, correctTokens: correctTokens ?? [], question: props.question };
+  const ctx = { studentTokens, correctTokens, question: props.question };
   const pipelineSignals = await runDiagnosisPipeline(ctx);
 
   if (pipelineSignals.length === 0) return;
 
-  if (attemptCount.value === 2) {
-    // 第二次錯誤：顯示具體診斷（過濾掉單純高亮的結果）
-    const validSignals = pipelineSignals.filter(s => s.code !== 'HIGHLIGHT_ONLY');
-    signals.value = validSignals.length > 0 ? validSignals : pipelineSignals;
-    playError();
-    isWrong.value = true;
-  } else {
-    // 第三次錯誤：啟動 L5 高亮兜底
-    signals.value = pipelineSignals;
-    playError();
-    isWrong.value = true;
-  }
-
   const displayed = props.question.ui_mode === 'REDUCE' ? pipelineSignals.slice(0, 1) : pipelineSignals;
+  signals.value = displayed;
+  playError();
+  isWrong.value = true;
+
   displayed.forEach((signal) => {
     if (signal.code !== 'HIGHLIGHT_ONLY' && signal.code !== 'TRY_AGAIN') {
       emit('misconception', signal.code);
@@ -262,6 +245,7 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
 
 <template>
   <div class="grammar-canvas" @click="handleOutsideClick">
+    <!-- 1. FIXED MORPH -->
     <div v-if="isFixedMorph" class="fixed-morph-sentence" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
       <span v-if="question.contextCloze" class="fixed-context">{{ question.contextCloze.prefix }}</span>
       <template v-for="(chunk, index) in answerArea" :key="chunk.id">
@@ -290,61 +274,61 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
       </Transition>
     </div>
 
+    <!-- 2. REDUCE -->
     <div v-else-if="question.ui_mode === 'REDUCE'" class="reduce-sentence-mode"
       :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
       <div class="sentence-display">
         <template v-for="(tile, index) in answerArea" :key="tile.id">
-          <div v-if="tile.draggable" class="removable-word" draggable="true"
+          <button v-if="tile.draggable" type="button" class="removable-word" draggable="true"
             @dragstart="handleDragStart(index)" @dragover.prevent @drop="handleDrop(index)"
             :aria-label="'移除「' + tile.text.replace(/[\[\]]/g, '') + '」'"
             :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }" @click="discardTile(tile)">
-            {{ tile.text.replace(/[\[\]]/g, '') }} <button type="button" class="reduce-remove-btn" @click.stop="discardTile(tile)">移除</button>
-          </div>
+            {{ tile.text.replace(/[\[\]]/g, '') }} <span class="remove-hint">×</span>
+          </button>
           <span v-else class="fixed-word" :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }">
             {{ tile.text.replace(/[\[\]]/g, '') }}
           </span>
         </template>
       </div>
       <div class="trash-zone-wrapper">
-        <div class="trash-label">🗑️ 垃圾桶（{{ trashArea.length }}）· 點擊字磚還原</div>
+        <div class="trash-label">🗑️ Removed tiles ({{ trashArea.length }}) · Click to restore</div>
         <div class="trash-area">
-          <div v-for="tile in trashArea" :key="tile.id" class="trash-tile" @click="restoreTile(tile)">
+          <div v-for="tile in trashArea" :key="tile.id" class="trash-tile">
             <span>{{ tile.text.replace(/[\[\]]/g, '') }}</span>
-            <button type="button" class="trash-restore-button" @click.stop="restoreTile(tile)">還原</button>
+            <button type="button" class="trash-restore-button" @click="restoreTile(tile)">Restore ↶</button>
           </div>
-          <div v-if="trashArea.length === 0" class="trash-placeholder">（垃圾桶為空）</div>
+          <div v-if="trashArea.length === 0" class="trash-placeholder">Click on underlined words above to remove them.
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- 3. BUILD -->
     <div v-else class="build-mode-wrapper">
-      <!-- BUILD Cloze 變體：前後文 + 挖空區，學生將字磚填入挖空 -->
-      <div v-if="question.contextCloze" class="cloze-build-mode">
-        <div class="cloze-sentence" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
-          <span class="cloze-prefix">{{ question.contextCloze.prefix }}</span>
-          <div class="cloze-blank" @drop="handleClozeDrop" @dragover="handleClozeDragOver">
-            <div v-for="(tile, index) in answerArea" :key="tile.id" class="cloze-tile"
-              :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }">
-              {{ tile.text.replace(/[\\[\\]]/g, '') }}
-              <button type="button" class="cloze-remove" @click.stop="unselectTile(tile)">✕</button>
-            </div>
-            <div v-if="answerArea.length === 0" class="cloze-placeholder">[ 將字磚拖入此處填空 ]</div>
-          </div>
-          <span class="cloze-suffix">{{ question.contextCloze.suffix }}</span>
+
+      <!-- 👈 復刻回來的克漏字上下文 UI -->
+      <div class="cloze-context" v-if="question.contextCloze">
+        <span class="cloze-text">{{ question.contextCloze.prefix }}</span>
+
+        <div class="cloze-blanks-container">
+          <span v-for="(_, index) in answerSlotCount" :key="index" class="cloze-blank-slot"
+            :class="{ 'has-text': answerArea[index] }" @dragover="handleClozeDragOver" @drop="handleClozeDrop">
+            <template v-if="answerArea[index]">
+              <div class="tile"
+                :class="{ 'tile-error': isError(index), 'tile-success': isSuccess, 'tile-chunk': answerArea[index].text.startsWith('[') }"
+                @click.stop="unselectTile(answerArea[index])">
+                {{ answerArea[index].text.replace(/[\[\]]/g, '') }}
+              </div>
+            </template>
+            <span v-else class="blank-placeholder">_</span>
+          </span>
         </div>
-        <div class="word-bank">
-          <div v-for="tile in wordBank" :key="tile.id" class="tile"
-            :class="{ 'tile-chunk': tile.text.startsWith('['), 'can-morph': tile.can_morph }"
-            draggable="true" @dragstart="handleClozeDragStart(tile)" @click="selectTile(tile)">
-            {{ tile.text.replace(/[\\[\\]]/g, '') }}
-          </div>
-        </div>
-        <button class="check-answer-button" @click="checkAnswer(true)">Check Answer</button>
+
+        <span class="cloze-text">{{ question.contextCloze.suffix }}</span>
       </div>
 
-      <!-- 現有全句重排模式 -->
-      <div v-else>
-      <div class="answer-area" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
+      <!-- 原本的全句重排區塊 (只有在沒有克漏字時顯示) -->
+      <div v-if="!question.contextCloze" class="answer-area" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
         <div v-for="(_, index) in answerSlotCount" :key="index" class="answer-slot">
           <div v-if="answerArea[index]" class="tile-wrapper">
             <div class="tile"
@@ -362,16 +346,20 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
           <div v-else class="empty-slot"></div>
         </div>
       </div>
+
+      <!-- 字磚庫 -->
       <div class="word-bank">
-        <div v-for="tile in wordBank" :key="tile.id" class="tile"
+        <div v-for="tile in wordBank" :key="tile.id" class="tile" draggable="true"
+          @dragstart="handleClozeDragStart(tile)"
           :class="{ 'tile-chunk': tile.text.startsWith('['), 'can-morph': tile.can_morph }" @click="selectTile(tile)">
           {{ tile.text.replace(/[\[\]]/g, '') }}
         </div>
       </div>
+
       <button class="check-answer-button" @click="checkAnswer(true)">Check Answer</button>
-  </div>
     </div>
 
+    <!-- Alert Bubble -->
     <div v-if="signals.length > 0" class="alert-bubble" :class="{ 'soft-warning': signals[0].code === 'TRY_AGAIN' }">
       <div class="alert-icon">{{ signals[0].code === 'TRY_AGAIN' ? '💡' : '⚠️' }}</div>
       <div class="alert-messages">
@@ -400,6 +388,55 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
   gap: 20px;
   min-height: 200px;
   position: relative;
+}
+
+/* === 新增：克漏字樣式 === */
+.cloze-context {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+.cloze-text {
+  color: #555;
+}
+
+.cloze-blanks-container {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.cloze-blank-slot {
+  min-width: 50px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e6f7ff;
+  color: #1cb0f6;
+  border-radius: 8px;
+  border-bottom: 3px dashed #1cb0f6;
+  padding: 4px 8px;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.cloze-blank-slot.has-text {
+  background: #d0f0ff;
+  border-bottom-style: solid;
+}
+
+.blank-placeholder {
+  opacity: 0.5;
 }
 
 /* === FIXED MORPH STYLES === */
@@ -733,7 +770,6 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
   animation: slideDown 0.3s ease-out;
 }
 
-/* 👈 溫和提示的樣式 */
 .alert-bubble.soft-warning {
   background-color: #fef3c7;
   color: #92400e;
@@ -882,120 +918,4 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
   background: #fee2e2;
   color: #991b1b;
 }
-/* === BUILD CLOZE (克漏字) STYLES === */
-.cloze-build-mode {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  align-items: center;
-}
-.cloze-sentence {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 24px;
-  border: 2px solid #d5e0e8;
-  border-radius: 16px;
-  background: #ffffff;
-  font-size: clamp(1.2rem, 3vw, 1.8rem);
-  line-height: 1.7;
-  min-height: 92px;
-}
-.cloze-sentence.success-bg { border-color: #58cc02; background: #f0fff0; }
-.cloze-sentence.shake { animation: shake 0.4s; }
-.cloze-prefix, .cloze-suffix { color: #526879; }
-.cloze-blank {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  border: 2px dashed #9ca3af;
-  border-radius: 10px;
-  padding: 8px 12px;
-  background: #f3f4f6;
-  min-width: 120px;
-  justify-content: center;
-}
-.cloze-tile {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
-  color: #111827;
-  font-weight: 600;
-}
-.cloze-remove {
-  border: 0;
-  background: transparent;
-  color: #ef4444;
-  cursor: pointer;
-  font-weight: bold;
-  padding: 0 4px;
-  line-height: 1;
-}
-.cloze-remove:hover { background: #fee2e2; border-radius: 4px; }
-.cloze-placeholder {
-  color: #9ca3af;
-  font-style: italic;
-  padding: 6px 10px;
-  border-radius: 6px;
-}
-/* === REDUCE CARD STYLES (卡片化 + 垃圾桶) === */
-.reduce-sentence-mode .sentence-display {
-  gap: 10px 16px;
-}
-.reduce-sentence-mode .removable-word {
-  display: inline-flex !important;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  border: 2px solid #ef4444 !important;
-  border-radius: 10px;
-  background: #fff0f0 !important;
-  color: #dc2626 !important;
-  font-weight: 700 !important;
-  font-size: 1.15rem !important;
-  cursor: pointer;
-}
-.reduce-sentence-mode .reduce-text { font-weight: 700; }
-.reduce-sentence-mode .reduce-remove-btn {
-  border: 1px solid #ef4444;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #dc2626;
-  padding: 2px 8px;
-  font-size: 0.8rem;
-  font-weight: 800;
-  cursor: pointer;
-}
-.reduce-sentence-mode .reduce-remove-btn:hover { background: #fecaca; }
-.reduce-sentence-mode .trash-tile {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: #f3f4f6;
-  color: #6b7280;
-  cursor: pointer;
-  font-weight: 600;
-}
-.reduce-sentence-mode .trash-tile:hover { background: #e5e7eb; border-color: #1cb0f6; color: #1cb0f6; }
-.reduce-sentence-mode .trash-restore-button {
-  border: 1px solid #1cb0f6;
-  border-radius: 6px;
-  padding: 2px 8px;
-  background: #fff;
-  color: #1cb0f6;
-  font-size: 0.8rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-.reduce-sentence-mode .trash-restore-button:hover { background: #bfdbfe; }
-
 </style>

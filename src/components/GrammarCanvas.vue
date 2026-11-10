@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, watch } from 'vue';
+import { computed, defineAsyncComponent } from 'vue';
 import type { Chunk, GrammarQuestionData } from '../rules/types';
 import { getQuestionCanvasMode } from '../rules/types';
 import { getGrammarTopic } from '../rules/grammarTopics';
@@ -25,8 +25,15 @@ const emit = defineEmits<{
 }>();
 
 const canvasMode = computed(() => getQuestionCanvasMode(props.question));
+
 const selectedCanvas = computed(() => {
   const mode = canvasMode.value;
+
+  // 👈 修正：只有 BUILD 或 REDUCE，且有 chunks，才強制走 TileSentenceCanvas
+  if ((mode === 'BUILD' || mode === 'REDUCE') && props.question.chunks && props.question.chunks.length > 0) {
+    return TileSentenceCanvas;
+  }
+
   const isUnspecifiedLegacyCanvas = !props.question.canvas_mode
     && !props.question.grammarTopicId
     && (mode === 'BUILD' || mode === 'REDUCE')
@@ -34,10 +41,12 @@ const selectedCanvas = computed(() => {
     && !props.question.matrix_config
     && !props.question.pragmatic_target
     && typeof props.question.status_gap !== 'number';
+
   if (isUnspecifiedLegacyCanvas) return TileSentenceCanvas;
   if (mode === 'MATRIX_GATE') return FeatureMatrixCanvas;
   if (mode === 'PRAGMATIC_HP') return PragmaticHpCanvas;
   if (mode === 'GRAVITY_SWITCH') return TimelineMorphCanvas;
+
   if (mode === 'MORPH') {
     if (props.question.concept === 'MODAL_VERB'
       && !props.question.canvas_mode && !props.question.pragmatic_target
@@ -48,32 +57,15 @@ const selectedCanvas = computed(() => {
     ].includes(props.question.concept ?? '')) return TimelineMorphCanvas;
     return TileSentenceCanvas;
   }
-  if (mode === 'REDUCE') return ShredderReduceCanvas;
-  if (mode === 'BUILD' || mode === 'MATRIX_GATE') return MagneticBuildCanvas;
-  return TileSentenceCanvas;
-});
-const shuffleWordBank = computed(() => canvasMode.value === 'BUILD'
-  && (getGrammarTopic(props.question.grammarTopicId)?.shuffleTiles ?? true));
 
-watch(selectedCanvas, (newCanvas) => {
-  const canvasName = newCanvas?.name || String(newCanvas);
-  console.log('[DEBUG GrammarCanvas] selectedCanvas changed →', canvasName);
-  console.log('[DEBUG GrammarCanvas] canvasMode.value:', canvasMode.value);
-  console.log('[DEBUG GrammarCanvas] question.ui_mode:', props.question.ui_mode);
-  console.log('[DEBUG GrammarCanvas] question.canvas_mode:', props.question.canvas_mode);
-  console.log('[DEBUG GrammarCanvas] initialChunks:', props.initialChunks);
+  if (mode === 'REDUCE') return ShredderReduceCanvas;
+  if (mode === 'BUILD') return MagneticBuildCanvas;
+
+  return TileSentenceCanvas;
 });
 </script>
 
 <template>
-  <component
-    :is="selectedCanvas"
-    :question="question"
-    :initial-chunks="initialChunks"
-    :speech-rate="speechRate"
-    :shuffle-word-bank="shuffleWordBank"
-    @success="emit('success')"
-    @misconception="emit('misconception', $event)"
-    @continue="emit('continue')"
-  />
+  <component :is="selectedCanvas" :question="question" :initial-chunks="initialChunks" :speech-rate="speechRate"
+    @success="emit('success')" @misconception="emit('misconception', $event)" @continue="emit('continue')" />
 </template>

@@ -12,29 +12,22 @@ const props = defineProps<{
     isDistractorActive: (word: string) => boolean;
 }>();
 
-// 專屬這個表單的 computed (從原本的 TeacherAdmin 搬過來)
 const funnelDiscarded = computed(() =>
     props.form.relativeSentence.replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim()
 );
 
-// 所有可能的階段（保持固定順序作為預設/可選項目）
+// 👈 這裡定義了所有可勾選的階段
 const allStages = [
-    { value: 'input', label: '聽力輸入', condition: (f: FormPayload) => f.questionType === 'standard' },
-    { value: 'macro', label: '巨觀拖拉', condition: (f: FormPayload) => f.questionType === 'standard' && f.questionMode !== 'reduce' },
-    { value: 'micro', label: '字磚重組', condition: () => true },
-    { value: 'pronunciation', label: '語音練習', condition: () => true },
-    { value: 'noticing', label: '意識提升', condition: () => true },
+    { value: 'preview', label: '預覽' },
+    { value: 'input', label: '聽力輸入' },
+    { value: 'macro', label: '巨觀拖拉' },
+    { value: 'micro', label: '字磚重組' },
+    { value: 'pronunciation', label: '語音練習' },
+    { value: 'noticing', label: '意識提升' },
 ] as const;
 
-// 可用的階段（根據條件過濾）
-const availableStages = computed(() =>
-    allStages.filter(s => s.condition(props.form))
-);
-
-// 目前已啟用的階段（陣列順序 = 執行順序）
 const enabledStages = computed(() => props.form.enabledStages);
 
-// 切換階段啟用/停用
 const toggleStage = (stage: TeachingStage) => {
     const idx = props.form.enabledStages.indexOf(stage);
     if (idx === -1) {
@@ -44,7 +37,6 @@ const toggleStage = (stage: TeachingStage) => {
     }
 };
 
-// 上移
 const moveUp = (idx: number) => {
     if (idx > 0) {
         const arr = [...props.form.enabledStages];
@@ -53,7 +45,6 @@ const moveUp = (idx: number) => {
     }
 };
 
-// 下移
 const moveDown = (idx: number) => {
     if (idx < props.form.enabledStages.length - 1) {
         const arr = [...props.form.enabledStages];
@@ -62,15 +53,12 @@ const moveDown = (idx: number) => {
     }
 };
 
-// 檢查階段是否已啟用
 const isStageEnabled = (stage: TeachingStage) => props.form.enabledStages.includes(stage);
 
-// 取得階段顯示名稱
 const getStageLabel = (stage: TeachingStage) => {
     const found = allStages.find(s => s.value === stage);
     return found ? found.label : stage;
 };
-
 </script>
 
 <template>
@@ -87,13 +75,22 @@ const getStageLabel = (stage: TeachingStage) => {
         <input type="number" v-model.number="form.timeLimitForm" placeholder="60" min="10" step="10" />
     </div>
 
+    <!-- 👈 完整補齊的教學流程 UI 區塊 -->
     <div class="form-group" v-if="form.questionType !== 'chunk'">
-        <label>本題教學流程</label>
-        <div class="stage-order">
+        <label>本題教學流程 (勾選並排序)</label>
+        <div class="stage-checkboxes">
+            <label v-for="stage in allStages" :key="stage.value">
+                <input type="checkbox" :checked="isStageEnabled(stage.value)" @change="toggleStage(stage.value)" />
+                {{ stage.label }}
+            </label>
+        </div>
+
+        <div class="stage-order" style="margin-top: 12px;">
             <div v-for="(stage, idx) in enabledStages" :key="stage" class="stage-item">
                 <span class="stage-label">{{ getStageLabel(stage) }}</span>
-                <button @click="moveUp(idx)" class="stage-move-up">▲</button>
-                <button @click="moveDown(idx)" class="stage-move-down">▼</button>
+                <button @click="moveUp(idx)" class="stage-move-up" :disabled="idx === 0">▲</button>
+                <button @click="moveDown(idx)" class="stage-move-down"
+                    :disabled="idx === enabledStages.length - 1">▼</button>
             </div>
         </div>
     </div>
@@ -117,20 +114,14 @@ const getStageLabel = (stage: TeachingStage) => {
         </div>
     </div>
 
+    <!-- 以下皆與你原本的一致 -->
     <template v-if="form.questionType === 'chunk'">
-        <div class="form-group">
-            <label>片語內容 (用 [ ] 包住要測驗的片語)</label>
-            <input v-model="form.relativeSentence" type="text" placeholder="Ex: [looking up words]" />
-        </div>
-        <div class="form-group">
-            <label>片語中文意思</label>
-            <input v-model="form.chunkZhInput" type="text" placeholder="Ex: 查單字" />
-        </div>
-        <div class="form-group">
-            <label>錯誤片語選項 (用逗號隔開，供微測驗用)</label>
-            <input v-model="form.chunkQuizInput" type="text"
-                placeholder="Ex: looking for his pen, looking at the board" />
-        </div>
+        <div class="form-group"><label>片語內容 (用 [ ] 包住要測驗的片語)</label><input v-model="form.relativeSentence" type="text"
+                placeholder="Ex: [looking up words]" /></div>
+        <div class="form-group"><label>片語中文意思</label><input v-model="form.chunkZhInput" type="text"
+                placeholder="Ex: 查單字" /></div>
+        <div class="form-group"><label>錯誤片語選項 (用逗號隔開，供微測驗用)</label><input v-model="form.chunkQuizInput" type="text"
+                placeholder="Ex: looking for his pen, looking at the board" /></div>
     </template>
 
     <div class="form-group">
@@ -163,16 +154,10 @@ const getStageLabel = (stage: TeachingStage) => {
     </template>
 
     <div class="form-row">
-        <div class="form-group">
-            <label>目標名詞</label>
-            <input v-model="form.targetNoun" type="text" placeholder="Ex: The boy"
-                @focus="$emit('update:activeUploadTarget', null)" />
-        </div>
-        <div class="form-group">
-            <label>心智圖標籤 (Tags)</label>
-            <input v-model="form.tagsInput" type="text" placeholder="Ex: 穿著與顏色"
-                @focus="$emit('update:activeUploadTarget', null)" />
-        </div>
+        <div class="form-group"><label>目標名詞</label><input v-model="form.targetNoun" type="text"
+                placeholder="Ex: The boy" @focus="$emit('update:activeUploadTarget', null)" /></div>
+        <div class="form-group"><label>心智圖標籤 (Tags)</label><input v-model="form.tagsInput" type="text"
+                placeholder="Ex: 穿著與顏色" @focus="$emit('update:activeUploadTarget', null)" /></div>
     </div>
 
     <div class="form-group" v-if="form.questionType !== 'chunk'">
@@ -209,19 +194,14 @@ const getStageLabel = (stage: TeachingStage) => {
 
     <div v-if="form.questionType === 'standard' && form.questionMode === 'reduce'" class="funnel-preview">
         <div class="funnel-title">🔍 系統自動拆解預覽 (可手動修改保留內容)</div>
-        <div class="funnel-row">
-            <span class="funnel-label" style="color: #166534;">🟢 保留 (簡化句)</span>
-            <input v-model="form.prepositionSentence" type="text" class="funnel-input-kept"
-                placeholder="Ex: [with a dictionary]" />
-        </div>
-        <div class="funnel-row">
-            <span class="funnel-label">🗑️ 丟棄 (垃圾桶)</span>
-            <span class="funnel-value discarded">{{ funnelDiscarded || '（無多餘詞彙）' }}</span>
-        </div>
+        <div class="funnel-row"><span class="funnel-label" style="color: #166534;">🟢 保留 (簡化句)</span><input
+                v-model="form.prepositionSentence" type="text" class="funnel-input-kept"
+                placeholder="Ex: [with a dictionary]" /></div>
+        <div class="funnel-row"><span class="funnel-label">🗑️ 丟棄 (垃圾桶)</span><span class="funnel-value discarded">{{
+            funnelDiscarded || '（無多餘詞彙）' }}</span></div>
         <p
             style="font-size: 0.85rem; color: #b45309; margin-top: 8px; background: #fef3c7; padding: 8px; border-radius: 8px;">
-            💡 提示：如果「動詞」要轉換為「介系詞」（例如 who is carrying ➔ with），請直接在綠色框內加上介系詞，系統會自動把該字加入學生的字磚庫。
-        </p>
+            💡 提示：如果「動詞」要轉換為「介系詞」（例如 who is carrying ➔ with），請直接在綠色框內加上介系詞，系統會自動把該字加入學生的字磚庫。</p>
     </div>
 
     <div class="form-group" v-if="form.questionType === 'standard'">
@@ -252,29 +232,17 @@ const getStageLabel = (stage: TeachingStage) => {
     </div>
 
     <div class="form-row" v-if="form.questionType === 'standard'">
-        <div class="form-group">
-            <label>正確圖下方文字 (選填)</label>
-            <input v-model="form.correctLabel" type="text" placeholder="Ex: who is looking up words"
-                @focus="$emit('update:activeUploadTarget', null)" />
-        </div>
-        <div class="form-group">
-            <label>干擾圖下方文字 (選填)</label>
-            <input v-model="form.distractorLabel" type="text" placeholder="Ex: who is looking for his pen"
-                @focus="$emit('update:activeUploadTarget', null)" />
-        </div>
+        <div class="form-group"><label>正確圖下方文字 (選填)</label><input v-model="form.correctLabel" type="text"
+                placeholder="Ex: who is looking up words" @focus="$emit('update:activeUploadTarget', null)" /></div>
+        <div class="form-group"><label>干擾圖下方文字 (選填)</label><input v-model="form.distractorLabel" type="text"
+                placeholder="Ex: who is looking for his pen" @focus="$emit('update:activeUploadTarget', null)" /></div>
     </div>
 
     <template v-if="form.questionType === 'contrast'">
-        <div class="form-group">
-            <label>中文句子</label>
-            <input v-model="form.chineseSentence" type="text" placeholder="Ex: 戴藍色帽子的女孩"
-                @focus="$emit('update:activeUploadTarget', null)" />
-        </div>
-        <div class="form-group">
-            <label>中文高亮 (修飾語部分)</label>
-            <input v-model="form.chineseHighlight" type="text" placeholder="Ex: 戴藍色帽子的"
-                @focus="$emit('update:activeUploadTarget', null)" />
-        </div>
+        <div class="form-group"><label>中文句子</label><input v-model="form.chineseSentence" type="text"
+                placeholder="Ex: 戴藍色帽子的女孩" @focus="$emit('update:activeUploadTarget', null)" /></div>
+        <div class="form-group"><label>中文高亮 (修飾語部分)</label><input v-model="form.chineseHighlight" type="text"
+                placeholder="Ex: 戴藍色帽子的" @focus="$emit('update:activeUploadTarget', null)" /></div>
         <div class="form-group">
             <label>拼圖排列方向</label>
             <div class="type-switcher">
@@ -284,21 +252,15 @@ const getStageLabel = (stage: TeachingStage) => {
                     @click="form.puzzleLayout = 'modifier-right'">佈局 B (修飾語在右)</button>
             </div>
         </div>
-        <div class="form-group">
-            <label>解釋卡標題</label>
-            <input v-model="form.explanationTitle" type="text" placeholder="Ex: ✨ 你發現了嗎？"
-                @focus="$emit('update:activeUploadTarget', null)" />
-        </div>
-        <div class="form-group">
-            <label>解釋卡說明</label>
-            <input v-model="form.explanationDesc" type="text" placeholder="Ex: 修飾語要放在名詞的後面喔！"
-                @focus="$emit('update:activeUploadTarget', null)" />
-        </div>
+        <div class="form-group"><label>解釋卡標題</label><input v-model="form.explanationTitle" type="text"
+                placeholder="Ex: ✨ 你發現了嗎？" @focus="$emit('update:activeUploadTarget', null)" /></div>
+        <div class="form-group"><label>解釋卡說明</label><input v-model="form.explanationDesc" type="text"
+                placeholder="Ex: 修飾語要放在名詞的後面喔！" @focus="$emit('update:activeUploadTarget', null)" /></div>
     </template>
 </template>
 
 <style scoped>
-/* 搬移相關的共用與專屬樣式 */
+/* 你的 CSS 保持不變，我補上了 stage-checkboxes 與 stage-order 的樣式 */
 .form-group {
     margin-bottom: 24px;
     display: flex;
@@ -600,7 +562,8 @@ const getStageLabel = (stage: TeachingStage) => {
     flex-shrink: 0;
 }
 
-.stage-move-up, .stage-move-down {
+.stage-move-up,
+.stage-move-down {
     background: none;
     border: none;
     color: #1cb0f6;
@@ -611,8 +574,16 @@ const getStageLabel = (stage: TeachingStage) => {
     transition: transform 0.15s;
 }
 
-.stage-move-up:hover, .stage-move-down:hover {
+.stage-move-up:hover,
+.stage-move-down:hover {
     transform: scale(1.2);
+}
+
+.stage-move-up:disabled,
+.stage-move-down:disabled {
+    color: #ccc;
+    cursor: not-allowed;
+    transform: none;
 }
 
 @media (max-width: 500px) {

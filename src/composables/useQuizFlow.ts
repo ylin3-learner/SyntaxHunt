@@ -6,7 +6,6 @@ import { getQuestionCanvasMode, getQuestionUiMode } from '../rules/types';
 import { CloudDatabase } from '../services/CloudDatabase';
 import { useQuizTimer } from './useQuizTimer';
 import { useSound } from '../utils/useSound';
-// 確保留言這行，從正確的路徑引入 currentTeacherId
 import { useClassroomSync, currentTeacherId } from './useClassroomSync';
 
 export function useQuizFlow() {
@@ -85,7 +84,6 @@ export function useQuizFlow() {
 
   type StageType = TeachingStage;
 
-  // 🔧 輔助：根據 enabledStages 數組順序，取得下一個階段
   const getNextStageInSequence = (current: StageType | null, enabledStages: StageType[]): StageType | null => {
     if (!enabledStages.length) return null;
     if (current === null) return enabledStages[0];
@@ -94,33 +92,22 @@ export function useQuizFlow() {
     return enabledStages[idx + 1];
   };
 
-  // 🔧 輔助：取得初始階段（受題型強制規則限制）
   const getInitialStage = (question: QuestionData, enabledStages: StageType[]): StageType => {
+    // 優先使用老師自訂的順序
+    if (enabledStages && enabledStages.length > 0) {
+      return enabledStages[0];
+    }
+    // Fallback 給舊題庫
     if (question.type === 'grammar') return 'micro';
     if (question.type === 'contrast') return 'macro';
     if (question.type === 'chunk') return 'preview';
-    if (enabledStages.length > 0) return enabledStages[0];
     return 'success';
   };
 
   const checkAndSetInitialStage = () => {
     const enabled = getEnabledStages.value;
-    console.log('[DEBUG Stage] checkAndSetInitialStage called');
-    console.log('[DEBUG Stage] question.type:', currentQuestion.value?.type);
-    console.log('[DEBUG Stage] question.mode:', currentQuestion.value?.mode);
-    console.log('[DEBUG Stage] enabledStages (順序):', enabled);
-    console.log('[DEBUG Stage] inputData:', currentQuestion.value?.inputData);
-    console.log('[DEBUG Stage] previewData:', currentQuestion.value?.previewData);
-
     const initial = getInitialStage(currentQuestion.value, enabled);
     currentStage.value = initial;
-    console.log(`[DEBUG Stage] -> set initial stage: ${initial}`);
-  };
-
-  const handlePreviewSuccess = () => {
-    if (currentQuestion.value.type === 'chunk') { handleSuccess(); return; }
-    const next = getNextStageInSequence('preview', getEnabledStages.value);
-    currentStage.value = next ?? 'success';
   };
 
   const handleChunkWrongAnswer = (option: string) => {
@@ -134,18 +121,33 @@ export function useQuizFlow() {
     });
   };
 
-  const handleInputSuccess = () => {
-    const next = getNextStageInSequence('input', getEnabledStages.value);
-    currentStage.value = next ?? 'success';
-  };
-
   const handleUnpack = (type: 'relative' | 'preposition') => { currentMode.value = type; currentStage.value = 'micro'; };
 
+  // 👈 核心流控：任何階段成功，都會尋找下一個階段
   const handleSuccess = () => {
     playSuccess();
-    currentStage.value = 'success';
     trackCompleted();
     if (completedCount.value <= currentIndex.value) completedCount.value = currentIndex.value + 1;
+
+    const nextStage = getNextStageInSequence(currentStage.value, getEnabledStages.value);
+
+    if (nextStage) {
+      currentStage.value = nextStage;
+    } else {
+      currentStage.value = 'success';
+    }
+  };
+
+  const handlePreviewSuccess = () => {
+    if (currentQuestion.value.type === 'chunk') {
+      handleSuccess();
+      return;
+    }
+    handleSuccess();
+  };
+
+  const handleInputSuccess = () => {
+    handleSuccess();
   };
 
   const nextQuestion = (allowClassModeSkip = false) => {
@@ -211,24 +213,15 @@ export function useQuizFlow() {
     questionBank.value = updatedQuestions;
   };
 
-  // 修正：使用 async 並加入防禦性載入
   const handlePushQuestion = async (id: string) => {
-    console.log(`🎯 [Student] 開始處理推播題目，目標 ID: ${id}`);
-
     let targetQ = questionBank.value.find(q => q.id === id);
-    console.log(`🎯 [Student] 本地題庫 (${questionBank.value.length} 題) 尋找結果:`, targetQ ? '找到了' : '找不到');
 
-    // 防禦性載入：如果本地找不到，強制從雲端拉取
     if (!targetQ && currentTeacherId.value) {
-      console.log(`📡 [Student] 本地找不到，強制從雲端拉取題庫 (Teacher: ${currentTeacherId.value})...`);
       const freshQuestions = await CloudDatabase.fetchQuestions(currentTeacherId.value);
-      console.log(`📡 [Student] 雲端回傳題庫數量:`, freshQuestions?.length);
-
       if (freshQuestions) {
         questionBank.value = freshQuestions;
         fixAntecedentNumbers();
         targetQ = freshQuestions.find(q => q.id === id);
-        console.log(`🎯 [Student] 重新尋找結果:`, targetQ ? '找到了' : '還是找不到');
       }
     }
 
@@ -237,7 +230,6 @@ export function useQuizFlow() {
       return;
     }
 
-    // 正常切換 UI 邏輯
     if (unitFilter.value !== 'all' && targetQ.unit !== unitFilter.value) {
       unitFilter.value = targetQ.unit || 'all';
     }
