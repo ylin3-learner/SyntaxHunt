@@ -136,6 +136,53 @@ Here are the code snippets to add to your README files. You can copy and paste t
 
 ---
 
+## 🗺️ UI Architecture & Data Flow (Debugging Guide)
+
+To easily trace how a question is rendered and to debug UI routing issues, here is the complete data flow and component routing hierarchy.
+
+### 1. Student Rendering Pipeline (App.vue → StageMicro → GrammarCanvas)
+
+When a student enters a question, the flow is as follows:
+
+1. **`App.vue`**: Listens to `currentStage` from `useQuizFlow.ts` and dynamically renders the corresponding stage component (e.g., `StageInput`, `StageMacro`, or `StageMicro`).
+2. **`useQuizFlow.ts` (`checkAndSetInitialStage`)**: Determines the starting stage. It strictly follows the `enabledStages` array configured by the teacher. If empty, it falls back to the legacy default (`micro` for grammar, `macro` for contrast).
+3. **`StageMicro.vue`**: Passes the `question` and `chunks` down to `GrammarCanvas.vue`.
+4. **`GrammarCanvas.vue`**: Acts as a **Canvas Router**. It inspects the question's properties (`chunks`, `ui_mode`, `canvas_mode`, `concept`) to select the correct interactive component.
+
+### 2. Canvas Routing Rules (`GrammarCanvas.vue`)
+
+The router uses the following priority to select the UI component:
+1. **The `chunks` Rule (BUILD / REDUCE)**: If the question has a populated `chunks` array (e.g., standard questions converted to word-building), it **always** routes directly to `TileSentenceCanvas`.
+2. **`MATRIX_GATE`**: Routes to `FeatureMatrixCanvas`.
+3. **`PRAGMATIC_HP`**: Routes to `PragmaticHpCanvas`.
+4. **`GRAVITY_SWITCH`**: Routes to `TimelineMorphCanvas`.
+5. **`MORPH`**: Routes to `TimelineMorphCanvas` (for tenses), `ModalGaugeCanvas` (for modals), or `TileSentenceCanvas` (fixed morphology).
+6. **Legacy BUILD / REDUCE**: Routes to `MagneticBuildCanvas` or `ShredderReduceCanvas` (which internally wrap `TileSentenceCanvas`).
+
+### 3. Core UI Modes (`TileSentenceCanvas.vue`)
+
+This is the most critical component. It handles three distinct modes based on `question.ui_mode`:
+- **`BUILD`**:
+  - If `contextCloze` exists: Renders the **Cloze variant** (prefix + blank slot + suffix). Students drag tiles into the blank.
+  - If no `contextCloze`: Renders the standard **Full Sentence Builder**.
+- **`REDUCE`**: Renders the **Card + Trash Can** UI. Students remove redundant words. A `success-bg` is applied when correct.
+- **`MORPH`**: Renders a fixed sentence with clickable "capsules" to change word forms.
+
+### 4. Progressive Scaffolding & State Tracking
+
+Inside `TileSentenceCanvas.vue`, the diagnostic logic uses an `attemptCount` to manage feedback:
+- **Attempt 1**: Soft warning (`TRY_AGAIN`). No red shakes, no API calls.
+- **Attempt 2+**: Triggers the full L1-L5 diagnostic pipeline and displays specific errors.
+- **Success**: Applies `.success-bg`, plays TTS, and emits `success` to `useQuizFlow`.
+
+### 🛠️ How to Debug UI Issues (Tracing Checklist)
+1. **Check `enabledStages`**: Use `console.log` in `useQuizFlow.ts` to verify the array order (e.g., `['micro', 'input']`).
+2. **Check `currentStage`**: Verify that `App.vue` is rendering the correct stage component.
+3. **Check `GrammarCanvas` Routing**: Look at the `selectedCanvas` computed property. Does the question have `chunks`? Is `ui_mode` set to `BUILD`?
+4. **Check `TileSentenceCanvas`**: Verify `initialChunks`. If empty, the word bank will be blank.
+
+---
+
 ### 🧠 Grammar Diagnostic Engine (Chain of Responsibility)
 
 The core diagnostic pipeline has been completely refactored from a monolithic rule engine into a highly decoupled, **5-Layer Chain of Responsibility**. This architecture ensures millisecond-level local responses while guaranteeing that *no student mistake is ever left without feedback*.

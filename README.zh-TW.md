@@ -129,6 +129,53 @@ graph TD
 
 ---
 
+## 🗺️ UI 架構與資料流（Debug 追蹤指南）
+
+為了讓未來開發或 Debug 時能快速釐清「題目為什麼這樣渲染」，以下是完整的資料流與組件路由層級。
+
+### 1. 學生端渲染流程（App.vue → StageMicro → GrammarCanvas）
+
+當學生進入題目時，資料流如下：
+
+1. **`App.vue`**：監聽來自 `useQuizFlow.ts` 的 `currentStage`，並動態渲染對應的階段組件（如 `StageInput`、`StageMacro` 或 `StageMicro`）。
+2. **`useQuizFlow.ts` (`checkAndSetInitialStage`)**：決定起始階段。系統**嚴格遵守**老師設定的 `enabledStages` 陣列順序。若為空，才 Fallback 到舊版預設（文法題 `micro`、對比題 `macro`）。
+3. **`StageMicro.vue`**：將 `question` 與 `chunks` 傳遞給 `GrammarCanvas.vue`。
+4. **`GrammarCanvas.vue`**：扮演**畫布分發器（Canvas Router）**。它會檢查 `chunks`、`ui_mode`、`canvas_mode`、`concept` 等屬性，決定載入哪個互動組件。
+
+### 2. 畫布路由規則 (`GrammarCanvas.vue`)
+
+分發器會依照以下優先級選擇 UI 組件：
+1. **`chunks` 鐵律（BUILD / REDUCE）**：只要題目有 `chunks` 陣列（例如標準題被轉換為字磚重組），**一律**直接路由到 `TileSentenceCanvas`。
+2. **`MATRIX_GATE`**：路由到 `FeatureMatrixCanvas`。
+3. **`PRAGMATIC_HP`**：路由到 `PragmaticHpCanvas`。
+4. **`GRAVITY_SWITCH`**：路由到 `TimelineMorphCanvas`。
+5. **`MORPH`**：依考點路由到 `TimelineMorphCanvas`（時態）、`ModalGaugeCanvas`（情態）或 `TileSentenceCanvas`（固定變形）。
+6. **舊版 BUILD / REDUCE**：路由到 `MagneticBuildCanvas` 或 `ShredderReduceCanvas`（這兩者內部會再包裝 `TileSentenceCanvas`）。
+
+### 3. 核心 UI 模式 (`TileSentenceCanvas.vue`)
+
+這是系統最核心的組件，根據 `question.ui_mode` 處理三種模式：
+- **`BUILD`**：
+  - 若有 `contextCloze`：渲染**克漏字變體**（前綴 + 挖空區 + 後綴），學生將字磚拖入挖空區。
+  - 若無 `contextCloze`：渲染標準的**全句重排**（字庫 + 作答區）。
+- **`REDUCE`**：渲染**卡片 + 垃圾桶** UI。學生點擊移除多餘字詞，答對時外層會套用 `.success-bg`。
+- **`MORPH`**：渲染固定句子，點擊紫色「膠囊」字塊切換單字形式。
+
+### 4. 漸進式鷹架與狀態追蹤 (Progressive Scaffolding)
+
+在 `TileSentenceCanvas.vue` 內部，診斷邏輯使用 `attemptCount` 來管理回饋：
+- **第一次錯誤**：僅顯示溫和提示（`TRY_AGAIN`），不觸發 Pipeline、不震動。
+- **第二次錯誤以上**：觸發完整的 L1-L5 診斷管線，顯示具體錯誤。
+- **成功**：套用 `.success-bg`，播放 TTS，並發出 `success` 事件給 `useQuizFlow`。
+
+### 🛠️ 如何 Debug UI 問題？（追蹤檢查表）
+1. **檢查 `enabledStages`**：在 `useQuizFlow.ts` 加 `console.log`，確認老師設定的陣列順序（例如 `['micro', 'input']`）是否正確。
+2. **檢查 `currentStage`**：確認 `App.vue` 是否渲染了正確的階段組件。
+3. **檢查 `GrammarCanvas` 路由**：查看 `selectedCanvas` 的 computed 邏輯。這題有 `chunks` 嗎？`ui_mode` 是 `BUILD` 嗎？
+4. **檢查 `TileSentenceCanvas`**：確認 `initialChunks` 是否有值。如果為空，字庫就會是空白的。
+
+---
+
 ## 🧠 文法診斷引擎（責任鏈模式）
 
 本專案的核心診斷管線已從單體規則引擎，全面重構為高內聚、低耦合的 **5 層責任鏈模式（Chain of Responsibility）**。此架構確保了「毫秒級的本地響應」，同時保證 **「絕對不會放過任何一個學生的錯誤」**。
