@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { FormPayload } from '../../domain/QuestionBuilder';
+import type { TeachingStage } from '../../rules/types';
 
 const props = defineProps<{
     form: FormPayload;
@@ -34,7 +35,7 @@ const availableStages = computed(() =>
 const enabledStages = computed(() => props.form.enabledStages);
 
 // 切換階段啟用/停用
-const toggleStage = (stage: string) => {
+const toggleStage = (stage: TeachingStage) => {
     const idx = props.form.enabledStages.indexOf(stage);
     if (idx === -1) {
         props.form.enabledStages.push(stage);
@@ -62,10 +63,10 @@ const moveDown = (idx: number) => {
 };
 
 // 檢查階段是否已啟用
-const isStageEnabled = (stage: string) => props.form.enabledStages.includes(stage);
+const isStageEnabled = (stage: TeachingStage) => props.form.enabledStages.includes(stage);
 
 // 取得階段顯示名稱
-const getStageLabel = (stage: string) => {
+const getStageLabel = (stage: TeachingStage) => {
     const found = allStages.find(s => s.value === stage);
     return found ? found.label : stage;
 };

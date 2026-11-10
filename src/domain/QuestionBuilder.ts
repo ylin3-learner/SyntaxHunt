@@ -1,4 +1,4 @@
-import type { CanvasMode, Chunk, GrammarConcept, QuestionData, UIMode, CustomGrammarRule } from '../rules/types';
+import type { CanvasMode, Chunk, GrammarConcept, QuestionData, UIMode, CustomGrammarRule, TeachingStage } from '../rules/types';
 import { autoChunk } from '../rules/autoChunk';
 import { getGrammarTopic } from '../rules/grammarTopics';
 
@@ -53,7 +53,7 @@ export interface FormPayload {
     distractorImageUrl: string;
     chunkZhInput: string;
     chunkQuizInput: string;
-    enabledStages: ('input' | 'macro' | 'micro' | 'pronunciation' | 'noticing')[];
+    enabledStages: TeachingStage[];
     editingId: string | null;
 }
 

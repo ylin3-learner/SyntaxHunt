@@ -109,6 +109,22 @@ export interface Antecedent {
   person: 'person' | 'thing';
 }
 
+export interface Antecedent {
+  noun: string;
+  number: 'singular' | 'plural';
+  person: 'person' | 'thing';
+}
+
+/** 統一的教學階段型別 (涵蓋全部階段) */
+export type TeachingStage =
+  | 'preview'
+  | 'input'
+  | 'macro'
+  | 'micro'
+  | 'pronunciation'
+  | 'noticing'
+  | 'success';
+
 /** 決定前端要用哪種 UI 模組來渲染這道題 */
 export type UIMode =
   | 'BUILD'   // 空間排序與插入 (原組句題)
@@ -274,7 +290,7 @@ export interface QuestionData {
   concept?: GrammarConcept;
 
   /** 教學流程控制 */
-  enabledStages?: ('input' | 'macro' | 'micro' | 'pronunciation' | 'noticing')[];
+  enabledStages?: TeachingStage[];
 
   /** 題目目標資訊 (用於關係子句的先行詞判斷) */
   targetNoun: string;

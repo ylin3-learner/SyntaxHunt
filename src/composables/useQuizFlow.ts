@@ -1,5 +1,5 @@
 ﻿import { ref, computed } from 'vue';
-import type { QuestionData, GrammarQuestionData } from '../rules/types';
+import type { QuestionData, GrammarQuestionData, TeachingStage } from '../rules/types';
 import { defaultQuestions } from '../data/questions';
 import { convertLegacyQuestion } from '../rules/adapter';
 import { getQuestionCanvasMode, getQuestionUiMode } from '../rules/types';
@@ -11,7 +11,7 @@ import { useClassroomSync, currentTeacherId } from './useClassroomSync';
 
 export function useQuizFlow() {
   const currentIndex = ref(0);
-  const currentStage = ref<'preview' | 'input' | 'macro' | 'micro' | 'success' | 'noticing'>('preview');
+  const currentStage = ref<TeachingStage>('preview');
   const currentMode = ref<'relative' | 'preposition'>('relative');
   const questionBank = ref<QuestionData[]>([]);
   const showSummary = ref(false);
@@ -83,7 +83,7 @@ export function useQuizFlow() {
     });
   };
 
-  type StageType = 'preview' | 'input' | 'macro' | 'micro' | 'success' | 'noticing';
+  type StageType = TeachingStage;
 
   // 🔧 輔助：根據 enabledStages 數組順序，取得下一個階段
   const getNextStageInSequence = (current: StageType | null, enabledStages: StageType[]): StageType | null => {
@@ -104,7 +104,7 @@ export function useQuizFlow() {
   };
 
   const checkAndSetInitialStage = () => {
-    const enabled = getEnabledStages.value as StageType[];
+    const enabled = getEnabledStages.value;
     console.log('[DEBUG Stage] checkAndSetInitialStage called');
     console.log('[DEBUG Stage] question.type:', currentQuestion.value?.type);
     console.log('[DEBUG Stage] question.mode:', currentQuestion.value?.mode);
@@ -119,7 +119,7 @@ export function useQuizFlow() {
 
   const handlePreviewSuccess = () => {
     if (currentQuestion.value.type === 'chunk') { handleSuccess(); return; }
-    const next = getNextStageInSequence('preview', getEnabledStages.value as StageType[]);
+    const next = getNextStageInSequence('preview', getEnabledStages.value);
     currentStage.value = next ?? 'success';
   };
 
