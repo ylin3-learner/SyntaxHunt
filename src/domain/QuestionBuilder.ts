@@ -200,6 +200,20 @@ export const buildQuestion = (form: FormPayload): { question?: QuestionData; err
         newQuestion.inputData = { audioText, options: [{ image: form.imageUrl, text: form.correctLabel || '', isCorrect: true }, { image: form.distractorImageUrl || '', text: form.distractorLabel || '', isCorrect: false }] };
         newQuestion.noticingData = { examples: [audioText], question: `請觀察以上句子，關係代名詞 who 代替的是什麼？`, options: [{ text: '事物（Things）', isCorrect: false }, { text: '人（People）', isCorrect: true }], explanation: `沒錯！當先行詞是「人」的時候，我們使用 who 來引導關係子句。` };
         if (form.clozePrefix || form.clozeSuffix) newQuestion.contextCloze = { prefix: form.clozePrefix, suffix: form.clozeSuffix };
+
+        // 組裝標準題的字磚資料，讓「字磚重組」(micro) 能於 TileSentenceCanvas BUILD/REDUCE 模式渲染
+        const buildSource = (form.grammarSentence || form.relativeSentence || '').trim();
+        const buildAnswer = (form.grammarAnswer || buildSource).trim();
+        if (buildSource) {
+            newQuestion.chunks = generateTiles(buildSource).map((text, i) => ({
+                id: `${newQuestion.id}-chunk-${i}`,
+                text,
+                draggable: true,
+            }));
+            newQuestion.correctAnswer = buildAnswer.split(/\s+/).filter(Boolean);
+            newQuestion.ui_mode = form.questionMode === 'reduce' ? 'REDUCE' : 'BUILD';
+            newQuestion.canvas_mode = newQuestion.ui_mode;
+        }
     }
 
     if (form.questionType === 'contrast') {

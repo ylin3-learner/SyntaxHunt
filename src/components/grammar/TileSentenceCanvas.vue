@@ -42,6 +42,8 @@ const draggedTileIndex = ref<number | null>(null);
 
 // 👈 追蹤嘗試次數，用於漸進式鷹架
 const attemptCount = ref(0);
+// BUILD Cloze 模式：記錄正從字庫拖曳的字磚
+const clozeDragged = ref<Chunk | null>(null);
 
 const initTiles = () => {
   if (isFixedMorph.value) {
@@ -129,6 +131,24 @@ const restoreTile = (tile: Chunk) => {
     resetState();
     void checkAnswer(true);
   }
+};
+
+// BUILD Cloze：從字庫拖曳字磚進入挖空區
+const handleClozeDragStart = (tile: Chunk) => {
+  clozeDragged.value = tile;
+};
+const handleClozeDragOver = (e: DragEvent) => {
+  e.preventDefault();
+};
+const handleClozeDrop = () => {
+  if (!clozeDragged.value) return;
+  const index = wordBank.value.findIndex(t => t.id === clozeDragged.value!.id);
+  if (index !== -1) {
+    wordBank.value.splice(index, 1);
+    answerArea.value.push(clozeDragged.value!);
+  }
+  clozeDragged.value = null;
+  resetState();
 };
 
 const selectTile = (tile: Chunk) => {
@@ -261,31 +281,56 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
       :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
       <div class="sentence-display">
         <template v-for="(tile, index) in answerArea" :key="tile.id">
-          <button v-if="tile.draggable" type="button" class="removable-word" draggable="true"
+          <div v-if="tile.draggable" class="removable-word" draggable="true"
             @dragstart="handleDragStart(index)" @dragover.prevent @drop="handleDrop(index)"
             :aria-label="'移除「' + tile.text.replace(/[\[\]]/g, '') + '」'"
             :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }" @click="discardTile(tile)">
-            {{ tile.text.replace(/[\[\]]/g, '') }} <span class="remove-hint">×</span>
-          </button>
+            {{ tile.text.replace(/[\[\]]/g, '') }} <button type="button" class="reduce-remove-btn" @click.stop="discardTile(tile)">移除</button>
+          </div>
           <span v-else class="fixed-word" :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }">
             {{ tile.text.replace(/[\[\]]/g, '') }}
           </span>
         </template>
       </div>
       <div class="trash-zone-wrapper">
-        <div class="trash-label">🗑️ Removed tiles ({{ trashArea.length }}) · Click to restore</div>
+        <div class="trash-label">🗑️ 垃圾桶（{{ trashArea.length }}）· 點擊字磚還原</div>
         <div class="trash-area">
-          <div v-for="tile in trashArea" :key="tile.id" class="trash-tile">
+          <div v-for="tile in trashArea" :key="tile.id" class="trash-tile" @click="restoreTile(tile)">
             <span>{{ tile.text.replace(/[\[\]]/g, '') }}</span>
-            <button type="button" class="trash-restore-button" @click="restoreTile(tile)">Restore ↶</button>
+            <button type="button" class="trash-restore-button" @click.stop="restoreTile(tile)">還原</button>
           </div>
-          <div v-if="trashArea.length === 0" class="trash-placeholder">Click on underlined words above to remove them.
-          </div>
+          <div v-if="trashArea.length === 0" class="trash-placeholder">（垃圾桶為空）</div>
         </div>
       </div>
     </div>
 
     <div v-else class="build-mode-wrapper">
+      <!-- BUILD Cloze 變體：前後文 + 挖空區，學生將字磚填入挖空 -->
+      <div v-if="question.contextCloze" class="cloze-build-mode">
+        <div class="cloze-sentence" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
+          <span class="cloze-prefix">{{ question.contextCloze.prefix }}</span>
+          <div class="cloze-blank" @drop="handleClozeDrop" @dragover="handleClozeDragOver">
+            <div v-for="(tile, index) in answerArea" :key="tile.id" class="cloze-tile"
+              :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }">
+              {{ tile.text.replace(/[\\[\\]]/g, '') }}
+              <button type="button" class="cloze-remove" @click.stop="unselectTile(tile)">✕</button>
+            </div>
+            <div v-if="answerArea.length === 0" class="cloze-placeholder">[ 將字磚拖入此處填空 ]</div>
+          </div>
+          <span class="cloze-suffix">{{ question.contextCloze.suffix }}</span>
+        </div>
+        <div class="word-bank">
+          <div v-for="tile in wordBank" :key="tile.id" class="tile"
+            :class="{ 'tile-chunk': tile.text.startsWith('['), 'can-morph': tile.can_morph }"
+            draggable="true" @dragstart="handleClozeDragStart(tile)" @click="selectTile(tile)">
+            {{ tile.text.replace(/[\\[\\]]/g, '') }}
+          </div>
+        </div>
+        <button class="check-answer-button" @click="checkAnswer(true)">Check Answer</button>
+      </div>
+
+      <!-- 現有全句重排模式 -->
+      <div v-else>
       <div class="answer-area" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
         <div v-for="(_, index) in answerSlotCount" :key="index" class="answer-slot">
           <div v-if="answerArea[index]" class="tile-wrapper">
@@ -311,6 +356,7 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
         </div>
       </div>
       <button class="check-answer-button" @click="checkAnswer(true)">Check Answer</button>
+  </div>
     </div>
 
     <div v-if="signals.length > 0" class="alert-bubble" :class="{ 'soft-warning': signals[0].code === 'TRY_AGAIN' }">
@@ -823,4 +869,120 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
   background: #fee2e2;
   color: #991b1b;
 }
+/* === BUILD CLOZE (克漏字) STYLES === */
+.cloze-build-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  align-items: center;
+}
+.cloze-sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 24px;
+  border: 2px solid #d5e0e8;
+  border-radius: 16px;
+  background: #ffffff;
+  font-size: clamp(1.2rem, 3vw, 1.8rem);
+  line-height: 1.7;
+  min-height: 92px;
+}
+.cloze-sentence.success-bg { border-color: #58cc02; background: #f0fff0; }
+.cloze-sentence.shake { animation: shake 0.4s; }
+.cloze-prefix, .cloze-suffix { color: #526879; }
+.cloze-blank {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  border: 2px dashed #9ca3af;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: #f3f4f6;
+  min-width: 120px;
+  justify-content: center;
+}
+.cloze-tile {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font-weight: 600;
+}
+.cloze-remove {
+  border: 0;
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+  font-weight: bold;
+  padding: 0 4px;
+  line-height: 1;
+}
+.cloze-remove:hover { background: #fee2e2; border-radius: 4px; }
+.cloze-placeholder {
+  color: #9ca3af;
+  font-style: italic;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+/* === REDUCE CARD STYLES (卡片化 + 垃圾桶) === */
+.reduce-sentence-mode .sentence-display {
+  gap: 10px 16px;
+}
+.reduce-sentence-mode .removable-word {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border: 2px solid #ef4444 !important;
+  border-radius: 10px;
+  background: #fff0f0 !important;
+  color: #dc2626 !important;
+  font-weight: 700 !important;
+  font-size: 1.15rem !important;
+  cursor: pointer;
+}
+.reduce-sentence-mode .reduce-text { font-weight: 700; }
+.reduce-sentence-mode .reduce-remove-btn {
+  border: 1px solid #ef4444;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #dc2626;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.reduce-sentence-mode .reduce-remove-btn:hover { background: #fecaca; }
+.reduce-sentence-mode .trash-tile {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: pointer;
+  font-weight: 600;
+}
+.reduce-sentence-mode .trash-tile:hover { background: #e5e7eb; border-color: #1cb0f6; color: #1cb0f6; }
+.reduce-sentence-mode .trash-restore-button {
+  border: 1px solid #1cb0f6;
+  border-radius: 6px;
+  padding: 2px 8px;
+  background: #fff;
+  color: #1cb0f6;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.reduce-sentence-mode .trash-restore-button:hover { background: #bfdbfe; }
+
 </style>
