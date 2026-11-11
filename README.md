@@ -316,6 +316,19 @@ To minimize teacher workload while maximizing diagnostic precision, the system i
 4. **Zero Runtime Overhead**: 
    `autoInfer` and `smartChunker` only run during the *authoring phase*. The student-facing diagnostic pipeline (L1-L5) remains completely untouched, ensuring millisecond-level local execution and absolute stability.
 
+---
+
+### 🎯 Concept-Driven Authoring (Not Chapter-Locked)
+
+Unlike traditional e-learning platforms that rigidly bind questions to textbook chapters, SyntaxHunt adopts a **Concept-Driven Architecture**. The UI routing and diagnostic pipeline are entirely decoupled from the curriculum chapters. 
+
+When a teacher authors a question, they select a **Grammar Concept** (e.g., `SUBJECT_VERB_AGREEMENT`, `PAST_TENSE`) rather than a specific textbook chapter. The system automatically:
+1. Routes to the optimal UI Canvas (e.g., `MORPH` for tenses, `REDUCE` for relative clauses).
+2. Loads the corresponding local grammar validators.
+3. Infers potential diagnostic rules using `compromise.js`.
+
+> This gives educators the freedom to pull sentences from any source—a news article, a movie quote, or a past exam—and seamlessly generate high-quality diagnostic questions without being locked to the syllabus order.
+
 ### The 5 Layers of Defense
 
 1. **L1 — Modular NLP-Enhanced Rules (`L1_LocalRules.ts`)**: 
