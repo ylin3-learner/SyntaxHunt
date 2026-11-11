@@ -355,9 +355,12 @@ When a teacher authors a question, they select a **Grammar Concept** (e.g., `SUB
 
 1. **L1 — Modular NLP-Enhanced Rules (`L1_LocalRules.ts`)**: 
    Acts as a pure dispatcher. It first runs legacy synchronous rules for 0ms short-circuiting, then invokes a suite of **modular NLP validators**:
-   - `svaValidator.ts` / `tenseValidator.ts`: Uses `compromise.js` to extract verb bases and detect context-dependent errors.
-   - `gerundInfinitiveValidator.ts` / `doubleNegativeValidator.ts`: Uses strict dictionary/regex matching to catch collocation errors (e.g., `enjoy to go`) and double negatives (e.g., `don't never`).
-   - `specialStructures/`: Modularized checks for conjunctions, inversion, modal verbs, and subjunctive mood.
+   - `svaValidator.ts`: Detects Subject-Verb Agreement errors. It combines `english-verbs-irregular` with rule-based suffix generation (`-s`, `-es`, `-ies`) to ensure 100% accuracy.
+   - `tenseValidator.ts`: Supports 12 grammatical tenses. It utilizes `compromise.js` to extract verb bases and analyze auxiliary structures (e.g., `will have`, `had`), accurately catching missing auxiliary verbs or wrong verb forms.
+   - `gerundInfinitiveValidator.ts`: Strictly checks verb collocations (e.g., `enjoy to go` or `want going`), with an exception list to avoid false positives (e.g., `something`, `anything`).
+   - `doubleNegativeValidator.ts`: Catches double negatives (e.g., `don't never`) using exact token matching.
+   - `inversionValidator.ts`: Detects missing subject-auxiliary inversions after negative adverbs (e.g., `Never I have`).
+   - `specialStructures.ts`: Modularized checks for conjunctions, modal verbs, and subjunctive mood.
 2. **L2 — Teacher Custom Rules (`L2_CustomRules.ts`)**: 
    Features **Smart Variant Expansion**. If a teacher inputs a multi-word phrase (e.g., `He go`), the system automatically uses `compromise.js` to expand all verb conjugations (`He goes`, `He went`, etc.) to catch all variants. If a teacher inputs a single word (e.g., `go`), it strictly enforces word boundaries to prevent false positives (e.g., matching `going`).
 3. **L3 — Structural Diff (`L3_StructuralDiff.ts`)**: 
@@ -555,6 +558,8 @@ The grammar diagnostic pipeline has been completely refactored from a monolithic
 
 #### 📁 New Directory Structure
 ```text
+#### 📁 Directory Structure
+```text
 src/rules/
 ├── diagnostics/
 │   ├── pipeline.ts                  # Pipeline Manager
@@ -565,14 +570,12 @@ src/rules/
 │   │   ├── L4_LanguageTool.ts       # Layer 4: Remote LanguageTool API
 │   │   └── L5_HighlightFallback.ts  # Layer 5: Ultimate Highlight Fallback
 └── validators/                      # Modular Grammar Validators
-    ├── svaValidator.ts              # Subject-Verb Agreement
-    ├── tenseValidator.ts            # Tense Check
-    ├── gerundInfinitiveValidator.ts # Gerund vs. Infinitive
-    ├── doubleNegativeValidator.ts   # Double Negative
-    ├── conjunctionValidator.ts      # Conjunctions
-    ├── inversionValidator.ts        # Inversion
-    ├── modalValidator.ts            # Modal Verbs
-    └── subjunctiveValidator.ts      # Subjunctive Mood
+    ├── svaValidator.ts              # Subject-Verb Agreement (NLP + Irregular verbs)
+    ├── tenseValidator.ts            # 12-Tense Check (NLP auxiliary extraction)
+    ├── gerundInfinitiveValidator.ts # Gerund vs. Infinitive (Dictionary + Exceptions)
+    ├── doubleNegativeValidator.ts   # Double Negative (Regex)
+    ├── inversionValidator.ts        # Inversion (Auxiliary placement)
+    └── specialStructures.ts         # Conjunctions, Modals, Subjunctive
 ```
 
 #### 🧪 Test Coverage

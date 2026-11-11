@@ -356,9 +356,12 @@ flowchart TD
 
 1. **L1 本地模組化 NLP 增強規則 (`L1_LocalRules.ts`)**：
    扮演單純的調度器。優先執行舊有同步規則以達到零延遲短路，接著呼叫 **模組化 NLP 驗證器**：
-   - `svaValidator.ts` / `tenseValidator.ts`：利用 `compromise.js` 提取動詞原形並結合上下文判斷。
-   - `gerundInfinitiveValidator.ts` / `doubleNegativeValidator.ts`：利用嚴謹的字典與正則比對，抓取 `enjoy to go` 等搭配錯誤或 `don't never` 等雙重否定。
-   - `specialStructures` 拆分：將連接詞、倒裝、情態、假設語氣拆分為獨立驗證器。
+   - `svaValidator.ts`：抓取主謂一致錯誤。結合 `english-verbs-irregular` 與規則推導（`-s`, `-es`, `-ies`），確保 100% 精準度。
+   - `tenseValidator.ts`：支援 12 種時態。利用 `compromise.js` 提取動詞原形並分析助動詞結構（如 `will have`, `had`），精準抓出漏掉助動詞或時態用錯的錯誤。
+   - `gerundInfinitiveValidator.ts`：嚴格檢查動詞搭配（如 `enjoy to go` 或 `want going`），並內建例外清單避免誤報（如 `something`, `anything`）。
+   - `doubleNegativeValidator.ts`：利用精準 Token 比對，抓取 `don't never` 等雙重否定。
+   - `inversionValidator.ts`：偵測否定副詞置首時（如 `Never I have`）是否遺漏倒裝。
+   - `specialStructures.ts`：模組化處理連接詞、情態動詞與假設語氣。
 2. **L2 老師自訂規則 (`L2_CustomRules.ts`)**：
    具備 **「智慧變體展開（Smart Variant Expansion）」** 能力。若老師輸入多字片語（如 `He go`），系統會自動利用 `compromise.js` 展開所有動詞變體（如 `He goes`, `He went`）來攔截所有錯誤；若老師只輸入單字（如 `go`），系統則嚴格執行單字邊界匹配，避免誤傷 `going` 等變體。
 3. **L3 結構差異比對 (`L3_StructuralDiff.ts`)**：
@@ -366,7 +369,7 @@ flowchart TD
 4. **L4 LanguageTool 深度診斷 (`L4_LanguageTool.ts`)**：
    僅在本地層級皆回傳 `UNKNOWN_ERROR` 時觸發。使用 `AbortController` 搭配 8 秒超時控制。若網路失敗或超時，會優雅降級至 L5，絕不卡住學生畫面。
 5. **L5 終極兜底高亮 (`L5_HighlightFallback.ts`)**：
-   教育意義的安全網。若所有規則皆無法解釋錯誤，系統會利用 `findDiffIndices` 找出第一個錯誤的字塊（Tile）。回傳 `HIGHLIGHT_ONLY` 訊號，讓 UI 將該字塊標紅，並顯示通用提示，確保學習閉環不會中斷。
+   教育意義的安全網。若所有規則皆無法解釋錯誤，系統會利用 `findDiffIndices` 找出第一個錯誤的字塊（Tile）。回傳 `HIGHLIGHT_ONLY` 訊號，讓 UI 將該字塊標紅，並顯示通用提示（「這裡的單字形式或順序好像不太對喔」），確保學習閉環不會中斷。
 
 ### 💡 核心設計優勢
 - **短路效率（Short-Circuit）**：99% 的常見錯誤在 L1~L3 就以零網路開銷解決。
@@ -566,14 +569,12 @@ src/rules/
 │   │   ├── L4_LanguageTool.ts       # Layer 4: Remote LanguageTool API
 │   │   └── L5_HighlightFallback.ts  # Layer 5: Ultimate Highlight Fallback
 └── validators/                      # Modular Grammar Validators
-    ├── svaValidator.ts              # Subject-Verb Agreement
-    ├── tenseValidator.ts            # Tense Check
-    ├── gerundInfinitiveValidator.ts # Gerund vs. Infinitive
-    ├── doubleNegativeValidator.ts   # Double Negative
-    ├── conjunctionValidator.ts      # Conjunctions
-    ├── inversionValidator.ts        # Inversion
-    ├── modalValidator.ts            # Modal Verbs
-    └── subjunctiveValidator.ts      # Subjunctive Mood
+    ├── svaValidator.ts              # Subject-Verb Agreement (NLP + Irregular verbs)
+    ├── tenseValidator.ts            # 12-Tense Check (NLP auxiliary extraction)
+    ├── gerundInfinitiveValidator.ts # Gerund vs. Infinitive (Dictionary + Exceptions)
+    ├── doubleNegativeValidator.ts   # Double Negative (Regex)
+    ├── inversionValidator.ts        # Inversion (Auxiliary placement)
+    └── specialStructures.ts         # Conjunctions, Modals, Subjunctive
 ```
 
 #### 🧪 測試狀態
