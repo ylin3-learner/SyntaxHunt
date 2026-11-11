@@ -1,4 +1,4 @@
-// 👈 刪除原本的 interface，改為直接引入
+// 刪除原本的 interface，改為直接引入
 import type { QuestionData } from '../rules/types';
 
 export const defaultQuestions: QuestionData[] = [

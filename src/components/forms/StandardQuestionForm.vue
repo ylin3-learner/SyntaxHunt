@@ -16,7 +16,7 @@ const funnelDiscarded = computed(() =>
     props.form.relativeSentence.replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim()
 );
 
-// 👈 這裡定義了所有可勾選的階段
+// 這裡定義了所有可勾選的階段
 const allStages = [
     { value: 'preview', label: '預覽' },
     { value: 'input', label: '聽力輸入' },
@@ -75,7 +75,7 @@ const getStageLabel = (stage: TeachingStage) => {
         <input type="number" v-model.number="form.timeLimitForm" placeholder="60" min="10" step="10" />
     </div>
 
-    <!-- 👈 完整補齊的教學流程 UI 區塊 -->
+    <!-- 完整補齊的教學流程 UI 區塊 -->
     <div class="form-group" v-if="form.questionType !== 'chunk'">
         <label>本題教學流程 (勾選並排序)</label>
         <div class="stage-checkboxes">

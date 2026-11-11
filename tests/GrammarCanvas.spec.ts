@@ -110,7 +110,7 @@ describe('GrammarCanvas', () => {
       await wrapper.findAll('.word-bank .tile').find(tile => tile.text() === token)!.trigger('click');
     }
 
-    // 👈 關鍵：因為 BUILD 模式不再即時觸發，所以必須點擊 Check Answer
+    // 關鍵：因為 BUILD 模式不再即時觸發，所以必須點擊 Check Answer
     // 而且因為是第一次錯，會顯示溫和提示 (TRY_AGAIN)，不會觸發 LanguageTool
     await wrapper.find('.check-answer-button').trigger('click');
     await nextTick();

@@ -36,14 +36,14 @@ export function useTTS() {
   const isSpeaking = ref(false);
 
   const speak = async (text: string, options?: { rate?: number }) => {
-    // 👈 調整預設語速，較慢的語速能有效減少連讀
+    // 調整預設語速，較慢的語速能有效減少連讀
     const rate = options?.rate ?? 0.75;
     const forceCloudTTS = window.location.search.includes('forceTTS=1') || window.location.search.includes('forceEdge=1');
 
     // 過濾出英文語音
     const enVoices = globalVoices.filter(v => v.lang.toLowerCase().includes('en'));
 
-    // 👈 智慧挑選最佳語音
+    // 智慧挑選最佳語音
     let bestVoice = null;
     if (enVoices.length > 0) {
       // 1. 優先尋找 Google US English (Chrome 上最自然)
@@ -64,7 +64,7 @@ export function useTTS() {
       utterance.rate = rate;
       utterance.voice = bestVoice;
 
-      // 👈 在標點符號後加入額外延遲，強制斷句 (可選，視情況開啟)
+      // 在標點符號後加入額外延遲，強制斷句 (可選，視情況開啟)
       // utterance.text = text.replace(/,/g, ', ');
 
       utterance.onstart = () => { isSpeaking.value = true; };

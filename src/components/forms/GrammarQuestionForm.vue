@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import type { FormPayload } from '../../domain/QuestionBuilder';
-import type { CustomGrammarRule } from '../../rules/types'; // 👈 引入型別
+import type { CustomGrammarRule } from '../../rules/types'; // 引入型別
 import { grammarChapters } from '../../rules/grammarTopics';
 import EditorFormFields from '../EditorFormFields.vue';
 
@@ -46,7 +46,7 @@ const addCustomRule = () => {
 
 const removeCustomRule = (id: string) => {
     if (!props.form.customRules) return;
-    // 👈 補上型別標註 (r: CustomGrammarRule)
+    // 補上型別標註 (r: CustomGrammarRule)
     props.form.customRules = props.form.customRules.filter((r: CustomGrammarRule) => r.id !== id);
 };
 </script>

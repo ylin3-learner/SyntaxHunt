@@ -19,7 +19,7 @@ const selectedIndex = ref<number | null>(null);
 const isWrong = ref(false);
 const isSuccess = ref(false);
 
-// 👈 過濾假圖的輔助函數
+// 過濾假圖的輔助函數
 const isRealImage = (url: string) => {
   return url && !url.includes('dicebear.com');
 };
@@ -71,7 +71,7 @@ const handleSelect = (opt: { isCorrect: boolean }, index: number) => {
         'is-wrong': isWrong && selectedIndex === index,
         'is-success': isSuccess && selectedIndex === index
       }" @click="handleSelect(opt, index)">
-        <!-- 👈 使用 isRealImage 判斷 -->
+        <!-- 使用 isRealImage 判斷 -->
         <img v-if="isRealImage(opt.image)" :src="opt.image" :class="{ 'shake': isWrong && selectedIndex === index }" />
         <div v-else class="placeholder-img" :class="{ 'shake': isWrong && selectedIndex === index }">無圖片</div>
 

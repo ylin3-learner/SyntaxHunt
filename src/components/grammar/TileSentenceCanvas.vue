@@ -306,7 +306,7 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
     <!-- 3. BUILD -->
     <div v-else class="build-mode-wrapper">
 
-      <!-- 👈 復刻回來的克漏字上下文 UI -->
+      <!-- 復刻回來的克漏字上下文 UI -->
       <div class="cloze-context" v-if="question.contextCloze">
         <span class="cloze-text">{{ question.contextCloze.prefix }}</span>
 

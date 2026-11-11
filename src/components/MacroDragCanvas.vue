@@ -50,7 +50,7 @@ const handleZoneClick = () => {
           {{ isSelected ? '👉 點擊放置於此' : '⬇️ 請先選取下方的卡片' }}
         </span>
         <span v-else class="dropped-content">
-          <!-- 👈 核心修正：這裡只顯示圖片，不顯示任何文字 -->
+          <!-- 核心修正：這裡只顯示圖片，不顯示任何文字 -->
           <img :src="imageUrl" class="dropped-img" alt="modifier" />
         </span>
       </div>
@@ -60,7 +60,7 @@ const handleZoneClick = () => {
       <div data-test="draggable-block" class="character-block" :class="{ 'selected': isSelected }"
         @click="handleBlockClick">
         <img :src="imageUrl" class="block-img" alt="character" />
-        <!-- 👈 核心修正：這裡不顯示 label -->
+        <!-- 核心修正：這裡不顯示 label -->
       </div>
     </div>
 
@@ -133,7 +133,7 @@ const handleZoneClick = () => {
   font-weight: bold;
 }
 
-/* 👈 新增：放置後的圖片樣式，讓它跟卡片大小一致 */
+/* 新增：放置後的圖片樣式，讓它跟卡片大小一致 */
 .dropped-img {
   width: 80px;
   height: 80px;

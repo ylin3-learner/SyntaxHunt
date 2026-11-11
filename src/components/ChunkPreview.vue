@@ -8,7 +8,7 @@ const props = defineProps<{
     chunk: string;
     zhMeaning: string;
     quizOptions?: { text: string; isCorrect: boolean }[];
-    speechRate?: number; // 👈 接收語速
+    speechRate?: number; // 接收語速
 }>();
 
 const emit = defineEmits<{
@@ -25,7 +25,7 @@ const isSuccess = ref(false);
 const isRealImage = computed(() => props.image && !props.image.includes('dicebear.com'));
 
 const playChunkAudio = () => {
-    speak(cleanChunk, { rate: props.speechRate ?? 0.8 }); // 👈 套用語速
+    speak(cleanChunk, { rate: props.speechRate ?? 0.8 }); // 套用語速
 };
 
 const handleSelect = (opt: { text: string; isCorrect: boolean }, index: number) => {
@@ -34,7 +34,7 @@ const handleSelect = (opt: { text: string; isCorrect: boolean }, index: number) 
 
     if (opt.isCorrect) {
         isSuccess.value = true;
-        speak(cleanChunk, { rate: props.speechRate ?? 0.8 }); // 👈 套用語速
+        speak(cleanChunk, { rate: props.speechRate ?? 0.8 }); // 套用語速
         setTimeout(() => { emit('success'); }, 1500);
     } else {
         isWrong.value = true;

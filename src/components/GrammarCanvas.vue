@@ -29,7 +29,7 @@ const canvasMode = computed(() => getQuestionCanvasMode(props.question));
 const selectedCanvas = computed(() => {
   const mode = canvasMode.value;
 
-  // 👈 修正：只有 BUILD 或 REDUCE，且有 chunks，才強制走 TileSentenceCanvas
+  // 修正：只有 BUILD 或 REDUCE，且有 chunks，才強制走 TileSentenceCanvas
   if ((mode === 'BUILD' || mode === 'REDUCE') && props.question.chunks && props.question.chunks.length > 0) {
     return TileSentenceCanvas;
   }

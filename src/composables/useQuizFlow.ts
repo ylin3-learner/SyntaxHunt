@@ -123,7 +123,7 @@ export function useQuizFlow() {
 
   const handleUnpack = (type: 'relative' | 'preposition') => { currentMode.value = type; currentStage.value = 'micro'; };
 
-  // 👈 核心流控：任何階段成功，都會尋找下一個階段
+  // 核心流控：任何階段成功，都會尋找下一個階段
   const handleSuccess = () => {
     playSuccess();
     trackCompleted();

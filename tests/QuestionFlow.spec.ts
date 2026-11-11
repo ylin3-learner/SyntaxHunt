@@ -17,7 +17,7 @@ describe('QuestionFlow', () => {
       props: { questions: [first, second], selectedId: null },
     });
 
-    // 👈 修正：先勾選題目 (此時 activeUnit 還是空字串，題目可見)
+    // 修正：先勾選題目 (此時 activeUnit 還是空字串，題目可見)
     await wrapper.find('input[type="checkbox"]').setValue(true);
 
     // 再建立新單元 (這會把 activeUnit 切換到 Unit 1)
@@ -53,7 +53,7 @@ describe('QuestionFlow', () => {
       props: { questions: [source], selectedId: null },
     });
 
-    // 👈 修正：先切換到 Unit 1 才能看到題目
+    // 修正：先切換到 Unit 1 才能看到題目
     (wrapper.vm as any).activeUnit = 'Unit 1';
     await nextTick();
 

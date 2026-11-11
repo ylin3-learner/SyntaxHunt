@@ -107,7 +107,7 @@ describe('Grammar Engine - diagnoseGrammar', () => {
     const morphQuestion: QuestionData = {
       ...mockQuestion,
       ui_mode: 'MORPH',
-      // 👈 將 correctAnswer 改為長度 3，與下方的 studentTokens 對齊
+      // 將 correctAnswer 改為長度 3，與下方的 studentTokens 對齊
       correctAnswer: ['He', 'went', 'to school'], 
       chunks: [
         { id: '1', text: 'He', draggable: true },

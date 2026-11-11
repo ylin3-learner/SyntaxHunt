@@ -257,7 +257,7 @@ const formattedDesc = computed(() => {
   position: relative;
   width: 640px;
   height: 180px;
-  /* 👈 加高以容納圖片與文字 */
+  /* 加高以容納圖片與文字 */
   flex-shrink: 0;
 }
 
@@ -277,7 +277,7 @@ const formattedDesc = computed(() => {
   top: 10px;
   width: 140px;
   height: 160px;
-  /* 👈 配合 puzzle-piece 高度 */
+  /* 配合 puzzle-piece 高度 */
   border: 4px dashed #ccc;
   border-radius: 16px;
   background: #fafafa;
@@ -316,7 +316,7 @@ const formattedDesc = computed(() => {
   top: 10px;
   width: 140px;
   height: 160px;
-  /* 👈 增加高度 */
+  /* 增加高度 */
   overflow: hidden;
   background: #ffffff;
   border: 4px solid #1cb0f6;
@@ -343,7 +343,7 @@ const formattedDesc = computed(() => {
   box-shadow: 0 0 0 4px rgba(255, 75, 75, 0.2);
 }
 
-/* 👈 修正：給圖片固定高度，確保文字不被擠出 */
+/* 修正：給圖片固定高度，確保文字不被擠出 */
 .puzzle-piece img {
   width: 100%;
   height: 110px;
@@ -352,7 +352,7 @@ const formattedDesc = computed(() => {
   flex-shrink: 0;
 }
 
-/* 👈 修正：文字標籤樣式 */
+/* 修正：文字標籤樣式 */
 .piece-label {
   height: 42px;
   width: 100%;

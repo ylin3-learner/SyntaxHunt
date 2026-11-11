@@ -33,7 +33,7 @@ export const unlockAudioContext = () => {
 
 // 核心播放函式
 const playTone = (freq: number, startTime: number, duration: number, type: OscillatorType = 'sine', volume = 0.2) => {
-    // 👈 終極防護：如果沒有實例，或者狀態不是 running，直接靜默返回
+    // 終極防護：如果沒有實例，或者狀態不是 running，直接靜默返回
     // 絕對不要去嘗試 await ctx.resume()，這會引發瀏覽器警告
     if (!audioCtx || audioCtx.state !== 'running') return;
 

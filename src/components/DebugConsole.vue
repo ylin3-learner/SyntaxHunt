@@ -17,7 +17,7 @@ const originalError = console.error;
 
 const formatArgs = (args: any[]) => {
     return args.map(arg => {
-        // 👈 修正：把 Error 物件轉成字串，不然會變成 {}
+        // 修正：把 Error 物件轉成字串，不然會變成 {}
         if (arg instanceof Error) {
             return arg.stack || arg.message;
         }

@@ -64,7 +64,7 @@ const startRecording = async () => {
       hasRecording.value = true;
       isAnalyzing.value = true;
 
-      // 👈 呼叫 Supabase Edge STT 代理
+      // 呼叫 Supabase Edge STT 代理
       try {
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.webm');
