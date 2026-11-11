@@ -268,6 +268,28 @@ stateDiagram-v2
 
 ---
 
+### 🏷️ Error Taxonomy & Diagnostic Codes (ERRANT + SST)
+
+To ensure pedagogical precision and enable robust data analytics, SyntaxHunt does not just label answers as "correct" or "wrong." The diagnostic engine outputs specific error codes based on the **ERRANT framework** (for edit operations) and the **Surface Strategy Taxonomy (SST)** (for cognitive behavior).
+
+#### 1. Edit Operations (ERRANT)
+Every diagnostic signal is categorized by how the student's answer deviates from the correct answer:
+- **`M` (Missing / Omission)**: The student left out a necessary word. (e.g., `M:PREP` for missing a preposition).
+- **`R` (Replacement / Misformation)**: The student used the wrong form or word. (e.g., `R:VERB:TENSE` for wrong tense, `R:VERB:SVA` for Subject-Verb Agreement).
+- **`U` (Unnecessary / Addition)**: The student added a redundant word. (e.g., `U:PRON` for redundant pronouns like `who he`).
+- **`O` (Order / Misordering)**: The words are correct, but the sequence is wrong. (e.g., `O:INVERSION` for failed inversion).
+
+#### 2. Surface Strategy Taxonomy (SST)
+Each signal is also mapped to an SST category, allowing teachers to visualize the cognitive patterns of their students in the Analytics Dashboard:
+- **Omission**
+- **Addition**
+- **Misformation**
+- **Misordering**
+
+*Example Code Structure: `R:VERB:SVA` -> Replacement operation, targeting Verbs, specifically Subject-Verb Agreement.*
+
+---
+
 ### 🧠 Grammar Diagnostic Engine (Chain of Responsibility)
 
 The core diagnostic pipeline has been completely refactored from a monolithic rule engine into a highly decoupled, **5-Layer Chain of Responsibility**. This architecture ensures millisecond-level local responses while guaranteeing that *no student mistake is ever left without feedback*.
