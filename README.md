@@ -267,6 +267,42 @@ Inside `TileSentenceCanvas.vue`, the diagnostic logic uses an `attemptCount` to 
 
 ---
 
+### 📥 Student Learning Record Export (SummaryReport.vue)
+
+To ensure students do not leave the classroom without submitting their assessment results, the `SummaryReport.vue` implements a "Zero-Trust Leave Interception" combined with an "Auto-Download" strategy.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Generating: Component Mounted
+    
+    Generating --> AutoDownload: html2canvas generates PNG
+    
+    AutoDownload --> Success: Trigger a.click()
+    AutoDownload --> Failed: Browser Blocked / Error
+    
+    Success --> Downloaded: isDownloaded = true
+    Failed --> ManualDownload: Show "Manual Download" Button
+    
+    ManualDownload --> Downloaded: User clicks button
+    
+    state Downloaded {
+        [*] --> SafeToLeave
+        SafeToLeave --> [*]: User clicks "Finish" or closes tab (No warning)
+    }
+    
+    state Generating {
+        [*] --> BeforeUnloadActive
+        BeforeUnloadActive --> [*]: User tries to close tab (Browser shows warning)
+    }
+```
+
+**Key Mechanisms:**
+1. **Auto-Download**: Upon `onMounted`, the system uses `html2canvas` to capture the `.summary-card` DOM and automatically triggers a download of the PNG.
+2. **Leave Interception (`beforeunload`)**: A global event listener is registered. If the student tries to refresh or close the tab before the download succeeds (`isDownloaded === false`), the browser will prompt a native warning dialog.
+3. **Graceful Degradation**: If the browser blocks the automatic download (common in modern browsers), the UI falls back to a manual "📸 Download Record" button. The `beforeunload` warning remains active until the student successfully downloads the file and clicks "✅ Finish".
+
+---
+
 ### 🧠 Grammar Diagnostic Engine (Chain of Responsibility)
 
 The core diagnostic pipeline has been completely refactored from a monolithic rule engine into a highly decoupled, **5-Layer Chain of Responsibility**. This architecture ensures millisecond-level local responses while guaranteeing that *no student mistake is ever left without feedback*.

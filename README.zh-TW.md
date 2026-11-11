@@ -260,6 +260,42 @@ graph TD
 
 ---
 
+### 📥 學生學習紀錄匯出與攔截 (SummaryReport.vue)
+
+為了確保學生不會在未繳交評量結果的情況下離開課堂，`SummaryReport.vue` 實作了「零信任離開攔截（Zero-Trust Leave Interception）」與「自動下載」機制。
+
+```mermaid
+stateDiagram-v2
+    [*] --> Generating: 組件掛載 (onMounted)
+    
+    Generating --> AutoDownload: html2canvas 生成 PNG
+    
+    AutoDownload --> Success: 觸發 a.click() 下載
+    AutoDownload --> Failed: 瀏覽器阻擋 / 發生錯誤
+    
+    Success --> Downloaded: isDownloaded = true
+    Failed --> ManualDownload: 顯示「手動下載」按鈕
+    
+    ManualDownload --> Downloaded: 學生點擊手動下載
+    
+    state Downloaded {
+        [*] --> SafeToLeave
+        SafeToLeave --> [*]: 點擊結束或關閉視窗 (無警告)
+    }
+    
+    state Generating {
+        [*] --> BeforeUnloadActive
+        BeforeUnloadActive --> [*]: 試圖關閉視窗 (瀏覽器彈出警告)
+    }
+```
+
+**核心機制說明：**
+1. **自動下載**：在 `onMounted` 階段，系統利用 `html2canvas` 抓取 `.summary-card` DOM，並自動觸發 PNG 檔案下載。
+2. **離開攔截 (`beforeunload`)**：系統註冊了全域事件攔截。若學生在下載成功前（`isDownloaded === false`）試圖重新整理或關閉分頁，瀏覽器會彈出原生的「您有未保存的變更」警告。
+3. **優雅降級**：若現代瀏覽器基於安全性阻擋了自動下載，UI 會降級顯示「📸 點擊領取學習紀錄」按鈕。在學生成功下載並點擊「✅ 我已保存，結束練習」之前，攔截警告都會保持啟用。
+
+---
+
 ## 🧠 文法診斷引擎（責任鏈模式）
 
 本專案的核心診斷管線已從單體規則引擎，全面重構為高內聚、低耦合的 **5 層責任鏈模式（Chain of Responsibility）**。此架構確保了「毫秒級的本地響應」，同時保證 **「絕對不會放過任何一個學生的錯誤」**。
