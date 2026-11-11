@@ -346,10 +346,10 @@ flowchart TD
 
 ### 五層防禦機制
 
-1. **L1 本地確定性規則 (`L1_LocalRules.ts`)**：
-   執行所有已註冊的同步文法規則（如主謂一致、關係代名詞）。若找到確定性錯誤，立即**短路回傳（Short-circuit）**，提供零延遲的反饋。
+1. **L1 本地 NLP 增強規則 (`L1_LocalRules.ts`)**：
+   扮演單純的調度器。優先執行舊有同步規則以達到零延遲短路，接著呼叫 **NLP 增強驗證器**（`svaValidator.ts`, `tenseValidator.ts`）。系統導入 `compromise.js`，能精準提取動詞原形並結合上下文（如主謂一致、過去時間副詞）進行判斷，徹底擺脫死板的字面比對。
 2. **L2 老師自訂規則 (`L2_CustomRules.ts`)**：
-   解析題目中的 `customRules`。使用帶有**單字邊界（`\b`）的正則表達式**，避免 `go` 誤匹配到 `going`。支援規則優先級排序與概念過濾。
+   具備 **「智慧變體展開（Smart Variant Expansion）」** 能力。若老師輸入多字片語（如 `He go`），系統會自動利用 `compromise.js` 展開所有動詞變體（如 `He goes`, `He went`）來攔截所有錯誤；若老師只輸入單字（如 `go`），系統則嚴格執行單字邊界匹配，避免誤傷 `going` 等變體。
 3. **L3 結構差異比對 (`L3_StructuralDiff.ts`)**：
    使用 **最長公共子序列（LCS）** 演算法計算 Token 級別的差異。將錯誤精準分類為遺漏（`M:`）、多餘（`U:`）、語序（`O:`）與替換（`R:`）。
 4. **L4 LanguageTool 深度診斷 (`L4_LanguageTool.ts`)**：

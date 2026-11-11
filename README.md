@@ -353,10 +353,10 @@ To minimize teacher workload while maximizing diagnostic precision, the system i
 
 ### The 5 Layers of Defense
 
-1. **L1 — Local Deterministic Rules (`L1_LocalRules.ts`)**: 
-   Runs all registered synchronous grammar rules (e.g., Subject-Verb Agreement, Relative Pronouns). If a definite error is found, it **short-circuits** immediately, providing a 0ms response.
+1. **L1 — NLP-Enhanced Local Rules (`L1_LocalRules.ts`)**: 
+   Acts as a pure dispatcher. It first runs legacy synchronous rules for 0ms short-circuiting, then invokes **NLP-enhanced validators** (`svaValidator.ts`, `tenseValidator.ts`). By utilizing `compromise.js`, L1 can accurately extract verb bases and detect context-dependent errors (e.g., Subject-Verb Agreement, Past Tense with adverbs) rather than relying on hardcoded word matching.
 2. **L2 — Teacher Custom Rules (`L2_CustomRules.ts`)**: 
-   Parses teacher-defined `customRules`. It uses precise **Regular Expressions with word boundaries (`\b`)** to prevent false positives (e.g., matching `go` inside `going`). Features rule prioritization and concept filtering.
+   Features **Smart Variant Expansion**. If a teacher inputs a multi-word phrase (e.g., `He go`), the system automatically uses `compromise.js` to expand all verb conjugations (`He goes`, `He went`, etc.) to catch all variants. If a teacher inputs a single word (e.g., `go`), it strictly enforces word boundaries to prevent false positives (e.g., matching `going`).
 3. **L3 — Structural Diff (`L3_StructuralDiff.ts`)**: 
    Utilizes the **Longest Common Subsequence (LCS)** algorithm to calculate token-level differences. It classifies errors into Omissions (`M:`), Additions (`U:`), Misorderings (`O:`), and Misformations (`R:`).
 4. **L4 — LanguageTool Deep Check (`L4_LanguageTool.ts`)**: 
