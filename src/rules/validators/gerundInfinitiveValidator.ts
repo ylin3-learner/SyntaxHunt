@@ -6,6 +6,8 @@ const GERUND_VERBS = new Set(['enjoy', 'avoid', 'finish', 'mind', 'practice', 's
 // 只能接 to + V 的動詞
 const INFINITIVE_VERBS = new Set(['want', 'decide', 'hope', 'plan', 'agree', 'promise', 'refuse', 'need', 'try']);
 
+const ingExceptions = new Set(['something', 'anything', 'nothing', 'everything', 'thing', 'morning', 'evening', 'during', 'king', 'ring', 'string']);
+
 export function validateGerundInfinitive(
   studentTokens: string[],
   correctTokens: string[]
@@ -28,8 +30,9 @@ export function validateGerundInfinitive(
       });
     }
 
+    
     // 2. 檢查「只能接 to V」的動詞是否誤接了 V-ing
-    if (INFINITIVE_VERBS.has(verb) && nextWord.endsWith('ing')) {
+    if (INFINITIVE_VERBS.has(verb) && nextWord.endsWith('ing') && !ingExceptions.has(nextWord)) {
       signals.push({
         code: 'R:VERB:FORM',
         sst: 'Misformation',

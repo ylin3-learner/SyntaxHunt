@@ -1,7 +1,7 @@
 import type { GrammarConcept } from '../types';
 import type { RuleContext, RuleValidator } from '../grammarRules';
 import { registerGrammarRule } from '../registry';
-import { findVerbPair } from '../verbTable';
+import nlp from 'compromise';
 
 const conjunctions = new Set([
   'and', 'but', 'or', 'nor', 'for', 'yet', 'so',
@@ -34,7 +34,7 @@ const multisetDifference = (left: string[], right: string[]) => {
   return { onlyLeft, onlyRight };
 };
 
-const diagnoseConjunctions: RuleValidator = ({ studentTokens, correctTokens }) => {
+export const diagnoseConjunctions: RuleValidator = ({ studentTokens, correctTokens }) => {
   const { onlyLeft, onlyRight } = multisetDifference(studentTokens, correctTokens);
   const extra = onlyLeft.find(item => conjunctions.has(clean(item.token)));
   const missing = onlyRight.find(token => conjunctions.has(token));
@@ -93,17 +93,25 @@ const diagnoseInversion: RuleValidator = ({ studentTokens, correctTokens }) => {
   return [];
 };
 
-const diagnoseModalVerb: RuleValidator = ({ studentTokens }) => {
+export const diagnoseModalVerb: RuleValidator = ({ studentTokens }) => {
+  const doc = nlp(studentTokens.join(' '));
+  
   for (let index = 0; index < studentTokens.length - 1; index++) {
     if (!modals.has(clean(studentTokens[index]))) continue;
+    
     const verb = clean(studentTokens[index + 1]);
-    const pair = findVerbPair(verb);
-    if (pair && verb !== pair.plural) {
+    
+    // 💡 優雅處理：用 NLP 反推原形，不要用 verbTable
+    const verbDoc = nlp(verb);
+    const baseForm = verbDoc.verbs().toInfinitive().out('text').toLowerCase();
+    
+    // 如果原形跟現在的單字不同，代表學生用了變化形（如 goes, running）
+    if (baseForm && baseForm !== verb) {
       return [{
         code: 'R:VERB:FORM',
         sst: 'Misformation',
         index: index + 1,
-        message: `情態動詞「${studentTokens[index]}」後面應接原形動詞「${pair.plural}」。`,
+        message: `情態動詞「${studentTokens[index]}」後面應接原形動詞「${baseForm}」。`,
         hint: '情態動詞後方的主要動詞使用原形。',
       }];
     }
@@ -111,7 +119,7 @@ const diagnoseModalVerb: RuleValidator = ({ studentTokens }) => {
   return [];
 };
 
-const diagnoseSubjunctiveMood: RuleValidator = ({ studentTokens, correctTokens }) => {
+export const diagnoseSubjunctiveMood: RuleValidator = ({ studentTokens, correctTokens }) => {
   const hasSubjunctiveCue = studentTokens.some(token => ['if', 'wish'].includes(clean(token)));
   if (!hasSubjunctiveCue) return [];
   const { onlyLeft, onlyRight } = multisetDifference(studentTokens, correctTokens);

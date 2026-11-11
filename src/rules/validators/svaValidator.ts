@@ -1,6 +1,37 @@
 import type { DiagnosticSignal } from '../types';
-import nlp from 'compromise'; // 預設匯入寫法
 import { cleanToken } from '../../utils/textUtils';
+import irregularVerbs from 'english-verbs-irregular/resources/irregularVerbs.json';
+
+// 建立不規則動詞的 O(1) 查詢表
+const irregularMap = new Map<string, string>();
+Object.entries(irregularVerbs as Record<string, string[][]>).forEach(([infinitive, forms]) => {
+  // forms[0] 通常包含過去式與過去分詞，但我們需要的是第三人稱單數
+  // 所以我們自己用規則推導不規則動詞的現在式 (除了 be/have/do 等特例)
+  const lower = infinitive.toLowerCase();
+  if (lower === 'be') irregularMap.set('be', 'is');
+  else if (lower === 'have') irregularMap.set('have', 'has');
+  else if (lower === 'do') irregularMap.set('do', 'does');
+  else if (lower === 'go') irregularMap.set('go', 'goes');
+  else if (lower === 'say') irregularMap.set('say', 'says');
+  else {
+    // 其他不規則動詞的現在式通常還是規則變化
+    irregularMap.set(lower, getRuleBasedThirdPerson(lower));
+  }
+});
+
+// 規則推導第三人稱單數 (處理 +s, +es, +ies)
+function getRuleBasedThirdPerson(verb: string): string {
+  if (/(s|sh|ch|x|z|o)$/.test(verb)) return `${verb}es`;
+  if (/[^aeiou]y$/.test(verb)) return `${verb.slice(0, -1)}ies`;
+  return `${verb}s`;
+}
+
+// 取得動詞的正確第三人稱單數
+function getThirdPersonSingular(verb: string): string {
+  const lower = verb.toLowerCase();
+  if (irregularMap.has(lower)) return irregularMap.get(lower)!;
+  return getRuleBasedThirdPerson(lower);
+}
 
 export function validateSVA(
     studentTokens: string[],
@@ -9,55 +40,54 @@ export function validateSVA(
     const signals: DiagnosticSignal[] = [];
     if (studentTokens.length === 0) return signals;
 
-    const studentDoc = nlp(studentTokens.join(' '));
-    const correctDoc = nlp(correctTokens.join(' '));
+    const studentStr = studentTokens.map(cleanToken).join(' ').toLowerCase();
+    const correctStr = correctTokens.map(cleanToken).join(' ').toLowerCase();
 
-    // 尋找第三人稱單數主詞
-    const hasThirdPerson = studentDoc.match('(he|she|it|the [a-z]+)').found;
-    if (!hasThirdPerson) return signals;
-
-    // 取得學生與正確答案的第一個動詞
-    const studentVerb = studentDoc.verbs().first();
-    const correctVerb = correctDoc.verbs().first();
-
-    if (studentVerb.found && correctVerb.found) {
-        // 修正：使用 as any 繞過型別檢查
-        const studentBase = (studentVerb as any).toInfinitive().out('text').toLowerCase();
-        const correctBase = (correctVerb as any).toInfinitive().out('text').toLowerCase();
-
-        // 如果兩者原形一樣，但學生的形式不等於正確答案（代表漏加 s/es）
-        if (studentBase === correctBase) {
-            const studentText = studentVerb.out('text').toLowerCase();
-            const correctText = correctVerb.out('text').toLowerCase();
-
-            // 修正：將 conjugate 的結果轉型為 Record
-            const conjugations = nlp(studentBase).verbs().conjugate()[0] as Record<string, string>;
-            const thirdPersonForm = conjugations?.PresentTense?.toLowerCase();
-
-            if (studentText !== correctText && thirdPersonForm === correctText) {
-                const index = studentTokens.findIndex(t => cleanToken(t).toLowerCase() === studentText);
-                signals.push({
-                    code: 'R:VERB:SVA',
-                    sst: 'Misformation',
-                    index,
-                    message: `主詞是第三人稱單數，動詞應該用「${correctText}」喔！`,
-                    hint: `請檢查動詞是否漏加了 s/es。`,
-                    source: 'local',
-                });
-            }
+    // 1. 檢查第三人稱單數主詞後面的動詞
+    const thirdPersonMatch = studentStr.match(/\b(he|she|it)\s+([a-z]+)/i);
+    if (thirdPersonMatch) {
+        const subject = thirdPersonMatch[1].toLowerCase();
+        const verb = thirdPersonMatch[2].toLowerCase();
+        
+        // 如果動詞是某個字的原形（即不在不規則表的第三人稱單數清單中）
+        const expectedThirdPerson = getThirdPersonSingular(verb);
+        
+        // 如果學生的動詞等於原形，且正確答案包含了第三人稱單數形式
+        if (correctStr.includes(expectedThirdPerson) && !studentStr.includes(expectedThirdPerson)) {
+            const index = studentTokens.findIndex(t => cleanToken(t).toLowerCase() === verb);
+            signals.push({
+                code: 'R:VERB:SVA',
+                sst: 'Misformation',
+                index,
+                message: `主詞「${subject}」是第三人稱單數，動詞應該用「${expectedThirdPerson}」喔！`,
+                hint: `請檢查動詞是否漏加了 s/es。`,
+                source: 'local',
+            });
         }
     }
 
-    // 檢查 Be 動詞 (am/is/are)
-    const beMatch = studentDoc.match('(he|she|it) am').found;
-    if (beMatch) {
-        const index = studentTokens.findIndex(t => t.toLowerCase() === 'am');
+    // 2. 檢查 Be 動詞 (he/she/it + am)
+    if (/\b(he|she|it)\s+am\b/i.test(studentStr)) {
+        const index = studentTokens.findIndex(t => cleanToken(t).toLowerCase() === 'am');
         signals.push({
             code: 'R:VERB:SVA',
             sst: 'Misformation',
             index,
             message: '「he/she/it」不能搭配「am」喔！',
             hint: '請改成 is 或 was。',
+            source: 'local',
+        });
+    }
+
+    // 3. 檢查 have 與 has 的錯誤
+    if (/\b(he|she|it)\s+have\b/i.test(studentStr)) {
+        const index = studentTokens.findIndex(t => cleanToken(t).toLowerCase() === 'have');
+        signals.push({
+            code: 'R:VERB:SVA',
+            sst: 'Misformation',
+            index,
+            message: '「he/she/it」必須搭配「has」。',
+            hint: '請把 have 改成 has。',
             source: 'local',
         });
     }
