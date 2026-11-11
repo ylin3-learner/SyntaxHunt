@@ -1,12 +1,11 @@
 import type { DiagnosticLayer, DiagnosticContext, DiagnosticSignal } from '../../types';
 import { getGrammarRules } from '../../registry';
 import '../../grammarRules';
+import { validateSVA } from '../../validators/svaValidator';
+import { validateTense } from '../../validators/tenseValidator';
+import { validateGerundInfinitive } from '../../validators/gerundInfinitiveValidator';
+import { validateDoubleNegative } from '../../validators/doubleNegativeValidator';
 
-/**
- * L1 本地確定性規則層
- * 包裝既有的 grammarRules.ts 註冊規則引擎
- * 僅回傳非 UNKNOWN_ERROR 的確定性診斷
- */
 export const L1LocalRules: DiagnosticLayer = {
   id: 'L1_LocalRules',
   priority: 10,
@@ -14,16 +13,22 @@ export const L1LocalRules: DiagnosticLayer = {
   async diagnose(ctx: DiagnosticContext): Promise<DiagnosticSignal[]> {
     const { studentTokens, correctTokens, question } = ctx;
 
-    // 建立與舊 RuleContext 相容的上下文
-    const ruleCtx = { studentTokens, correctTokens, question };
-
     const signals: DiagnosticSignal[] = [];
+
+    // 1. 執行舊有的 Registry 規則
+    const ruleCtx = { studentTokens, correctTokens, question };
     for (const rule of getGrammarRules(question.concept)) {
       const result = rule(ruleCtx);
       signals.push(...result);
     }
 
-    // 只回傳確定性診斷，過濾掉 UNKNOWN_ERROR
+    // 2. 執行 NLP 增強驗證器
+    signals.push(...validateSVA(studentTokens, correctTokens));
+    signals.push(...validateTense(studentTokens, correctTokens));
+    signals.push(...validateGerundInfinitive(studentTokens, correctTokens));
+    signals.push(...validateDoubleNegative(studentTokens, correctTokens));
+
+    // 過濾 UNKNOWN_ERROR 並回傳
     return signals.filter((s) => s.code !== 'UNKNOWN_ERROR');
   },
 };
