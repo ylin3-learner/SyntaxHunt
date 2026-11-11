@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import html2canvas from 'html2canvas';
 
 const props = defineProps<{
@@ -14,6 +14,8 @@ const emit = defineEmits<{
 
 const reportCardRef = ref<HTMLElement | null>(null);
 const isGenerating = ref(false);
+const isDownloaded = ref(false);
+let beforeunloadHandler: null | EventListener = null;
 
 const misconceptionText = computed(() => {
   const dict: Record<string, string> = {
@@ -39,7 +41,7 @@ const downloadScreenshot = async () => {
     const image = canvas.toDataURL('image/png');
     const link = document.createElement('a');
     link.href = image;
-    link.download = `AnimeHunter_學習紀錄_${new Date().getTime()}.png`;
+    link.download = `SyntaxHunter_學習紀錄_${new Date().getTime()}.png`;
     link.click();
   } catch (err) {
     console.error('截圖失敗:', err);
@@ -48,6 +50,62 @@ const downloadScreenshot = async () => {
     isGenerating.value = false;
   }
 };
+const autoDownloadAndRegister = async () => {
+  if (isGenerating.value) return;
+  isGenerating.value = true;
+  try {
+    if (!reportCardRef.value) return;
+    const canvas = await html2canvas(reportCardRef.value, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+    });
+    const image = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = image;
+    link.download = `AnimeHunter_學習紀錄_${new Date().getTime()}.png`;
+    link.click();
+    isDownloaded.value = true;
+    registerBeforeUnload();
+  } catch (err) {
+    console.error('截圖失敗:', err);
+  } finally {
+    isGenerating.value = false;
+  }
+};
+
+const registerBeforeUnload = () => {
+  if (beforeunloadHandler) return;
+  const handler = (e: any) => {
+    if (!isDownloaded.value) {
+      e.preventDefault();
+      e.returnValue = '你有未下載的學習紀錄，確定要離開嗎？';
+    }
+  };
+  window.addEventListener('beforeunload', handler);
+  beforeunloadHandler = handler;
+};
+
+const removeBeforeUnload = () => {
+  if (beforeunloadHandler) {
+    window.removeEventListener('beforeunload', beforeunloadHandler);
+    beforeunloadHandler = null;
+  }
+};
+
+const saveAndExit = () => {
+  isDownloaded.value = true;
+  removeBeforeUnload();
+  emit('restart');
+};
+
+onMounted(() => {
+  autoDownloadAndRegister();
+});
+
+onBeforeUnmount(() => {
+  removeBeforeUnload();
+});
 </script>
 
 <template>
