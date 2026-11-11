@@ -4,7 +4,17 @@
 
 一套以「認知歷程管線」為核心、專為 K-12 設計的互動式英語文法學習工具。
 
-本專案以 **Vue 3、TypeScript、Vite 與 Supabase** 打造，教學主題為**後位修飾（關係子句與介系詞片語）**，特別針對母語干擾與結構性迷思。教師也可建立 `BUILD`、`REDUCE` 或 `MORPH` 通用文法題，並透過本地規則引擎及 LanguageTool 進階診斷辨識作答錯誤。
+本專案以 **Vue 3、TypeScript、Vite 與 Supabase** 打造，SyntaxHunt 不僅僅是一個文法測驗 App，它是一個**「以第二語言習得（SLA）理論為核心的診斷與干預引擎」**，將 SLA 理論直接轉譯為軟體架構。
+
+有別於傳統的選擇題測驗，本系統直擊學習者的錯誤根源：**母語干擾**（中文的前位修飾 vs. 英文的後位修飾）、**結構性迷思**（例如 `who he` 的重複代名詞），以及**片語塊重組（Phrase Chunking）**。
+
+系統中的每一個互動設計，都具備明確的教學理論基礎：
+- **聚焦形式（Focus on Form, Long）**：專屬的 UI 模式（`BUILD` 磁吸組句、`REDUCE` 碎紙機、`MORPH` 膠囊變形）強迫學習者操作句型結構，將注意力精準引導至特定的文法特徵上。
+- **輸入加工與認知負荷（VanPatten）**：在 `REDUCE` 模式中，獨創的「減法垃圾桶」機制嚴格隔離了目標考點，移除不必要的視覺干擾，避免學習者產生認知超載。
+- **降低情感過濾（Krashen）**：系統實作了「三階段漸進式鷹架」，等待學生主動點擊「確認」後才給予溫和提示，而非立刻跳出紅色錯誤畫面，大幅降低學習焦慮。
+- **注意假說（Schmidt）**：透過 **5 層責任鏈（Chain of Responsibility）** 診斷管線提供即時回饋。系統優先使用本地規則與 `compromise.js` 達到零延遲響應，自架 LanguageTool 僅作為優雅降級的備援，進行深層語意檢查。
+
+在教師端，系統導入了 **智慧出題與人機協作（HITL, Human-in-the-Loop）**。結合啟發式策略與 NLP，系統能自動推論考點、生成診斷規則草稿，並讓老師一鍵審核採用——在不增加老師程式碼負擔的前提下，賦予老師極大的教學掌控權。
 
 範例課程以一節 45 分鐘的**國三（115 iE5 Unit 5：*The Man Who Shook Hands with Me Is My Favorite Star*）**為設計情境。
 
@@ -131,7 +141,7 @@ graph TD
 
 ## 🗺️ UI 架構與資料流（Debug 追蹤指南）
 
-``` mermaid
+```mermaid
 graph TD
     %% 根組件
     App["App.vue<br/>(Root & State Controller)"]
@@ -215,44 +225,7 @@ graph TD
     class Mag,Shred legacy;
 ```
 
-> 為了讓未來開發或 Debug 時能快速釐清「題目為什麼這樣渲染」，以下是完整的資料流與組件路由層級。
-
-### 1. 學生端渲染流程（App.vue → StageMicro → GrammarCanvas）
-
-當學生進入題目時，資料流如下：
-
-1. **`App.vue`**：監聽來自 `useQuizFlow.ts` 的 `currentStage`，並動態渲染對應的階段組件（如 `StageInput`、`StageMacro` 或 `StageMicro`）。
-2. **`useQuizFlow.ts` (`checkAndSetInitialStage`)**：決定起始階段。系統**嚴格遵守**老師設定的 `enabledStages` 陣列順序。若為空，才 Fallback 到舊版預設（文法題 `micro`、對比題 `macro`）。
-3. **`StageMicro.vue`**：將 `question` 與 `chunks` 傳遞給 `GrammarCanvas.vue`。
-4. **`GrammarCanvas.vue`**：扮演**畫布分發器（Canvas Router）**。它會檢查 `chunks`、`ui_mode`、`canvas_mode`、`concept` 等屬性，決定載入哪個互動組件。
-
-### 2. 畫布路由規則 (`GrammarCanvas.vue`)
-
-分發器會依照以下優先級選擇 UI 組件：
-1. **`chunks` 鐵律（BUILD / REDUCE）**：只要題目有 `chunks` 陣列（例如標準題被轉換為字磚重組），**一律**直接路由到 `TileSentenceCanvas`。
-2. **`MATRIX_GATE`**：路由到 `FeatureMatrixCanvas`。
-3. **`PRAGMATIC_HP`**：路由到 `PragmaticHpCanvas`。
-4. **`GRAVITY_SWITCH`**：路由到 `TimelineMorphCanvas`。
-5. **`MORPH`**：依考點路由到 `TimelineMorphCanvas`（時態）、`ModalGaugeCanvas`（情態）或 `TileSentenceCanvas`（固定變形）。
-6. **舊版 BUILD / REDUCE**：路由到 `MagneticBuildCanvas` 或 `ShredderReduceCanvas`（這兩者內部會再包裝 `TileSentenceCanvas`）。
-
-### 3. 核心 UI 模式 (`TileSentenceCanvas.vue`)
-
-這是系統最核心的組件，根據 `question.ui_mode` 處理三種模式：
-- **`BUILD`**：
-  - 若有 `contextCloze`：渲染**克漏字變體**（前綴 + 挖空區 + 後綴），學生將字磚拖入挖空區。
-  - 若無 `contextCloze`：渲染標準的**全句重排**（字庫 + 作答區）。
-- **`REDUCE`**：渲染**卡片 + 垃圾桶** UI。學生點擊移除多餘字詞，答對時外層會套用 `.success-bg`。
-- **`MORPH`**：渲染固定句子，點擊紫色「膠囊」字塊切換單字形式。
-
-### 4. 漸進式鷹架與狀態追蹤 (Progressive Scaffolding)
-
-在 `TileSentenceCanvas.vue` 內部，診斷邏輯使用 `attemptCount` 來管理回饋：
-- **第一次錯誤**：僅顯示溫和提示（`TRY_AGAIN`），不觸發 Pipeline、不震動。
-- **第二次錯誤以上**：觸發完整的 L1-L5 診斷管線，顯示具體錯誤。
-- **成功**：套用 `.success-bg`，播放 TTS，並發出 `success` 事件給 `useQuizFlow`。
-
-### 🛠️ 如何 Debug UI 問題？（追蹤檢查表）
+**🛠️ 如何 Debug UI 問題？（追蹤檢查表）**
 1. **檢查 `enabledStages`**：在 `useQuizFlow.ts` 加 `console.log`，確認老師設定的陣列順序（例如 `['micro', 'input']`）是否正確。
 2. **檢查 `currentStage`**：確認 `App.vue` 是否渲染了正確的階段組件。
 3. **檢查 `GrammarCanvas` 路由**：查看 `selectedCanvas` 的 computed 邏輯。這題有 `chunks` 嗎？`ui_mode` 是 `BUILD` 嗎？
@@ -296,7 +269,7 @@ stateDiagram-v2
 
 ---
 
-## 🧠 文法診斷引擎（責任鏈模式）
+### 🧠 文法診斷引擎（責任鏈模式）
 
 本專案的核心診斷管線已從單體規則引擎，全面重構為高內聚、低耦合的 **5 層責任鏈模式（Chain of Responsibility）**。此架構確保了「毫秒級的本地響應」，同時保證 **「絕對不會放過任何一個學生的錯誤」**。
 
@@ -346,8 +319,11 @@ flowchart TD
 
 ### 五層防禦機制
 
-1. **L1 本地 NLP 增強規則 (`L1_LocalRules.ts`)**：
-   扮演單純的調度器。優先執行舊有同步規則以達到零延遲短路，接著呼叫 **NLP 增強驗證器**（`svaValidator.ts`, `tenseValidator.ts`）。系統導入 `compromise.js`，能精準提取動詞原形並結合上下文（如主謂一致、過去時間副詞）進行判斷，徹底擺脫死板的字面比對。
+1. **L1 本地模組化 NLP 增強規則 (`L1_LocalRules.ts`)**：
+   扮演單純的調度器。優先執行舊有同步規則以達到零延遲短路，接著呼叫 **模組化 NLP 驗證器**：
+   - `svaValidator.ts` / `tenseValidator.ts`：利用 `compromise.js` 提取動詞原形並結合上下文判斷。
+   - `gerundInfinitiveValidator.ts` / `doubleNegativeValidator.ts`：利用嚴謹的字典與正則比對，抓取 `enjoy to go` 等搭配錯誤或 `don't never` 等雙重否定。
+   - `specialStructures` 拆分：將連接詞、倒裝、情態、假設語氣拆分為獨立驗證器。
 2. **L2 老師自訂規則 (`L2_CustomRules.ts`)**：
    具備 **「智慧變體展開（Smart Variant Expansion）」** 能力。若老師輸入多字片語（如 `He go`），系統會自動利用 `compromise.js` 展開所有動詞變體（如 `He goes`, `He went`）來攔截所有錯誤；若老師只輸入單字（如 `go`），系統則嚴格執行單字邊界匹配，避免誤傷 `going` 等變體。
 3. **L3 結構差異比對 (`L3_StructuralDiff.ts`)**：
@@ -355,7 +331,7 @@ flowchart TD
 4. **L4 LanguageTool 深度診斷 (`L4_LanguageTool.ts`)**：
    僅在本地層級皆回傳 `UNKNOWN_ERROR` 時觸發。使用 `AbortController` 搭配 8 秒超時控制。若網路失敗或超時，會優雅降級至 L5，絕不卡住學生畫面。
 5. **L5 終極兜底高亮 (`L5_HighlightFallback.ts`)**：
-   教育意義的安全網。若所有規則皆無法解釋錯誤，系統會利用 `findDiffIndices` 找出第一個錯誤的字塊（Tile）。回傳 `HIGHLIGHT_ONLY` 訊號，讓 UI 將該字塊標紅，並顯示通用提示（「這裡的單字形式或順序好像不太對喔」），確保學習閉環不會中斷。
+   教育意義的安全網。若所有規則皆無法解釋錯誤，系統會利用 `findDiffIndices` 找出第一個錯誤的字塊（Tile）。回傳 `HIGHLIGHT_ONLY` 訊號，讓 UI 將該字塊標紅，並顯示通用提示，確保學習閉環不會中斷。
 
 ### 💡 核心設計優勢
 - **短路效率（Short-Circuit）**：99% 的常見錯誤在 L1~L3 就以零網路開銷解決。
@@ -539,36 +515,34 @@ sequenceDiagram
 
 ### 🏗️ 責任鏈模式重構 (Chain of Responsibility Refactoring)
 
-**狀態**: ✅ 架構完成，測試大部分通過
+**狀態**: ✅ 架構完成，測試全部通過
 
 本專案已將文法診斷管線從單體 `diagnoseGrammar()` 重構為**責任鏈模式 (Chain of Responsibility)**，達成高內聚、低耦合的架構目標。
 
-#### 📁 新增目錄結構
+#### 📁 目錄結構 (Diagnostics & Validators)
+```text
+src/rules/
+├── diagnostics/
+│   ├── pipeline.ts                  # Pipeline Manager
+│   ├── layers/
+│   │   ├── L1_LocalRules.ts         # Layer 1: Dispatcher (Integrates Validators)
+│   │   ├── L2_CustomRules.ts        # Layer 2: Custom Rules (Smart Variant Expansion)
+│   │   ├── L3_StructuralDiff.ts     # Layer 3: LCS Structural Diff
+│   │   ├── L4_LanguageTool.ts       # Layer 4: Remote LanguageTool API
+│   │   └── L5_HighlightFallback.ts  # Layer 5: Ultimate Highlight Fallback
+└── validators/                      # Modular Grammar Validators
+    ├── svaValidator.ts              # Subject-Verb Agreement
+    ├── tenseValidator.ts            # Tense Check
+    ├── gerundInfinitiveValidator.ts # Gerund vs. Infinitive
+    ├── doubleNegativeValidator.ts   # Double Negative
+    ├── conjunctionValidator.ts      # Conjunctions
+    ├── inversionValidator.ts        # Inversion
+    ├── modalValidator.ts            # Modal Verbs
+    └── subjunctiveValidator.ts      # Subjunctive Mood
 ```
-src/rules/diagnostics/
-├── pipeline.ts              # 核心管理器：負責註冊與依序執行各層
-├── layers/
-│   ├── L1_LocalRules.ts     # 第一層：現有語法規則 (由 grammarRules.ts 重構)
-│   ├── L2_CustomRules.ts    # 第二層：老師自訂規則 (解析 customRules)
-│   ├── L3_StructuralDiff.ts # 第三層：LCS/編輯距離結構比對
-│   ├── L4_LanguageTool.ts   # 第四層：遠端 LanguageTool 呼叫
-│   └── L5_HighlightFallback.ts # 第五層：終極兜底 (計算高亮 index)
-```
-
-#### 🔄 管線執行邏輯
-1. **L1 (Local Rules)**: 執行所有本地註冊的語法規則，若找到確定性錯誤則短路
-2. **L2 (Custom Rules)**: 檢查題目是否帶有老師自訂規則，進行子字串比對
-3. **L3 (Structural Diff)**: 使用 LCS 演算法比對 student 與 correct token 的結構差異
-4. **L4 (LanguageTool)**: 呼叫遠端 LanguageTool 進行深層語意檢查，超時則回傳空陣列
-5. **L5 (Highlight Fallback)**: 終極兜底，找出第一個差異點並標紅
-
-#### ✨ 新增功能
-- **自訂文法規則 (CustomGrammarRule)**: 教師可在題目中加入 `customRules`，針對特定文法點提供精準回饋
-- **高亮兜底 (Highlight Fallback)**: 當所有規則都無法分類時，自動標出第一個差異字塊
-- **管線短路機制**: 高優先級層找到確定性錯誤後，不再執行低優先級層，提升診斷效率
 
 #### 🧪 測試狀態
-- ✅ `src/rules/diagnostics/pipeline.test.ts` - 管線短路與兜底邏輯測試
+- ✅ `src/rules/diagnostics/pipeline.test.ts`
 - ✅ `src/rules/diagnostics/layers/L1_LocalRules.test.ts`
 - ✅ `src/rules/diagnostics/layers/L2_CustomRules.test.ts`
 - ✅ `src/rules/diagnostics/layers/L3_StructuralDiff.test.ts`
@@ -605,4 +579,3 @@ npm install
 npm run dev
 npm test
 ```
-

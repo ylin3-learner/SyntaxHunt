@@ -4,7 +4,17 @@
 
 An interactive, cognitive-pipeline-driven English grammar learning tool designed for K-12 education.
 
-Built with **Vue 3, TypeScript, Vite, and Supabase**, this application takes a pedagogical approach to teaching **Post-modifiers (Relative Clauses & Prepositional Phrases)**, specifically targeting the common L1 interference (Chinese pre-modifiers vs. English post-modifiers), structural misconceptions (e.g., redundant pronouns like `who she`), and **Phrase Chunking**. Teachers can also author general grammar questions in `BUILD`, `REDUCE`, or `MORPH` mode; answers are checked by a local rule engine first, with self-hosted LanguageTool providing additional diagnostics when local rules cannot classify an incorrect answer.
+Built with **Vue 3, TypeScript, Vite, and Supabase**, SyntaxHunt is not just a grammar quiz app—it is a **SLA-driven diagnostic and intervention engine** that translates Second Language Acquisition (SLA) theories directly into software architecture.
+
+Instead of traditional multiple-choice tests, the system addresses the root causes of learner errors: **L1 interference** (Chinese pre-modifiers vs. English post-modifiers), **structural misconceptions** (e.g., redundant pronouns like `who he`), and **Phrase Chunking**. 
+
+Every interaction is pedagogically grounded:
+- **Focus on Form (Long)**: The custom UI modes (`BUILD`, `REDUCE`, `MORPH`) force learners to manipulate sentence structures, directing their attention to specific grammatical features.
+- **Input Processing & Cognitive Load (VanPatten)**: The "Trash Can" subtraction mechanic (REDUCE mode) isolates target grammar points, eliminating visual clutter to prevent cognitive overload.
+- **Lowering the Affective Filter (Krashen)**: The 3-Stage Progressive Scaffolding system prevents students from feeling overwhelmed, waiting for them to explicitly "Check Answer" before providing soft warnings rather than immediate red error screens.
+- **Noticing Hypothesis (Schmidt)**: A 5-layer Chain of Responsibility diagnostic pipeline provides immediate, actionable feedback. It utilizes local rule engines and `compromise.js` first for 0ms responses, with self-hosted LanguageTool acting as a graceful fallback for deep semantic checks.
+
+Teachers can author general grammar questions via the **Smart Authoring Pipeline (HITL)**. By combining heuristics with NLP, the system automatically infers potential grammar points, generates diagnostic rule drafts, and lets teachers approve them with a single click—empowering educators without requiring them to write code.
 
 The sample lesson is designed for a 45-minute class for **Grade 9 (115 iE5, Unit 5: *The Man Who Shook Hands with Me Is My Favorite Star*)**, covering Grammar Focus 1 (prepositional phrases), Grammar Focus 2 (subject relative clauses with *who / which / that*), and the p.107 Read activity.
 
@@ -132,13 +142,11 @@ graph TD
     LT_Proxy --> LanguageTool
 ```
 
-Here are the code snippets to add to your README files. You can copy and paste these directly into the respective sections (e.g., right after the System Architecture section).
-
 ---
 
 ## 🗺️ UI Architecture & Data Flow (Debugging Guide)
 
-``` mermaid
+```mermaid
 graph TD
     %% Root Component
     App["App.vue<br/>(Root & State Controller)"]
@@ -221,49 +229,6 @@ graph TD
     class Tile,ClozeUI,BuildUI,ReduceUI,MorphUI core;
     class Mag,Shred legacy;
 ```
-
-> To easily trace how a question is rendered and to debug UI routing issues, here is the complete data flow and component routing hierarchy.
-
-### 1. Student Rendering Pipeline (App.vue → StageMicro → GrammarCanvas)
-
-When a student enters a question, the flow is as follows:
-
-1. **`App.vue`**: Listens to `currentStage` from `useQuizFlow.ts` and dynamically renders the corresponding stage component (e.g., `StageInput`, `StageMacro`, or `StageMicro`).
-2. **`useQuizFlow.ts` (`checkAndSetInitialStage`)**: Determines the starting stage. It strictly follows the `enabledStages` array configured by the teacher. If empty, it falls back to the legacy default (`micro` for grammar, `macro` for contrast).
-3. **`StageMicro.vue`**: Passes the `question` and `chunks` down to `GrammarCanvas.vue`.
-4. **`GrammarCanvas.vue`**: Acts as a **Canvas Router**. It inspects the question's properties (`chunks`, `ui_mode`, `canvas_mode`, `concept`) to select the correct interactive component.
-
-### 2. Canvas Routing Rules (`GrammarCanvas.vue`)
-
-The router uses the following priority to select the UI component:
-1. **The `chunks` Rule (BUILD / REDUCE)**: If the question has a populated `chunks` array (e.g., standard questions converted to word-building), it **always** routes directly to `TileSentenceCanvas`.
-2. **`MATRIX_GATE`**: Routes to `FeatureMatrixCanvas`.
-3. **`PRAGMATIC_HP`**: Routes to `PragmaticHpCanvas`.
-4. **`GRAVITY_SWITCH`**: Routes to `TimelineMorphCanvas`.
-5. **`MORPH`**: Routes to `TimelineMorphCanvas` (for tenses), `ModalGaugeCanvas` (for modals), or `TileSentenceCanvas` (fixed morphology).
-6. **Legacy BUILD / REDUCE**: Routes to `MagneticBuildCanvas` or `ShredderReduceCanvas` (which internally wrap `TileSentenceCanvas`).
-
-### 3. Core UI Modes (`TileSentenceCanvas.vue`)
-
-This is the most critical component. It handles three distinct modes based on `question.ui_mode`:
-- **`BUILD`**:
-  - If `contextCloze` exists: Renders the **Cloze variant** (prefix + blank slot + suffix). Students drag tiles into the blank.
-  - If no `contextCloze`: Renders the standard **Full Sentence Builder**.
-- **`REDUCE`**: Renders the **Card + Trash Can** UI. Students remove redundant words. A `success-bg` is applied when correct.
-- **`MORPH`**: Renders a fixed sentence with clickable "capsules" to change word forms.
-
-### 4. Progressive Scaffolding & State Tracking
-
-Inside `TileSentenceCanvas.vue`, the diagnostic logic uses an `attemptCount` to manage feedback:
-- **Attempt 1**: Soft warning (`TRY_AGAIN`). No red shakes, no API calls.
-- **Attempt 2+**: Triggers the full L1-L5 diagnostic pipeline and displays specific errors.
-- **Success**: Applies `.success-bg`, plays TTS, and emits `success` to `useQuizFlow`.
-
-### 🛠️ How to Debug UI Issues (Tracing Checklist)
-1. **Check `enabledStages`**: Use `console.log` in `useQuizFlow.ts` to verify the array order (e.g., `['micro', 'input']`).
-2. **Check `currentStage`**: Verify that `App.vue` is rendering the correct stage component.
-3. **Check `GrammarCanvas` Routing**: Look at the `selectedCanvas` computed property. Does the question have `chunks`? Is `ui_mode` set to `BUILD`?
-4. **Check `TileSentenceCanvas`**: Verify `initialChunks`. If empty, the word bank will be blank.
 
 ---
 
@@ -353,8 +318,11 @@ To minimize teacher workload while maximizing diagnostic precision, the system i
 
 ### The 5 Layers of Defense
 
-1. **L1 — NLP-Enhanced Local Rules (`L1_LocalRules.ts`)**: 
-   Acts as a pure dispatcher. It first runs legacy synchronous rules for 0ms short-circuiting, then invokes **NLP-enhanced validators** (`svaValidator.ts`, `tenseValidator.ts`). By utilizing `compromise.js`, L1 can accurately extract verb bases and detect context-dependent errors (e.g., Subject-Verb Agreement, Past Tense with adverbs) rather than relying on hardcoded word matching.
+1. **L1 — Modular NLP-Enhanced Rules (`L1_LocalRules.ts`)**: 
+   Acts as a pure dispatcher. It first runs legacy synchronous rules for 0ms short-circuiting, then invokes a suite of **modular NLP validators**:
+   - `svaValidator.ts` / `tenseValidator.ts`: Uses `compromise.js` to extract verb bases and detect context-dependent errors.
+   - `gerundInfinitiveValidator.ts` / `doubleNegativeValidator.ts`: Uses strict dictionary/regex matching to catch collocation errors (e.g., `enjoy to go`) and double negatives (e.g., `don't never`).
+   - `specialStructures/`: Modularized checks for conjunctions, inversion, modal verbs, and subjunctive mood.
 2. **L2 — Teacher Custom Rules (`L2_CustomRules.ts`)**: 
    Features **Smart Variant Expansion**. If a teacher inputs a multi-word phrase (e.g., `He go`), the system automatically uses `compromise.js` to expand all verb conjugations (`He goes`, `He went`, etc.) to catch all variants. If a teacher inputs a single word (e.g., `go`), it strictly enforces word boundaries to prevent false positives (e.g., matching `going`).
 3. **L3 — Structural Diff (`L3_StructuralDiff.ts`)**: 
@@ -544,40 +512,36 @@ To ensure a seamless classroom experience, the real-time broadcast mechanism han
 
 ---
 
-## 📋 進度追蹤 (Progress Tracking)
+## 📋 Progress Tracking
 
-### 🏗️ 責任鏈模式重構 (Chain of Responsibility Refactoring)
+### 🏗️ Chain of Responsibility Refactoring
 
-**狀態**: ✅ 架構完成，測試大部分通過
+The grammar diagnostic pipeline has been completely refactored from a monolithic `diagnoseGrammar()` into a highly decoupled **Chain of Responsibility**.
 
-本專案已將文法診斷管線從單體 `diagnoseGrammar()` 重構為**責任鏈模式 (Chain of Responsibility)**，達成高內聚、低耦合的架構目標。
-
-#### 📁 新增目錄結構
+#### 📁 New Directory Structure
+```text
+src/rules/
+├── diagnostics/
+│   ├── pipeline.ts                  # Pipeline Manager
+│   ├── layers/
+│   │   ├── L1_LocalRules.ts         # Layer 1: Dispatcher (Integrates Validators)
+│   │   ├── L2_CustomRules.ts        # Layer 2: Custom Rules (Smart Variant Expansion)
+│   │   ├── L3_StructuralDiff.ts     # Layer 3: LCS Structural Diff
+│   │   ├── L4_LanguageTool.ts       # Layer 4: Remote LanguageTool API
+│   │   └── L5_HighlightFallback.ts  # Layer 5: Ultimate Highlight Fallback
+└── validators/                      # Modular Grammar Validators
+    ├── svaValidator.ts              # Subject-Verb Agreement
+    ├── tenseValidator.ts            # Tense Check
+    ├── gerundInfinitiveValidator.ts # Gerund vs. Infinitive
+    ├── doubleNegativeValidator.ts   # Double Negative
+    ├── conjunctionValidator.ts      # Conjunctions
+    ├── inversionValidator.ts        # Inversion
+    ├── modalValidator.ts            # Modal Verbs
+    └── subjunctiveValidator.ts      # Subjunctive Mood
 ```
-src/rules/diagnostics/
-├── pipeline.ts              # 核心管理器：負責註冊與依序執行各層
-├── layers/
-│   ├── L1_LocalRules.ts     # 第一層：現有語法規則 (由 grammarRules.ts 重構)
-│   ├── L2_CustomRules.ts    # 第二層：老師自訂規則 (解析 customRules)
-│   ├── L3_StructuralDiff.ts # 第三層：LCS/編輯距離結構比對
-│   ├── L4_LanguageTool.ts   # 第四層：遠端 LanguageTool 呼叫
-│   └── L5_HighlightFallback.ts # 第五層：終極兜底 (計算高亮 index)
-```
 
-#### 🔄 管線執行邏輯
-1. **L1 (Local Rules)**: 執行所有本地註冊的語法規則，若找到確定性錯誤則短路
-2. **L2 (Custom Rules)**: 檢查題目是否帶有老師自訂規則，進行子字串比對
-3. **L3 (Structural Diff)**: 使用 LCS 演算法比對 student 與 correct token 的結構差異
-4. **L4 (LanguageTool)**: 呼叫遠端 LanguageTool 進行深層語意檢查，超時則回傳空陣列
-5. **L5 (Highlight Fallback)**: 終極兜底，找出第一個差異點並標紅
-
-#### ✨ 新增功能
-- **自訂文法規則 (CustomGrammarRule)**: 教師可在題目中加入 `customRules`，針對特定文法點提供精準回饋
-- **高亮兜底 (Highlight Fallback)**: 當所有規則都無法分類時，自動標出第一個差異字塊
-- **管線短路機制**: 高優先級層找到確定性錯誤後，不再執行低優先級層，提升診斷效率
-
-#### 🧪 測試狀態
-- ✅ `src/rules/diagnostics/pipeline.test.ts` - 管線短路與兜底邏輯測試
+#### 🧪 Test Coverage
+- ✅ `src/rules/diagnostics/pipeline.test.ts` - Pipeline short-circuit and fallback logic.
 - ✅ `src/rules/diagnostics/layers/L1_LocalRules.test.ts`
 - ✅ `src/rules/diagnostics/layers/L2_CustomRules.test.ts`
 - ✅ `src/rules/diagnostics/layers/L3_StructuralDiff.test.ts`
