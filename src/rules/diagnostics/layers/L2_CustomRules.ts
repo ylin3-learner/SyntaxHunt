@@ -1,26 +1,57 @@
 import type { DiagnosticLayer, DiagnosticContext, DiagnosticSignal, CustomGrammarRule } from '../../types';
+import nlp from 'compromise'; // 修正：使用 ES Module 匯入
 
-/**
- * 轉義正則表達式特殊字元，避免老師輸入 '?' 或 '*' 時導致系統崩潰
- */
-function escapeRegExp(str: string): string {
+export function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/**
- * 建立具備單字邊界且容錯多空白的正則表達式
- */
-function buildPhraseRegex(pattern: string): RegExp {
+export function buildPhraseRegex(pattern: string): RegExp {
   const escaped = escapeRegExp(pattern.trim());
   const flexibleSpaces = escaped.replace(/\s+/g, '\\s+');
   return new RegExp(`\\b${flexibleSpaces}\\b`, 'i');
 }
 
 /**
- * L2 老師自訂規則層
- * 解析 question.customRules，進行精準的單字邊界比對
+ * 使用 compromise.js 自動展開動詞變體
+ * 例如：輸入 'go' -> 回傳 ['go', 'goes', 'went', 'gone', 'going']
+ * 輸入 'He go' -> 回傳 ['He go', 'He goes', 'He went', ...]
  */
-// 👈 這裡確保有加上 export const
+function expandPatternWithCompromise(pattern: string): string[] {
+  const trimmed = pattern.trim();
+  
+  // 關鍵修正：如果只有單一單字，只做精確匹配，不展開變體
+  if (!trimmed.includes(' ')) {
+    return [trimmed.toLowerCase()];
+  }
+
+  const doc = nlp(trimmed);
+  const verbs = doc.verbs();
+
+  if (!verbs.found) {
+    return [trimmed.toLowerCase()];
+  }
+
+  const conjugations = verbs.conjugate();
+  if (!conjugations || conjugations.length === 0) {
+    return [trimmed.toLowerCase()];
+  }
+
+  const expanded = new Set<string>([trimmed.toLowerCase()]);
+  const originalVerb = verbs.out('text').toLowerCase();
+
+  conjugations.forEach((conj) => {
+    Object.values(conj).forEach((form) => {
+      if (typeof form === 'string' && form.trim() !== '') {
+        const regex = new RegExp(`\\b${originalVerb}\\b`, 'gi');
+        const newPattern = trimmed.replace(regex, form);
+        expanded.add(newPattern.toLowerCase());
+      }
+    });
+  });
+
+  return Array.from(expanded);
+}
+
 export const L2CustomRules: DiagnosticLayer = {
   id: 'L2_CustomRules',
   priority: 20,
@@ -36,13 +67,13 @@ export const L2CustomRules: DiagnosticLayer = {
     const studentStr = studentTokens.join(' ');
     const signals: DiagnosticSignal[] = [];
 
-    // 依優先級由高到低排序 (數字大的優先)
+    // 依優先級由高到低排序
     const sortedRules = [...customRules].sort(
       (a, b) => (b.priority ?? 100) - (a.priority ?? 100)
     );
 
     for (const rule of sortedRules) {
-      // 檢查概念是否匹配 (空陣列表示所有概念皆適用)
+      // 檢查概念是否匹配
       if (
         rule.concepts &&
         rule.concepts.length > 0 &&
@@ -52,13 +83,14 @@ export const L2CustomRules: DiagnosticLayer = {
         continue;
       }
 
-      // 使用 RegExp 進行精準比對
-      const matched = rule.wrongPattern.some((pattern) => {
+      // 展開變體
+      const expandedPatterns = rule.wrongPattern.flatMap((p) => expandPatternWithCompromise(p));
+
+      const matched = expandedPatterns.some((pattern) => {
         try {
           const regex = buildPhraseRegex(pattern);
           return regex.test(studentStr);
         } catch (e) {
-          // 若正則建立失敗，退回基本字串比對
           console.warn(`Invalid custom rule pattern: ${pattern}`, e);
           return studentStr.toLowerCase().includes(pattern.toLowerCase());
         }
@@ -68,9 +100,7 @@ export const L2CustomRules: DiagnosticLayer = {
         signals.push({
           code: `CUSTOM:${rule.id}`,
           message: rule.message,
-          hint: rule.correctForm
-            ? `建議改用：「${rule.correctForm}"`
-            : undefined,
+          hint: rule.correctForm ? `建議改用：「${rule.correctForm}"` : undefined,
           source: 'custom',
           index: 0,
         });
