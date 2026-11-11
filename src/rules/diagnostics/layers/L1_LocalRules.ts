@@ -5,6 +5,7 @@ import { validateSVA } from '../../validators/svaValidator';
 import { validateTense } from '../../validators/tenseValidator';
 import { validateGerundInfinitive } from '../../validators/gerundInfinitiveValidator';
 import { validateDoubleNegative } from '../../validators/doubleNegativeValidator';
+import { validateInversion } from '../../validators/inversionValidator';
 
 export const L1LocalRules: DiagnosticLayer = {
   id: 'L1_LocalRules',
@@ -27,6 +28,7 @@ export const L1LocalRules: DiagnosticLayer = {
     signals.push(...validateTense(studentTokens, correctTokens));
     signals.push(...validateGerundInfinitive(studentTokens, correctTokens));
     signals.push(...validateDoubleNegative(studentTokens, correctTokens));
+    signals.push(...validateInversion(studentTokens, correctTokens));
 
     // 過濾 UNKNOWN_ERROR 並回傳
     return signals.filter((s) => s.code !== 'UNKNOWN_ERROR');
