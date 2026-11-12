@@ -70,7 +70,15 @@ describe('GrammarCanvas', () => {
     };
     const wrapper = mount(GrammarCanvas, { props: { question, initialChunks: question.chunks } });
 
+    // 新增：等待 ShredderReduceCanvas 載入
+    await flushPromises();
+    await nextTick();
+
     const buttons = wrapper.findAll('.removable-word');
+
+    // 確保有找到元素再觸發
+    expect(buttons.length).toBeGreaterThan(0);
+
     await buttons[2].trigger('dragstart');
     await buttons[1].trigger('drop');
     await nextTick();
@@ -105,6 +113,10 @@ describe('GrammarCanvas', () => {
       ],
     };
     const wrapper = mount(GrammarCanvas, { props: { question, initialChunks: question.chunks } });
+
+    // 新增：等待 MagneticBuildCanvas 載入
+    await flushPromises();
+    await nextTick();
 
     for (const token of ['I', 'like', 'banana']) {
       await wrapper.findAll('.word-bank .tile').find(tile => tile.text() === token)!.trigger('click');
@@ -150,6 +162,10 @@ describe('GrammarCanvas', () => {
       ],
     };
     const wrapper = mount(GrammarCanvas, { props: { question, initialChunks: question.chunks } });
+
+    // 新增：等待 MagneticBuildCanvas 載入
+    await flushPromises();
+    await nextTick();
 
     for (const token of ['I', 'eat', 'pie']) {
       await wrapper.findAll('.word-bank .tile').find(tile => tile.text() === token)!.trigger('click');

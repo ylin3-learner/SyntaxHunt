@@ -2,7 +2,6 @@
 import { computed, defineAsyncComponent } from 'vue';
 import type { Chunk, GrammarQuestionData } from '../rules/types';
 import { getQuestionCanvasMode } from '../rules/types';
-import { getGrammarTopic } from '../rules/grammarTopics';
 import TileSentenceCanvas from './grammar/TileSentenceCanvas.vue';
 
 const MagneticBuildCanvas = defineAsyncComponent(() => import('./grammar/MagneticBuildCanvas.vue'));
@@ -28,39 +27,35 @@ const canvasMode = computed(() => getQuestionCanvasMode(props.question));
 
 const selectedCanvas = computed(() => {
   const mode = canvasMode.value;
+  const q = props.question;
 
-  // 修正：只有 BUILD 或 REDUCE，且有 chunks，才強制走 TileSentenceCanvas
-  if ((mode === 'BUILD' || mode === 'REDUCE') && props.question.chunks && props.question.chunks.length > 0) {
-    return TileSentenceCanvas;
-  }
-
-  const isUnspecifiedLegacyCanvas = !props.question.canvas_mode
-    && !props.question.grammarTopicId
-    && (mode === 'BUILD' || mode === 'REDUCE')
-    && !props.question.concept
-    && !props.question.matrix_config
-    && !props.question.pragmatic_target
-    && typeof props.question.status_gap !== 'number';
-
-  if (isUnspecifiedLegacyCanvas) return TileSentenceCanvas;
+  // 1. 明確 canvas_mode 指派（特殊畫布優先）
   if (mode === 'MATRIX_GATE') return FeatureMatrixCanvas;
   if (mode === 'PRAGMATIC_HP') return PragmaticHpCanvas;
   if (mode === 'GRAVITY_SWITCH') return TimelineMorphCanvas;
 
-  if (mode === 'MORPH') {
-    if (props.question.concept === 'MODAL_VERB'
-      && !props.question.canvas_mode && !props.question.pragmatic_target
-      && typeof props.question.status_gap !== 'number') return ModalGaugeCanvas;
-    if (props.question.grammarTopicId || [
-      'SUBJECT_VERB_AGREEMENT', 'TENSE_ASPECT', 'PAST_TENSE',
-      'SUBJUNCTIVE', 'CONDITIONALS',
-    ].includes(props.question.concept ?? '')) return TimelineMorphCanvas;
-    return TileSentenceCanvas;
-  }
+  // 檢查是否有 chunks
+  const hasChunks = q.chunks && q.chunks.length > 0;
 
-  if (mode === 'REDUCE') return ShredderReduceCanvas;
-  if (mode === 'BUILD') return MagneticBuildCanvas;
+  // 2. 如果沒有 chunks，走專用的 REDUCE / BUILD 元件
+  if (mode === 'REDUCE' && !hasChunks) return ShredderReduceCanvas;
+  if (mode === 'BUILD' && !hasChunks) return MagneticBuildCanvas;
 
+  // 3. 如果有 chunks，依賴 ui_mode 決定，但也保留 chunks 條件作為舊題庫相容
+  if (q.ui_mode === 'REDUCE' && !hasChunks) return ShredderReduceCanvas;
+  if (q.ui_mode === 'BUILD' && !hasChunks) return MagneticBuildCanvas;
+
+  // 4. 保留部分舊題庫回退條件（有 chunks 的舊題目）
+  const isUnspecifiedLegacyCanvas = !q.canvas_mode
+    && !q.grammarTopicId
+    && !q.concept
+    && !q.matrix_config
+    && !q.pragmatic_target
+    && typeof q.status_gap !== 'number';
+
+  if (isUnspecifiedLegacyCanvas) return TileSentenceCanvas;
+
+  // 5. 最終預設
   return TileSentenceCanvas;
 });
 </script>

@@ -82,6 +82,15 @@ useFocusMonitor(handleDistracted);
 const { handleRealtimeEvent, lockedUnit } = useRealtimeSync(quizFlow, realtimeNotice);
 
 // ---- UI 路由 ----
+watch(currentStage, (newStage, oldStage) => {
+  console.log(`[DEBUG App] currentStage changed: ${oldStage} → ${newStage}`);
+  console.log('[DEBUG App] currentQuestion:', currentQuestion.value);
+  console.log('[DEBUG App] currentQuestion.chunks:', currentQuestion.value?.chunks);
+  console.log('[DEBUG App] currentQuestion.ui_mode:', currentQuestion.value?.ui_mode);
+  console.log('[DEBUG App] currentQuestion.canvas_mode:', currentQuestion.value?.canvas_mode);
+  console.log('[DEBUG App] currentQuestion.mode:', currentQuestion.value?.mode);
+});
+
 const currentStageComponent = computed(() => {
   if (currentQuestion.value?.type === 'contrast') return StageContrast;
 
@@ -93,15 +102,8 @@ const currentStageComponent = computed(() => {
   else if (currentStage.value === 'macro') comp = StageMacro;
   else if (currentStage.value === 'micro') comp = StageMicro;
 
+  console.log(`[DEBUG App] currentStageComponent: ${currentStage.value} → ${comp?.name || comp}`);
   return comp;
-});
-
-watch(currentStage, (newStage, oldStage) => {
-  console.log(`[DEBUG App] currentStage changed: ${oldStage} → ${newStage}`);
-  console.log('[DEBUG App] currentQuestion:', currentQuestion.value);
-  console.log('[DEBUG App] currentQuestion.chunks:', currentQuestion.value?.chunks);
-  console.log('[DEBUG App] currentQuestion.ui_mode:', currentQuestion.value?.ui_mode);
-  console.log('[DEBUG App] currentQuestion.canvas_mode:', currentQuestion.value?.canvas_mode);
 });
 
 // ---- 生命週期 ----
@@ -192,13 +194,18 @@ const fullSentenceData = computed(() => {
   if (!q) return { target: '', display: '', modifier: '' };
 
   const noun = q.targetNoun;
+  
+  // ✅ 新增：安全轉型，避免 currentMode 為 build/reduce 時發生 TS 錯誤
+  const safeLegacyFeature = (currentMode.value === 'build' || currentMode.value === 'reduce' ? 'relative' : currentMode.value) as 'relative' | 'preposition';
+
   const modifier = getQuestionUiMode(q) === 'REDUCE'
     ? formatAnswerForDisplay(microQuestion.value?.correctAnswer ?? [])
     : q.grammarFeature
       ? q.type === 'contrast'
         ? q.grammarFeature.relative.label
-        : q.grammarFeature[currentMode.value].label
+        : q.grammarFeature[safeLegacyFeature].label // 👈 使用安全轉型後的變數
       : formatAnswerForDisplay(microQuestion.value?.correctAnswer ?? []);
+      
   return { target: `${noun} ${modifier} is my favorite.`, display: `${noun} | ${modifier} | is my favorite.`, modifier };
 });
 

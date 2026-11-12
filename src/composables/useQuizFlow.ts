@@ -11,7 +11,7 @@ import { useClassroomSync, currentTeacherId } from './useClassroomSync';
 export function useQuizFlow() {
   const currentIndex = ref(0);
   const currentStage = ref<TeachingStage>('preview');
-  const currentMode = ref<'relative' | 'preposition'>('relative');
+  const currentMode = ref<'build' | 'reduce' | 'relative' | 'preposition'>('build');
   const questionBank = ref<QuestionData[]>([]);
   const showSummary = ref(false);
   const completedCount = ref(0);
@@ -42,15 +42,31 @@ export function useQuizFlow() {
     return filteredQuestions.value[currentIndex.value] || filteredQuestions.value[0];
   });
 
-  const getEnabledStages = computed<NonNullable<QuestionData['enabledStages']>>(() =>
-    currentQuestion.value.enabledStages || (currentQuestion.value.type === 'grammar'
-      ? ['micro']
-      : ['input', 'macro', 'micro', 'pronunciation', 'noticing'])
-  );
+  const getEnabledStages = computed<NonNullable<QuestionData['enabledStages']>>(() => {
+    const q = currentQuestion.value
+
+    // 1. 如果老師明確指定 enabledStages，直接使用
+    if (q.enabledStages) return q.enabledStages as NonNullable<QuestionData['enabledStages']>
+
+    // 2. grammar 類型題目，預設只保留 micro 階段
+    if (q.type === 'grammar') {
+      return ['micro']
+    }
+
+    // 3. reduce 類型題目：僅保留 input → micro，跳過 macro → pronunciation
+    if (q.mode === 'reduce') {
+      return ['input', 'micro']
+    }
+
+    // 4. 預設完整順序：input → macro → micro → pronunciation → noticing
+    return ['input', 'macro', 'micro', 'pronunciation', 'noticing']
+  });
 
   const microQuestion = computed<GrammarQuestionData>(() => {
     const question = currentQuestion.value;
-    const legacyFeature = question.mode === 'reduce' ? 'relative' : currentMode.value;
+    // 確保 legacyFeature 符合 'relative' | 'preposition'
+    const fallbackFeature = currentMode.value === 'build' || currentMode.value === 'reduce' ? 'relative' : currentMode.value;
+    const legacyFeature = question.mode === 'reduce' ? 'relative' : fallbackFeature;
     return convertLegacyQuestion(question, legacyFeature);
   });
 
@@ -127,9 +143,16 @@ export function useQuizFlow() {
   const handleSuccess = () => {
     playSuccess();
     trackCompleted();
+
     if (completedCount.value <= currentIndex.value) completedCount.value = currentIndex.value + 1;
 
     const nextStage = getNextStageInSequence(currentStage.value, getEnabledStages.value);
+
+    // DEBUG
+    console.log(`[DEBUG QuizFlow] handleSuccess: 前進前 stage = ${currentStage.value}`);
+    console.log(`[DEBUG QuizFlow] handleSuccess: 題目 mode = ${currentMode.value}`);
+    console.log(`[DEBUG QuizFlow] handleSuccess: enabledStages = ${JSON.stringify(getEnabledStages.value)}`);
+    console.log(`[DEBUG QuizFlow] handleSuccess: 目標下一階段 = ${nextStage ?? 'none'}`);
 
     if (nextStage) {
       currentStage.value = nextStage;
@@ -139,6 +162,11 @@ export function useQuizFlow() {
   };
 
   const handlePreviewSuccess = () => {
+    // DEBUG
+    console.log(`[DEBUG QuizFlow] handlePreviewSuccess: 前進前 stage = ${currentStage.value}`);
+    console.log(`[DEBUG QuizFlow] handlePreviewSuccess: 題目 mode = ${currentMode.value}`);
+    console.log(`[DEBUG QuizFlow] handlePreviewSuccess: enabledStages = ${JSON.stringify(getEnabledStages.value)}`);
+
     if (currentQuestion.value.type === 'chunk') {
       handleSuccess();
       return;
@@ -147,6 +175,11 @@ export function useQuizFlow() {
   };
 
   const handleInputSuccess = () => {
+    // DEBUG
+    console.log(`[DEBUG QuizFlow] handleInputSuccess: 前進前 stage = ${currentStage.value}`);
+    console.log(`[DEBUG QuizFlow] handleInputSuccess: 題目 mode = ${currentMode.value}`);
+    console.log(`[DEBUG QuizFlow] handleInputSuccess: enabledStages = ${JSON.stringify(getEnabledStages.value)}`);
+
     handleSuccess();
   };
 
@@ -157,8 +190,17 @@ export function useQuizFlow() {
     }
     trackAnswering();
     window.speechSynthesis.cancel();
-    if (currentStage.value === 'success' && getEnabledStages.value.includes('noticing') && currentQuestion.value.noticingData) { currentStage.value = 'noticing'; return; }
-    if (currentIndex.value < filteredQuestions.value.length - 1) {
+
+    // DEBUG
+    console.log(`[DEBUG QuizFlow] nextQuestion: currentMode = ${currentMode.value}`);
+    console.log(`[DEBUG QuizFlow] nextQuestion: currentStage = ${currentStage.value}`);
+
+    if (currentMode.value === 'reduce') {
+      // Reduce 題目：直接跳到 success，跳過完整流程
+      currentStage.value = 'success'
+    } else if (currentStage.value === 'success' && getEnabledStages.value.includes('noticing') && currentQuestion.value.noticingData) {
+      currentStage.value = 'noticing';
+    } else if (currentIndex.value < filteredQuestions.value.length - 1) {
       currentIndex.value++; checkAndSetInitialStage();
     } else {
       showSummary.value = true;
