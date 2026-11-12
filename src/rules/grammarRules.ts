@@ -4,7 +4,13 @@ import { findVerbPair, expectedForm } from './verbTable';
 import { getGrammarRules, registerGrammarRule } from './registry';
 import { cleanToken } from '../utils/textUtils';
 
-const pluginModules = import.meta.glob('./validators/*.ts', { eager: true });
+const pluginModules = import.meta.glob(
+  [
+    './validators/*.ts',
+    '!./validators/**/*.test.ts',   // 排除所有測試檔
+  ],
+  { eager: true }
+);
 void pluginModules;
 
 // ==========================================
@@ -161,9 +167,9 @@ const diagnoseTokenDifference = (
         ? 'M:DET'
         : PREPOSITIONS.has(token)
           ? 'M:PREP'
-        : findVerbPair(token)
-          ? 'M:VERB'
-          : 'UNKNOWN_ERROR';
+          : findVerbPair(token)
+            ? 'M:VERB'
+            : 'UNKNOWN_ERROR';
     return [{
       code,
       sst: 'Omission',
@@ -205,9 +211,9 @@ const diagnoseTokenDifference = (
       ? 'R:PREP'
       : DETERMINERS.has(studentToken) || DETERMINERS.has(correctToken)
         ? 'R:DET'
-      : isNumberSubstitution
-        ? 'R:NOUN:NUM'
-        : 'UNKNOWN_ERROR';
+        : isNumberSubstitution
+          ? 'R:NOUN:NUM'
+          : 'UNKNOWN_ERROR';
   const similar = distance(cleanToken(studentWord.token), cleanToken(correctWord.token));
   return [{
     code,
