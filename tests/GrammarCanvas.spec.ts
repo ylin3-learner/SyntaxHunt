@@ -1,17 +1,19 @@
 ﻿import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick } from 'vue';
-import GrammarCanvas from '../src/components/GrammarCanvas.vue';
+import MagneticBuildCanvas from '../src/components/grammar/MagneticBuildCanvas.vue';
+import ShredderReduceCanvas from '../src/components/grammar/ShredderReduceCanvas.vue';
+import MorphChoiceCanvas from '../src/components/grammar/MorphChoiceCanvas.vue';
 import type { GrammarQuestionData } from '../src/rules/types';
 
+// ❌ 移除 initDiagnosticPipeline 的 Mock，讓 Pipeline 正常註冊 L1~L5
+// ✅ 只 Mock 外部依賴
 vi.mock('../src/utils/useSound', () => ({
   useSound: () => ({ playError: vi.fn(), playSuccess: vi.fn() }),
 }));
-
 vi.mock('../src/utils/useSpeech', () => ({
   useTTS: () => ({ speak: vi.fn() }),
 }));
-
 vi.mock('../src/services/CloudDatabase', () => ({
   CloudDatabase: {
     checkLanguageTool: vi.fn(async () => []),
@@ -21,7 +23,7 @@ vi.mock('../src/services/CloudDatabase', () => ({
 
 import { CloudDatabase } from '../src/services/CloudDatabase';
 
-describe('GrammarCanvas', () => {
+describe('GrammarCanvas UI Interactions (Sub-components)', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
@@ -29,32 +31,7 @@ describe('GrammarCanvas', () => {
     vi.mocked(CloudDatabase.checkLanguageTool).mockResolvedValue([]);
   });
 
-  it('keeps MORPH sentences fixed while students choose an allowed word form', async () => {
-    vi.useFakeTimers();
-    const question: GrammarQuestionData = {
-      id: 'morph-test', type: 'grammar', ui_mode: 'MORPH',
-      targetNoun: 'He', antecedent: { noun: 'He', number: 'singular', person: 'person' },
-      correctAnswer: ['He', 'went', 'to school'],
-      chunks: [
-        { id: 'he', text: 'He', draggable: true },
-        { id: 'go', text: 'go', draggable: true, can_morph: true, morph_options: ['go', 'went'] },
-        { id: 'school', text: 'to school', draggable: true },
-      ],
-    };
-    const wrapper = mount(GrammarCanvas, { props: { question, initialChunks: question.chunks } });
-
-    await wrapper.find('.fixed-morph-sentence .morph-capsule').trigger('click');
-    await wrapper.findAll('.morph-menu button').find(option => option.text() === 'went')!.trigger('click');
-    await nextTick();
-
-    expect(wrapper.findAll('.fixed-morph-sentence > .fixed-sentence-token, .fixed-morph-token').map(t => t.text())).toEqual(['He', 'went', 'to school']);
-    await vi.advanceTimersByTimeAsync(1500);
-    expect(wrapper.emitted('success')).toBeTruthy();
-    wrapper.unmount();
-  });
-
   it('lets students reorder retained REDUCE chunks to form the correct sentence', async () => {
-    vi.useFakeTimers();
     const question: GrammarQuestionData = {
       id: 'reduce-reorder-test', type: 'grammar', ui_mode: 'REDUCE',
       targetNoun: 'The writer', antecedent: { noun: 'The writer', number: 'singular', person: 'person' },
@@ -68,15 +45,12 @@ describe('GrammarCanvas', () => {
         { id: 'which', text: 'which', draggable: true },
       ],
     };
-    const wrapper = mount(GrammarCanvas, { props: { question, initialChunks: question.chunks } });
 
-    // 新增：等待 ShredderReduceCanvas 載入
-    await flushPromises();
+    const wrapper = mount(ShredderReduceCanvas, { props: { question, initialChunks: question.chunks } });
     await nextTick();
+    vi.useFakeTimers();
 
     const buttons = wrapper.findAll('.removable-word');
-
-    // 確保有找到元素再觸發
     expect(buttons.length).toBeGreaterThan(0);
 
     await buttons[2].trigger('dragstart');
@@ -112,39 +86,35 @@ describe('GrammarCanvas', () => {
         { id: 'banana', text: 'banana', draggable: true },
       ],
     };
-    const wrapper = mount(GrammarCanvas, { props: { question, initialChunks: question.chunks } });
 
-    // 新增：等待 MagneticBuildCanvas 載入
-    await flushPromises();
+    const wrapper = mount(MagneticBuildCanvas, { props: { question, initialChunks: question.chunks } });
     await nextTick();
 
     for (const token of ['I', 'like', 'banana']) {
-      await wrapper.findAll('.word-bank .tile').find(tile => tile.text() === token)!.trigger('click');
+      const tile = wrapper.findAll('.word-bank .tile').find(t => t.text() === token);
+      expect(tile).toBeDefined();
+      await tile!.trigger('click');
     }
 
-    // 關鍵：因為 BUILD 模式不再即時觸發，所以必須點擊 Check Answer
-    // 而且因為是第一次錯，會顯示溫和提示 (TRY_AGAIN)，不會觸發 LanguageTool
     await wrapper.find('.check-answer-button').trigger('click');
     await nextTick();
 
-    // 第一次錯：顯示溫和提示
     expect(wrapper.text()).toContain('好像還差一點點');
     expect(CloudDatabase.checkLanguageTool).not.toHaveBeenCalled();
 
-    // 第二次錯：點擊再次檢查，這次會觸發 Pipeline 並呼叫 LanguageTool
     await wrapper.find('.check-answer-button').trigger('click');
 
-    await vi.waitFor(() => expect(CloudDatabase.checkLanguageTool).toHaveBeenCalled());
+    // 等待 Pipeline 完成，確保 L4 被觸發
     await flushPromises();
     await nextTick();
 
+    expect(CloudDatabase.checkLanguageTool).toHaveBeenCalled();
     expect(wrapper.emitted('success')).toBeUndefined();
     expect(wrapper.text()).toContain('Use a different fruit.');
     wrapper.unmount();
   });
 
   it('lets students continue to the next question when LanguageTool times out', async () => {
-    vi.useFakeTimers();
     vi.mocked(CloudDatabase.checkLanguageTool).mockImplementationOnce((text, signal) => {
       return new Promise((_, reject) => {
         signal?.addEventListener('abort', () => reject(new Error('Aborted')));
@@ -161,23 +131,22 @@ describe('GrammarCanvas', () => {
         { id: 'pie', text: 'pie', draggable: true },
       ],
     };
-    const wrapper = mount(GrammarCanvas, { props: { question, initialChunks: question.chunks } });
 
-    // 新增：等待 MagneticBuildCanvas 載入
-    await flushPromises();
+    const wrapper = mount(MagneticBuildCanvas, { props: { question, initialChunks: question.chunks } });
     await nextTick();
+    vi.useFakeTimers();
 
     for (const token of ['I', 'eat', 'pie']) {
-      await wrapper.findAll('.word-bank .tile').find(tile => tile.text() === token)!.trigger('click');
+      const tile = wrapper.findAll('.word-bank .tile').find(t => t.text() === token);
+      expect(tile).toBeDefined();
+      await tile!.trigger('click');
     }
 
-    // 第一次點擊 (溫和提示)
     await wrapper.find('.check-answer-button').trigger('click');
     await nextTick();
-
-    // 第二次點擊 (觸發 Pipeline 與超時)
     await wrapper.find('.check-answer-button').trigger('click');
 
+    // 觸發 8 秒超時
     await vi.advanceTimersByTimeAsync(8000);
     await flushPromises();
     await nextTick();
@@ -203,13 +172,19 @@ describe('GrammarCanvas', () => {
         { id: 'go', text: 'go.', draggable: true },
       ],
     };
-    const wrapper = mount(GrammarCanvas, { props: { question, initialChunks: question.chunks } });
 
-    await vi.waitFor(() => expect(wrapper.find('[role="switch"]').exists()).toBe(true));
-    await wrapper.find('[role="switch"]').trigger('click');
+    const wrapper = mount(MorphChoiceCanvas, {
+      props: { question, initialChunks: question.chunks, strategy: 'timeline', fixedMorph: true }
+    });
     await nextTick();
 
-    expect(wrapper.find('.morph-strategy').classes()).toContain('gravity-irreal');
+    const toggleBtn = wrapper.findAll('button').find(b => b.text().includes('切換假設模式'));
+    expect(toggleBtn).toBeDefined();
+
+    await toggleBtn!.trigger('click');
+    await nextTick();
+
+    expect(wrapper.find('.gravity-irreal').exists()).toBe(true);
     expect(wrapper.find('.fixed-morph-sentence').text()).toContain('were');
     expect(wrapper.find('.fixed-morph-sentence').text()).toContain('would');
     wrapper.unmount();

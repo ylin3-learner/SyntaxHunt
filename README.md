@@ -837,6 +837,57 @@ npm run build
 npx vite preview
 ```
 
+## 📚 UI Flow & Grammar Canvas Modes
+
+This section documents the UI rendering flow and how different question types map to their respective canvas components.
+
+### Question-to-Canvas Routing
+
+The `GrammarCanvas.vue` component routes questions to the appropriate canvas based on `ui_mode` and `canvas_mode`:
+
+| Mode | Canvas Component | Key DOM Selectors |
+|------|-----------------|-------------------|
+| **BUILD** (`ui_mode: 'BUILD'`)` | `MagneticBuildCanvas` | `.word-bank .tile` — draggable word bank tiles |
+| **REDUCE** (`ui_mode: 'REDUCE'`)` | `ShredderReduceCanvas` | `.removable-word` — removable words in answer area |
+| **MORPH** (`ui_mode: 'MORPH'`)` | `TileSentenceCanvas` | `.morph-capsule` — morphable word buttons |
+| **MATRIX_GATE**` | `FeatureMatrixCanvas` | `.decode-button` — feature unlock button |
+| **PRAGMATIC_HP**` | `PragmaticHpCanvas` | `.pragmatic-word-bank` — word bank buttons |
+| **GRAVITY_SWITCH**` | `MorphChoiceCanvas` | `.gravity-irreal` — gravity toggle |
+
+### Stage Integration
+
+- `StageMicro.vue` uses `GrammarCanvas` as its core renderer
+- Question data enters via `useQuizFlow.microQuestion` computed property
+- `getEnabledStages` filters stages based on available question data (e.g., `inputData` for StageInput, `chunks` for Micro)
+- **Blank UI prevention**: Stages lacking required data are dynamically removed from the enabled stages list
+
+### Canvas Component Constraints (Architecture Iron Laws)
+
+- `MagneticBuildCanvas`, `ShredderReduceCanvas`, and `TileSentenceCanvas` must remain as independent, decoupled components
+- No merging of these components into a single monolithic renderer
+- Each canvas receives question data through explicit props (`question`, `initialChunks`)
+- Dependency injection and route dispatch logic in `GrammarCanvas.vue` must remain intact
+
+### E2E Testing
+
+- Playwright E2E tests in `tests/e2e/grammar-canvas.spec.ts` verify BUILD and REDUCE canvas rendering
+- Tests inject question data via `localStorage` and assert corresponding DOM elements exist
+- Debug snapshots capture URL, body HTML, and body text on failure for CI/CD crash analysis
+
+### Flow Description (Default: Build Mode, Non-Grammar Questions)
+
+```
+preview → input → macro → micro → pronunciation → noticing → success
+```
+
+**Mode Variations:**
+- **build mode** (預設): complete sequence input → macro → micro → pronunciation → noticing
+- **reduce mode**: 無 chunks → ShredderReduceCanvas (僅 input → micro)，有 chunks → TileSentenceCanvas (顯示完整句子結構)
+- **grammar type**: 僅顯示 micro 階段
+
+---
+*Documentation updated to reflect Playwright E2E integration and component routing (v2026.11.13)*
+
 ## 🚀 Getting Started
 
 ### Environment Setup

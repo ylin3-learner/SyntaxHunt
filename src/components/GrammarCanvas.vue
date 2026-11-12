@@ -29,33 +29,16 @@ const selectedCanvas = computed(() => {
   const mode = canvasMode.value;
   const q = props.question;
 
-  // 1. 明確 canvas_mode 指派（特殊畫布優先）
+  // 1. 特殊 Canvas 優先
   if (mode === 'MATRIX_GATE') return FeatureMatrixCanvas;
   if (mode === 'PRAGMATIC_HP') return PragmaticHpCanvas;
   if (mode === 'GRAVITY_SWITCH') return TimelineMorphCanvas;
 
-  // 檢查是否有 chunks
-  const hasChunks = q.chunks && q.chunks.length > 0;
+  // 2. 絕對的 REDUCE 與 BUILD 路由 - 完全不依賴 chunks
+  if (mode === 'REDUCE' || q.ui_mode === 'REDUCE') return ShredderReduceCanvas;
+  if (mode === 'BUILD' || q.ui_mode === 'BUILD') return MagneticBuildCanvas;
 
-  // 2. 如果沒有 chunks，走專用的 REDUCE / BUILD 元件
-  if (mode === 'REDUCE' && !hasChunks) return ShredderReduceCanvas;
-  if (mode === 'BUILD' && !hasChunks) return MagneticBuildCanvas;
-
-  // 3. 如果有 chunks，依賴 ui_mode 決定，但也保留 chunks 條件作為舊題庫相容
-  if (q.ui_mode === 'REDUCE' && !hasChunks) return ShredderReduceCanvas;
-  if (q.ui_mode === 'BUILD' && !hasChunks) return MagneticBuildCanvas;
-
-  // 4. 保留部分舊題庫回退條件（有 chunks 的舊題目）
-  const isUnspecifiedLegacyCanvas = !q.canvas_mode
-    && !q.grammarTopicId
-    && !q.concept
-    && !q.matrix_config
-    && !q.pragmatic_target
-    && typeof q.status_gap !== 'number';
-
-  if (isUnspecifiedLegacyCanvas) return TileSentenceCanvas;
-
-  // 5. 最終預設
+  // 3. MORPH 或其他
   return TileSentenceCanvas;
 });
 </script>

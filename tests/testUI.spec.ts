@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
-import { describe, it, expect } from 'vitest';
-import TileSentenceCanvas from '../src/components/grammar/TileSentenceCanvas.vue';
+import { describe, it, expect, vi } from 'vitest';
+import MagneticBuildCanvas from '../src/components/grammar/MagneticBuildCanvas.vue';
 import type { GrammarQuestionData } from '../src/rules/types';
 
 vi.mock('../src/utils/useSpeech', () => ({ useTTS: () => ({ speak: vi.fn() }) }));
@@ -25,7 +25,8 @@ describe('Standard BUILD mock render', () => {
       enabledStages: ['micro'],
     };
 
-    const wrapper = mount(TileSentenceCanvas, {
+    // 改為掛載 MagneticBuildCanvas
+    const wrapper = mount(MagneticBuildCanvas, {
       props: {
         question,
         initialChunks: question.chunks,
@@ -38,7 +39,5 @@ describe('Standard BUILD mock render', () => {
     expect(wrapper.findAll('.word-bank .tile').length).toBe(3);
     // 預期作答區開始為空
     expect(wrapper.findAll('.answer-area .tile').length).toBe(0);
-
-    console.log(wrapper.html());
   });
 });

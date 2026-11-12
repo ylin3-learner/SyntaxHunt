@@ -1,16 +1,10 @@
 ﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import { runDiagnosisPipeline } from '../../rules/diagnostics/pipeline';
-import { normalizeAnswer } from '../../utils/textUtils';
-import type { DiagnosticSignal, GrammarQuestionData, Chunk } from '../../rules/types';
+import type { GrammarQuestionData, Chunk } from '../../rules/types';
 import { useSound } from '../../utils/useSound';
 import { useTTS } from '../../utils/useSpeech';
-import { shuffleArray } from '../../utils/shuffle';
-import { initDiagnosticPipeline } from '../../rules/diagnostics/init';
 
-initDiagnosticPipeline();
-
-const { playError, playSuccess } = useSound();
+const { playSuccess } = useSound();
 const { speak } = useTTS();
 
 const props = withDefaults(defineProps<{
@@ -28,47 +22,19 @@ const emit = defineEmits<{
 }>();
 
 const answerArea = ref<Chunk[]>([]);
-const trashArea = ref<Chunk[]>([]);
-const wordBank = ref<Chunk[]>([]);
-const isFixedMorph = computed(() => props.fixedMorph || props.question.ui_mode === 'MORPH');
-const answerSlotCount = computed(() => Math.max(props.question.correctAnswer?.length ?? 0, answerArea.value.length));
-const signals = ref<DiagnosticSignal[]>([]);
 const isSuccess = ref(false);
-const isWrong = ref(false);
-const remoteStatus = ref('');
 const activeMorphId = ref<string | null>(null);
 const morphFeedback = ref<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
-const draggedTileIndex = ref<number | null>(null);
-
-// 漸進式鷹架：紀錄嘗試次數
-const attemptCount = ref(0);
-
-const clozeDragged = ref<Chunk | null>(null);
 
 const initTiles = () => {
-  if (isFixedMorph.value) {
-    answerArea.value = JSON.parse(JSON.stringify(props.initialChunks.map(chunk => ({ ...chunk }))));
-    trashArea.value = [];
-    wordBank.value = [];
-  } else if (props.question.ui_mode === 'REDUCE') {
-    answerArea.value = JSON.parse(JSON.stringify(props.initialChunks));
-    trashArea.value = [];
-    wordBank.value = [];
-  } else {
-    const chunks = props.shuffleWordBank ? shuffleArray(props.initialChunks) : props.initialChunks;
-    wordBank.value = JSON.parse(JSON.stringify(chunks));
-    answerArea.value = [];
-    trashArea.value = [];
-  }
+  answerArea.value = JSON.parse(JSON.stringify(props.initialChunks.map(chunk => ({ ...chunk }))));
 };
 
 initTiles();
 
 watch(() => props.initialChunks, () => {
-  if (isFixedMorph.value) {
-    answerArea.value = JSON.parse(JSON.stringify(props.initialChunks));
-    resetState();
-  }
+  answerArea.value = JSON.parse(JSON.stringify(props.initialChunks));
+  isSuccess.value = false;
 }, { deep: true });
 
 let successTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -89,164 +55,27 @@ const selectMorph = (chunk: Chunk, newText: string, hintText?: string) => {
     type: isCorrect ? 'success' : 'error'
   };
   activeMorphId.value = null;
-  resetState();
-  void checkAnswer();
+  checkAnswer();
 };
 
-const discardTile = (tile: Chunk) => {
-  if (isSuccess.value || props.question.ui_mode !== 'REDUCE') return;
-  const index = answerArea.value.findIndex(t => t.id === tile.id);
-  if (index !== -1) {
-    const [removed] = answerArea.value.splice(index, 1);
-    trashArea.value.push(removed);
-    resetState();
-    void checkAnswer();
-  }
-};
-
-const handleDragStart = (index: number) => {
-  if (isSuccess.value || props.question.ui_mode !== 'REDUCE') return;
-  draggedTileIndex.value = index;
-};
-
-const handleDrop = (dropIndex: number) => {
-  if (draggedTileIndex.value === null || isSuccess.value) return;
-  const startIndex = draggedTileIndex.value;
-  if (startIndex === dropIndex) return;
-
-  const item = answerArea.value.splice(startIndex, 1)[0];
-  answerArea.value.splice(dropIndex, 0, item);
-  draggedTileIndex.value = null;
-  resetState();
-  void checkAnswer();
-};
-
-const restoreTile = (tile: Chunk) => {
-  if (isSuccess.value) return;
-  const index = trashArea.value.findIndex(t => t.id === tile.id);
-  if (index !== -1) {
-    const [restored] = trashArea.value.splice(index, 1);
-    answerArea.value.push(restored);
-    answerArea.value.sort((a, b) => props.initialChunks.findIndex(c => c.id === a.id) - props.initialChunks.findIndex(c => c.id === b.id));
-    resetState();
-    void checkAnswer();
-  }
-};
-
-const selectTile = (tile: Chunk) => {
-  if (isSuccess.value) return;
-  const index = wordBank.value.findIndex(t => t.id === tile.id);
-  if (index !== -1) {
-    wordBank.value.splice(index, 1);
-    answerArea.value.push(tile);
-    resetState();
-  }
-};
-
-const unselectTile = (tile: Chunk) => {
-  if (isSuccess.value) return;
-  const index = answerArea.value.findIndex(t => t.id === tile.id);
-  if (index !== -1) {
-    answerArea.value.splice(index, 1);
-    wordBank.value.push(tile);
-    resetState();
-  }
-};
-
-const handleClozeDragStart = (tile: Chunk) => {
-  if (isSuccess.value) return;
-  clozeDragged.value = tile;
-};
-
-const handleClozeDragOver = (event: DragEvent) => {
-  event.preventDefault();
-};
-
-const handleClozeDrop = (event: DragEvent) => {
-  event.preventDefault();
-  if (!clozeDragged.value || isSuccess.value) return;
-
-  const tile = clozeDragged.value;
-  const index = wordBank.value.findIndex(t => t.id === tile.id);
-
-  if (index !== -1) {
-    wordBank.value.splice(index, 1);
-    answerArea.value.push(tile);
-    resetState();
-  }
-  clozeDragged.value = null;
-};
-
-const resetState = () => {
-  isWrong.value = false;
-  signals.value = [];
-  remoteStatus.value = '';
-};
-
-const checkAnswer = async (force = false) => {
+const checkAnswer = () => {
   const studentTokens = answerArea.value.map(t => t.text);
   const correctTokens = props.question.correctAnswer ?? [];
 
-  if (correctTokens.length === 0) {
-    console.warn('⚠️ [TileSentenceCanvas] correctAnswer 為空，停止診斷。');
-    return;
-  }
-
-  if (studentTokens.length === 0 && props.question.ui_mode !== 'REDUCE') return;
-
-  const cleanCurrent = normalizeAnswer(studentTokens);
-  const cleanTarget = normalizeAnswer(correctTokens);
-
-  if (cleanCurrent === cleanTarget) {
+  if (studentTokens.join(' ') === correctTokens.join(' ')) {
     playSuccess();
     isSuccess.value = true;
-    attemptCount.value = 0; // 答對後重置次數
     speak(studentTokens.map(token => token.replace(/[\[\]]/g, '')).join(' '), { rate: props.speechRate ?? 0.8 });
     successTimeout = setTimeout(() => emit('success'), 1500);
-    return;
   }
-
-  if (!force && props.question.ui_mode !== 'REDUCE' && studentTokens.length < correctTokens.length) return;
-
-  // 漸進式鷹架邏輯
-  attemptCount.value++;
-
-  // 第一次錯誤：顯示溫和提示，不呼叫 Pipeline
-  if (attemptCount.value === 1 && props.question.ui_mode === 'BUILD') {
-    signals.value = [{
-      code: 'TRY_AGAIN',
-      message: '好像還差一點點，檢查看看順序或單字有沒有拼對！',
-      source: 'local',
-      category: 'Soft Warning'
-    }];
-    return;
-  }
-
-  const ctx = { studentTokens, correctTokens, question: props.question };
-  const pipelineSignals = await runDiagnosisPipeline(ctx);
-
-  if (pipelineSignals.length === 0) return;
-
-  const displayed = props.question.ui_mode === 'REDUCE' ? pipelineSignals.slice(0, 1) : pipelineSignals;
-  signals.value = displayed;
-  playError();
-  isWrong.value = true;
-
-  displayed.forEach((signal) => {
-    if (signal.code !== 'HIGHLIGHT_ONLY' && signal.code !== 'TRY_AGAIN') {
-      emit('misconception', signal.code);
-    }
-  });
 };
 
-const isError = (index: number) => signals.value.some(s => s.index === index);
 const handleOutsideClick = () => { activeMorphId.value = null; };
 </script>
 
 <template>
   <div class="grammar-canvas" @click="handleOutsideClick">
-    <!-- 1. FIXED MORPH -->
-    <div v-if="isFixedMorph" class="fixed-morph-sentence" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
+    <div class="fixed-morph-sentence" :class="{ 'success-bg': isSuccess }">
       <span v-if="question.contextCloze" class="fixed-context">{{ question.contextCloze.prefix }}</span>
       <template v-for="(chunk, index) in answerArea" :key="chunk.id">
         <span v-if="index > 0 && !question.contextCloze" class="fixed-word-space"> </span>
@@ -262,126 +91,23 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
             </button>
           </div>
         </span>
-        <span v-else class="fixed-sentence-token" :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }">
+        <span v-else class="fixed-sentence-token" :class="{ 'tile-success': isSuccess }">
           {{ chunk.text.replace(/[\[\]]/g, '') }}
         </span>
       </template>
       <span v-if="question.contextCloze" class="fixed-context">{{ question.contextCloze.suffix }}</span>
+
       <Transition name="fade">
         <div v-if="morphFeedback" class="morph-feedback" :class="morphFeedback.type">
           {{ morphFeedback.text }}
         </div>
       </Transition>
     </div>
-
-    <!-- 2. REDUCE -->
-    <div v-else-if="question.ui_mode === 'REDUCE'" class="reduce-sentence-mode"
-      :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
-      <div class="sentence-display">
-        <template v-for="(tile, index) in answerArea" :key="tile.id">
-          <button v-if="tile.draggable" type="button" class="removable-word" draggable="true"
-            @dragstart="handleDragStart(index)" @dragover.prevent @drop="handleDrop(index)"
-            :aria-label="'移除「' + tile.text.replace(/[\[\]]/g, '') + '」'"
-            :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }" @click="discardTile(tile)">
-            {{ tile.text.replace(/[\[\]]/g, '') }} <span class="remove-hint">×</span>
-          </button>
-          <span v-else class="fixed-word" :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }">
-            {{ tile.text.replace(/[\[\]]/g, '') }}
-          </span>
-        </template>
-      </div>
-      <div class="trash-zone-wrapper">
-        <div class="trash-label">🗑️ Removed tiles ({{ trashArea.length }}) · Click to restore</div>
-        <div class="trash-area">
-          <div v-for="tile in trashArea" :key="tile.id" class="trash-tile">
-            <span>{{ tile.text.replace(/[\[\]]/g, '') }}</span>
-            <button type="button" class="trash-restore-button" @click="restoreTile(tile)">Restore ↶</button>
-          </div>
-          <div v-if="trashArea.length === 0" class="trash-placeholder">Click on underlined words above to remove them.
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 3. BUILD -->
-    <div v-else class="build-mode-wrapper">
-
-      <!-- 復刻回來的克漏字上下文 UI -->
-      <div class="cloze-context" v-if="question.contextCloze">
-        <span class="cloze-text">{{ question.contextCloze.prefix }}</span>
-
-        <div class="cloze-blanks-container">
-          <span v-for="(_, index) in answerSlotCount" :key="index" class="cloze-blank-slot"
-            :class="{ 'has-text': answerArea[index] }" @dragover="handleClozeDragOver" @drop="handleClozeDrop">
-            <template v-if="answerArea[index]">
-              <div class="tile"
-                :class="{ 'tile-error': isError(index), 'tile-success': isSuccess, 'tile-chunk': answerArea[index].text.startsWith('[') }"
-                @click.stop="unselectTile(answerArea[index])">
-                {{ answerArea[index].text.replace(/[\[\]]/g, '') }}
-              </div>
-            </template>
-            <span v-else class="blank-placeholder">_</span>
-          </span>
-        </div>
-
-        <span class="cloze-text">{{ question.contextCloze.suffix }}</span>
-      </div>
-
-      <!-- 原本的全句重排區塊 (只有在沒有克漏字時顯示) -->
-      <div v-if="!question.contextCloze" class="answer-area" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
-        <div v-for="(_, index) in answerSlotCount" :key="index" class="answer-slot">
-          <div v-if="answerArea[index]" class="tile-wrapper">
-            <div class="tile"
-              :class="{ 'tile-error': isError(index), 'tile-success': isSuccess, 'tile-chunk': answerArea[index].text.startsWith('['), 'can-morph': answerArea[index].can_morph }"
-              @click.stop="answerArea[index].can_morph ? toggleMorphMenu(answerArea[index]) : unselectTile(answerArea[index])">
-              {{ answerArea[index].text.replace(/[\[\]]/g, '') }}
-            </div>
-            <div v-if="activeMorphId === answerArea[index].id" class="morph-menu">
-              <button v-for="opt in (answerArea[index].options ?? answerArea[index].morph_options)" :key="opt"
-                type="button" @click.stop="selectMorph(answerArea[index], opt)">
-                {{ opt }}
-              </button>
-            </div>
-          </div>
-          <div v-else class="empty-slot"></div>
-        </div>
-      </div>
-
-      <!-- 字磚庫 -->
-      <div class="word-bank">
-        <div v-for="tile in wordBank" :key="tile.id" class="tile" draggable="true"
-          @dragstart="handleClozeDragStart(tile)"
-          :class="{ 'tile-chunk': tile.text.startsWith('['), 'can-morph': tile.can_morph }" @click="selectTile(tile)">
-          {{ tile.text.replace(/[\[\]]/g, '') }}
-        </div>
-      </div>
-
-      <button class="check-answer-button" @click="checkAnswer(true)">Check Answer</button>
-    </div>
-
-    <!-- Alert Bubble -->
-    <div v-if="signals.length > 0" class="alert-bubble" :class="{ 'soft-warning': signals[0].code === 'TRY_AGAIN' }">
-      <div class="alert-icon">{{ signals[0].code === 'TRY_AGAIN' ? '💡' : '⚠️' }}</div>
-      <div class="alert-messages">
-        <div v-for="(s, index) in signals" :key="`${s.code}-${index}`">
-          <p>{{ s.message }}</p>
-          <p v-if="s.category" class="diagnosis-meta">
-            {{ s.source === 'languagetool' ? 'LanguageTool' : 'Local Diagnostic' }}
-            <span v-if="s.ruleId"> · {{ s.ruleId }}</span>
-            <span v-if="s.category"> · {{ s.category }}</span>
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <button v-if="signals.length > 0 && (signals[0].code === 'HIGHLIGHT_ONLY' || signals[0].source === 'languagetool')"
-      class="continue-button" @click="emit('continue')">
-      繼續下一題 →
-    </button>
   </div>
 </template>
 
 <style scoped>
+/* 保留 MORPH 專用的樣式 */
 .grammar-canvas {
   display: flex;
   flex-direction: column;
@@ -390,56 +116,6 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
   position: relative;
 }
 
-/* === 新增：克漏字樣式 === */
-.cloze-context {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  font-size: 1.4rem;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 10px;
-  line-height: 1.6;
-}
-
-.cloze-text {
-  color: #555;
-}
-
-.cloze-blanks-container {
-  display: inline-flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-}
-
-.cloze-blank-slot {
-  min-width: 50px;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #e6f7ff;
-  color: #1cb0f6;
-  border-radius: 8px;
-  border-bottom: 3px dashed #1cb0f6;
-  padding: 4px 8px;
-  transition: all 0.2s;
-  box-sizing: border-box;
-}
-
-.cloze-blank-slot.has-text {
-  background: #d0f0ff;
-  border-bottom-style: solid;
-}
-
-.blank-placeholder {
-  opacity: 0.5;
-}
-
-/* === FIXED MORPH STYLES === */
 .fixed-morph-sentence {
   position: relative;
   display: flex;
@@ -486,226 +162,15 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
   box-shadow: 0 4px 8px rgba(156, 39, 176, 0.2);
 }
 
-/* === REDUCE STYLES === */
-.reduce-sentence-mode {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding: 20px;
-  background: #fafafa;
-  border-radius: 16px;
-  border: 2px dashed #e5e5e5;
-}
-
-.reduce-sentence-mode.success-bg {
-  background-color: #f0fff0;
-  border-color: #58cc02;
-}
-
-.sentence-display {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  font-size: clamp(1.2rem, 3vw, 1.8rem);
-  align-items: center;
-  line-height: 1.6;
-}
-
-.fixed-word {
-  color: #333;
-}
-
-.removable-word {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 10px;
-  border: 2px solid #ff4b4b;
-  border-radius: 8px;
-  background: #fff0f0;
-  color: #ea2b2b;
-  font-size: inherit;
-  font-weight: bold;
-  cursor: grab;
-  transition: all 0.2s;
-}
-
-.removable-word:active {
-  cursor: grabbing;
-}
-
-.removable-word:hover {
-  background: #ffdfe0;
-  transform: scale(1.05);
-}
-
-.remove-hint {
-  font-size: 1.2rem;
-  opacity: 0.6;
-}
-
-.trash-zone-wrapper {
-  border-top: 2px dashed #eee;
-  padding-top: 20px;
-}
-
-.trash-label {
-  font-size: 0.9rem;
-  font-weight: bold;
-  color: #6b7280;
-  margin-bottom: 12px;
-}
-
-.trash-area {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  min-height: 60px;
-  padding: 16px;
-  background: #fff;
-  border: 2px dashed #ccc;
-  border-radius: 12px;
-  justify-content: center;
-}
-
-.trash-tile {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border: 1px solid #d5d9de;
-  border-radius: 8px;
-  background: #f0f0f0;
-  color: #999;
-}
-
-.trash-restore-button {
-  border: 1px solid #1cb0f6;
-  border-radius: 6px;
-  padding: 4px 8px;
-  background: #fff;
-  color: #1cb0f6;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.trash-placeholder {
-  color: #999;
-  font-size: 0.9rem;
-}
-
-/* === BUILD STYLES === */
-.build-mode-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.answer-area {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  min-height: 80px;
-  padding: 16px;
-  border-radius: 16px;
-  border-bottom: 4px dashed #e5e5e5;
-  background: #fdfdfd;
-  align-items: center;
-  transition: all 0.3s;
-}
-
-.answer-area.success-bg {
-  border-bottom-color: #58cc02;
-  background: #f0fff0;
-}
-
-.word-bank {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  min-height: 80px;
-  padding: 16px;
-  border: 2px solid #e5e5e5;
-  border-radius: 16px;
-  background: #ffffff;
-  transition: all 0.3s;
-}
-
-.answer-slot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 60px;
-  min-height: 50px;
-}
-
-.empty-slot {
-  width: 100%;
-  height: 100%;
-  min-width: 60px;
-  min-height: 50px;
-  border-bottom: 3px dashed #ccc;
-  border-radius: 8px;
-  background: #f4f4f4;
-  transition: all 0.2s;
-}
-
-.tile-wrapper {
-  position: relative;
-}
-
-.tile {
-  padding: 12px 20px;
-  background-color: #ffffff;
-  border: 2px solid #e5e5e5;
-  border-bottom-width: 4px;
-  border-radius: 12px;
-  cursor: pointer;
-  user-select: none;
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #4b4b4b;
-  transition: all 0.1s;
-  height: 100%;
-  display: flex;
-  align-items: center;
-}
-
-.tile:hover {
-  background-color: #f7f7f7;
-}
-
-.tile:active {
-  border-bottom-width: 2px;
-  transform: translateY(2px);
-}
-
-.tile-chunk {
-  background-color: #e6f7ff;
-  border-color: #1cb0f6;
-  color: #1899d6;
-  border-radius: 20px;
-  padding: 12px 24px;
-  box-shadow: 0 2px 8px rgba(28, 176, 246, 0.15);
-}
-
-.tile.can-morph {
-  border-color: #9c27b0;
-  background-color: #f3e8ff;
-  color: #9c27b0;
-}
-
-/* === SHARED STYLES === */
-.tile-error {
-  background-color: #ffdfe0 !important;
-  border-color: #ff4b4b !important;
-  color: #ea2b2b !important;
-}
-
 .tile-success {
   background-color: #d7ffb8 !important;
   border-color: #58cc02 !important;
   color: #58cc02 !important;
+}
+
+.success-bg {
+  background-color: #f0fff0;
+  border-color: #58cc02;
 }
 
 .morph-menu {
@@ -723,7 +188,6 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
   min-width: 100%;
   max-height: 240px;
   overflow-y: auto;
-  animation: slideDown 0.2s;
 }
 
 .morph-menu button {
@@ -739,122 +203,9 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
   transition: background 0.2s;
 }
 
-.morph-menu button:hover,
-.morph-menu button:focus-visible {
+.morph-menu button:hover {
   background: #f3e8ff;
   color: #9c27b0;
-}
-
-.check-answer-button,
-.continue-button {
-  align-self: flex-end;
-  padding: 10px 20px;
-  background: #58cc02;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: bold;
-  cursor: pointer;
-  margin-top: 10px;
-}
-
-.alert-bubble {
-  display: flex;
-  gap: 12px;
-  background-color: #ffdfe0;
-  color: #ea2b2b;
-  padding: 16px;
-  border-radius: 12px;
-  border: 2px solid #ff4b4b;
-  font-weight: 500;
-  animation: slideDown 0.3s ease-out;
-}
-
-.alert-bubble.soft-warning {
-  background-color: #fef3c7;
-  color: #92400e;
-  border-color: #fcd34d;
-}
-
-.alert-icon {
-  font-size: 1.5rem;
-}
-
-.alert-messages p {
-  margin: 0 0 4px 0;
-}
-
-@keyframes slideDown {
-  from {
-    transform: translateY(-10px);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-@keyframes shake {
-
-  10%,
-  90% {
-    transform: translate3d(-2px, 0, 0);
-  }
-
-  20%,
-  80% {
-    transform: translate3d(4px, 0, 0);
-  }
-
-  30%,
-  50%,
-  70% {
-    transform: translate3d(-8px, 0, 0);
-  }
-
-  40%,
-  60% {
-    transform: translate3d(8px, 0, 0);
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-@media (max-width: 600px) {
-  .grammar-canvas {
-    gap: 14px;
-    min-height: 0;
-  }
-
-  .answer-area,
-  .word-bank,
-  .trash-area {
-    gap: 8px;
-    min-height: 64px;
-    padding: 10px;
-  }
-
-  .answer-slot,
-  .empty-slot {
-    min-width: 44px;
-    min-height: 44px;
-  }
-
-  .tile {
-    max-width: 100%;
-    padding: 9px 12px;
-    font-size: 1rem;
-  }
 }
 
 .explicit-menu {
@@ -891,20 +242,12 @@ const handleOutsideClick = () => { activeMorphId.value = null; };
   color: #333;
 }
 
-.option-hint {
-  font-size: 0.8rem;
-  color: #7c3aed;
-  font-weight: normal;
-  margin-top: 4px;
-}
-
 .morph-feedback {
   margin-top: 16px;
   padding: 12px 16px;
   border-radius: 8px;
   font-weight: bold;
   font-size: 1rem;
-  animation: slideDown 0.3s ease;
   flex-basis: 100%;
   box-sizing: border-box;
 }

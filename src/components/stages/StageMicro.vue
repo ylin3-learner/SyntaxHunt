@@ -25,14 +25,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <GrammarCanvas
-    :question="props.question"
-    :initial-chunks="props.question.chunks"
-    :speech-rate="props.question.speechRate || 0.8"
-    @success="emit('success')"
-    @continue="emit('continue', true)"
-    @misconception="emit('misconception', $event)"
-  />
+  <GrammarCanvas :question="props.question" :initial-chunks="props.question.chunks || []"
+    :speech-rate="props.question.speechRate || 0.8" @success="emit('success')" @continue="emit('continue', true)"
+    @misconception="emit('misconception', $event)" />
 </template>
 
 <style scoped></style>

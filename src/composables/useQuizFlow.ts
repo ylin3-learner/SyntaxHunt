@@ -46,20 +46,43 @@ export function useQuizFlow() {
     const q = currentQuestion.value
 
     // 1. 如果老師明確指定 enabledStages，直接使用
-    if (q.enabledStages) return q.enabledStages as NonNullable<QuestionData['enabledStages']>
+    if (q.enabledStages) {
+      let stages = [...q.enabledStages]
 
-    // 2. grammar 類型題目，預設只保留 micro 階段
+      // 2. 動態過濾：如果缺少對應資料，就從陣列中移除該階段
+      return stages.filter(stage => {
+        if (stage === 'preview' && !q.previewData) return false
+        if (stage === 'input' && !q.inputData) return false
+        if (stage === 'macro' && !q.grammarFeature && !q.chunks) return false
+        if (stage === 'micro' && !q.chunks && !q.matrix_config && !q.pragmatic_target && q.type !== 'grammar') return false
+        if (stage === 'pronunciation' && !q.inputData) return false
+        if (stage === 'noticing' && !q.noticingData) return false
+        return true
+      }) as NonNullable<QuestionData['enabledStages']>
+    }
+
+    // 3. grammar 類型題目，預設只保留 micro 階段
     if (q.type === 'grammar') {
       return ['micro']
     }
 
-    // 3. reduce 類型題目：僅保留 input → micro，跳過 macro → pronunciation
+    // 4. reduce 類型題目：僅保留 input → micro，跳過 macro → pronunciation
     if (q.mode === 'reduce') {
       return ['input', 'micro']
     }
 
-    // 4. 預設完整順序：input → macro → micro → pronunciation → noticing
-    return ['input', 'macro', 'micro', 'pronunciation', 'noticing']
+    // 5. 預設完整順序：input → macro → micro → pronunciation → noticing
+    // 動態過濾缺少資料的階段
+    let stages = ['preview', 'input', 'macro', 'micro', 'pronunciation', 'noticing']
+    return stages.filter(stage => {
+      if (stage === 'preview' && !q.previewData) return false
+      if (stage === 'input' && !q.inputData) return false
+      if (stage === 'macro' && !q.grammarFeature && !q.chunks) return false
+      if (stage === 'micro' && !q.chunks && !q.matrix_config && !q.pragmatic_target && q.type !== 'grammar') return false
+      if (stage === 'pronunciation' && !q.inputData) return false
+      if (stage === 'noticing' && !q.noticingData) return false
+      return true
+    }) as NonNullable<QuestionData['enabledStages']>
   });
 
   const microQuestion = computed<GrammarQuestionData>(() => {

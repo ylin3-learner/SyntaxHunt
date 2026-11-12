@@ -836,6 +836,57 @@ npm run build
 npx vite preview
 ```
 
+## 📚 UI Flow & Grammar Canvas Modes
+
+本節說明 UI 渲染流程以及不同類型的題目對應的 Canvas 元件。
+
+### 題目到 Canvas 的路由
+
+`GrammarCanvas.vue` 組件根據 `ui_mode` 和 `canvas_mode` 將題目路由到對應的 Canvas：
+
+| 模式 | Canvas 組件 | key DOM セレクタ |
+|------|-------------|-------------------|
+| **BUILD** (`ui_mode: 'BUILD'`)` | `MagneticBuildCanvas` | `.word-bank .tile` — 可拖曳字庫磚 |
+| **REDUCE** (`ui_mode: 'REDUCE'`)` | `ShredderReduceCanvas` | `.removable-word` — 答區可移除的單詞 |
+| **MORPH** (`ui_mode: 'MORPH'`)` | `TileSentenceCanvas` | `.morph-capsule` — 可變形的單字按鈕 |
+| **MATRIX_GATE**` | `FeatureMatrixCanvas` | `.decode-button` — 功能解鎖按鈕 |
+| **PRAGMATIC_HP**` | `PragmaticHpCanvas` | `.pragmatic-word-bank` — 字幕銀行按鈕 |
+| **GRAVITY_SWITCH**` | `MorphChoiceCanvas` | `.gravity-irreal` — 重力切換 |
+
+### Stage 整合
+
+- `StageMicro.vue` 將 `GrammarCanvas` 作為其核心渲染器
+- 題目數據透過 `useQuizFlow.microQuestion` computed property 進入
+- `getEnabledStages` 根據可用的題目數據過濾階段（例如：`inputData` 給 StageInput，`chunks` 給 Micro）
+- **防止空白 UI**：缺少必要數據的階段會從啟用列表中動態移除
+
+### Canvas 組件約束（架構鐵律）
+
+- `MagneticBuildCanvas`、`ShredderReduceCanvas` 和 `TileSentenceCanvas` 必須保持獨立、解耦的組件
+- 不得將這些組件合併為單一的monolithic renderer
+- 每個 Canvas 通過明確的 props (`question`, `initialChunks`) 接收題目數據
+- `GrammarCanvas.vue` 中的依賴注入和路由分發邏輯必須保持完整
+
+### E2E 測試
+
+- `tests/e2e/grammar-canvas.spec.ts` 中的 Playwright E2E 測試驗證 BUILD 和 REDUCE Canvas 渲染
+- 測試透過 `localStorage` 注入題目數據並斷言對應的 DOM 元素存在
+- 失敗時的偵錯快照會捕獲 URL、body HTML 和 body text，用於 CI/CD 崩潰分析
+
+### Flow Description (預設：Build Mode, 非 Grammar 問題)
+
+```
+preview → input → macro → micro → pronunciation → noticing → success
+```
+
+**模式變體:**
+- **build mode** (預設): complete sequence input → macro → micro → pronunciation → noticing
+- **reduce mode**: 無 chunks → ShredderReduceCanvas (僅 input → micro)，有 chunks → TileSentenceCanvas (顯示完整句子結構)
+- **grammar type**: 僅顯示 micro 階段
+
+---
+*文檔更新以反映 Playwright E2E 整合和組件路由 (v2026.11.13)*
+
 ## 🚀 快速開始
 
 ### 環境設定

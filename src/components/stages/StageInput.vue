@@ -18,8 +18,12 @@ const speechRate = computed(() => props.question.speechRate || 0.8);
 </script>
 
 <template>
+  <!-- Fallback when inputData is not available -->
+  <div v-if="!inputData" class="fallback-empty">⚠️ 此題目未設定聽力測驗資料，請聯絡老師。</div>
+  
+  <!-- Normal structured input when inputData is available -->
   <StructuredInput
-    v-if="inputData"
+    v-else
     :audio-text="inputData.audioText"
     :options="inputData.options"
     :speech-rate="speechRate"
