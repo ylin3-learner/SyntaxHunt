@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { L2CustomRules } from './L2_CustomRules';
-import type { DiagnosticContext, GrammarConcept } from '../../types';
+import { L2CustomRules } from '@/rules/diagnostics/layers/L2_CustomRules';
+import type { DiagnosticContext, GrammarConcept } from '@/rules/types';
 
 describe('L2 Custom Rules Layer (Teacher-Defined Feedback)', () => {
     const createCtx = (

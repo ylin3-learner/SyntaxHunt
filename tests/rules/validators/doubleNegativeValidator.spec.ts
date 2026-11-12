@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateDoubleNegative } from './doubleNegativeValidator';
+import { validateDoubleNegative } from '@/rules/validators/doubleNegativeValidator';
 
 describe('doubleNegativeValidator', () => {
   it('should flag "don\'t never"', () => {

@@ -586,6 +586,257 @@ src/rules/
 
 ---
 
+## 🧪 Test File Reference Flow & Path Alias (Debug Guide)
+
+### Overview
+
+All test files are consolidated under `tests/` and Vitest only scans `tests/**/*.spec.ts` and `tests/**/*.test.ts`.  
+The `src/` directory is intentionally kept free of test files to avoid accidental inclusion in production builds.
+
+A path alias `@` → `src` is configured so tests can import source modules without fragile relative paths.
+
+### Directory Mapping (tests/ → src/)
+
+```
+tests/                         ← Vitest scan scope
+├── rules/
+│   ├── adapter.spec.ts
+│   ├── autoChunk.spec.ts
+│   ├── grammarRules.spec.ts
+│   ├── diagnostics/
+│   │   ├── pipeline.spec.ts
+│   │   └── layers/
+│   │       ├── L1_LocalRules.spec.ts
+│   │       ├── L2_CustomRules.spec.ts
+│   │       └── L3_StructuralDiff.spec.ts
+│   └── validators/
+│       ├── conjunctionValidator.spec.ts
+│       ├── doubleNegativeValidator.spec.ts
+│       ├── gerundInfinitiveValidator.spec.ts
+│       ├── inversionValidator.spec.ts
+│       ├── modalValidator.spec.ts
+│       ├── subjunctiveValidator.spec.ts
+│       ├── svaValidator.spec.ts
+│       └── tenseValidator.spec.ts
+├── utils/
+│   └── textUtils.spec.ts
+├── ChunkPreview.spec.ts
+├── CloudDatabase.spec.ts
+├── ContrastPuzzle.spec.ts
+├── EditorFormFields.spec.ts
+├── GrammarCanvas.spec.ts
+├── GrammarCanvasUI.spec.ts
+├── NoticingBoard.spec.ts
+├── QuestionBuilder.spec.ts
+├── QuestionFlow.spec.ts
+├── TeacherAnalytics.spec.ts
+├── testUI.spec.ts
+├── useQuestionForm.spec.ts
+├── verbTable.test.ts
+└── grammarTopics.test.ts
+
+src/                           ← Source under test (aliased as @)
+├── rules/
+│   ├── types.ts
+│   ├── adapter.ts
+│   ├── autoChunk.ts
+│   ├── grammarRules.ts
+│   ├── diagnostics/
+│   │   ├── pipeline.ts
+│   │   └── layers/
+│   │       ├── L1_LocalRules.ts
+│   │       ├── L2_CustomRules.ts
+│   │       ├── L3_StructuralDiff.ts
+│   │       ├── L4_LanguageTool.ts
+│   │       └── L5_HighlightFallback.ts
+│   └── validators/
+│       ├── specialStructures.ts
+│       ├── svaValidator.ts
+│       ├── tenseValidator.ts
+│       ├── gerundInfinitiveValidator.ts
+│       ├── doubleNegativeValidator.ts
+│       ├── inversionValidator.ts
+│       ├── modalValidator.ts
+│       └── subjunctiveValidator.ts
+├── utils/
+│   └── textUtils.ts
+├── services/
+│   ├── CloudDatabase.ts
+│   └── supabaseClient.ts
+├── composables/
+│   └── useQuestionForm.ts
+├── domain/
+│   └── QuestionBuilder.ts
+└── components/
+    ├── ChunkPreview.vue
+    ├── ContrastPuzzle.vue
+    ├── EditorFormFields.vue
+    ├── GrammarCanvas.vue
+    ├── NoticingBoard.vue
+    ├── QuestionFlow.vue
+    ├── TeacherAnalytics.vue
+    └── grammar/
+        ├── TileSentenceCanvas.vue
+        ├── FeatureMatrixCanvas.vue
+        ├── PragmaticHpCanvas.vue
+        └── MorphChoiceCanvas.vue
+```
+
+### Mermaid Reference Flow
+
+```mermaid
+flowchart TD
+    subgraph Runner["Vitest Runner (npm test)"]
+        A["vite.config.ts<br/>test.include"] --> B["tests/**/*.spec.ts<br/>tests/**/*.test.ts"]
+    end
+
+    subgraph Tests["tests/ (30 test files)"]
+        direction TB
+        T1[grammarTopics.test.ts]
+        T2[verbTable.test.ts]
+        T3[QuestionBuilder.spec.ts]
+        T4[useQuestionForm.spec.ts]
+        T5[CloudDatabase.spec.ts]
+        T6[TeacherAnalytics.spec.ts]
+        T7[ChunkPreview.spec.ts]
+        T8[ContrastPuzzle.spec.ts]
+        T9[EditorFormFields.spec.ts]
+        T10[GrammarCanvas.spec.ts]
+        T11[GrammarCanvasUI.spec.ts]
+        T12[NoticingBoard.spec.ts]
+        T13[QuestionFlow.spec.ts]
+        T14[testUI.spec.ts]
+        T15[rules/adapter.spec.ts]
+        T16[rules/autoChunk.spec.ts]
+        T17[rules/grammarRules.spec.ts]
+        T18[rules/diagnostics/pipeline.spec.ts]
+        T19[rules/diagnostics/layers/L1_LocalRules.spec.ts]
+        T20[rules/diagnostics/layers/L2_CustomRules.spec.ts]
+        T21[rules/diagnostics/layers/L3_StructuralDiff.spec.ts]
+        T22[rules/validators/conjunctionValidator.spec.ts]
+        T23[rules/validators/doubleNegativeValidator.spec.ts]
+        T24[rules/validators/gerundInfinitiveValidator.spec.ts]
+        T25[rules/validators/inversionValidator.spec.ts]
+        T26[rules/validators/modalValidator.spec.ts]
+        T27[rules/validators/subjunctiveValidator.spec.ts]
+        T28[rules/validators/svaValidator.spec.ts]
+        T29[rules/validators/tenseValidator.spec.ts]
+        T30[utils/textUtils.spec.ts]
+    end
+
+    subgraph Alias["Path Alias: @ → src/"]
+        style Alias fill:#e1f5fe
+    end
+
+    subgraph Src["src/ (Source Under Test)"]
+        direction TB
+        S1[rules/types.ts]
+        S2[rules/adapter.ts]
+        S3[rules/autoChunk.ts]
+        S4[rules/grammarRules.ts]
+        S5[rules/diagnostics/pipeline.ts]
+        S6[rules/diagnostics/layers/L*.ts]
+        S7[rules/validators/*.ts]
+        S8[utils/textUtils.ts]
+        S9[services/CloudDatabase.ts]
+        S10[services/supabaseClient.ts]
+        S11[composables/useQuestionForm.ts]
+        S12[domain/QuestionBuilder.ts]
+        S13[components/*.vue]
+    end
+
+    subgraph Mocks["vi.mock (Vitest Mocks)"]
+        M1[supabaseClient]
+        M2[useSpeech]
+        M3[useSound]
+        M4[CloudDatabase]
+    end
+
+    B --> Tests
+    Tests -->|import from '@/...'| Alias
+    Alias --> Src
+    Tests -.->|vi.mock| Mocks
+    Mocks --> Src
+
+    style Runner fill:#e8f5e9
+    style Tests fill:#fff3e0
+    style Src fill:#fce4ec
+    style Mocks fill:#f3e5f5
+```
+
+### Configuration Files
+
+**vite.config.ts** — Path alias + Vitest scan scope:
+
+```ts
+import { fileURLToPath, URL } from 'node:url';
+// ...
+resolve: {
+  alias: {
+    '@': fileURLToPath(new URL('./src', import.meta.url)),
+  },
+},
+test: {
+  environment: 'jsdom',
+  globals: true,
+  include: ['tests/**/*.spec.ts', 'tests/**/*.test.ts'],
+},
+```
+
+**tsconfig.json** — TypeScript path recognition (VS Code / `vue-tsc`):
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  }
+}
+```
+
+### Import Path Convention (for debugging)
+
+All moved test files use `@/` absolute alias instead of relative paths:
+
+| Test file | Before (relative) | After (`@/` alias) |
+|-----------|-------------------|--------------------|
+| `tests/rules/validators/*.spec.ts` | `./specialStructures`, `../types` | `@/rules/validators/specialStructures`, `@/rules/types` |
+| `tests/rules/diagnostics/layers/L*.spec.ts` | `./L1_LocalRules`, `../../types` | `@/rules/diagnostics/layers/L1_LocalRules`, `@/rules/types` |
+| `tests/rules/diagnostics/pipeline.spec.ts` | `./pipeline`, `../types`, `./layers/L5_HighlightFallback` | `@/rules/diagnostics/pipeline`, `@/rules/types`, `@/rules/diagnostics/layers/L5_HighlightFallback` |
+| `tests/rules/adapter.spec.ts` | `./adapter`, `./types` | `@/rules/adapter`, `@/rules/types` |
+| `tests/rules/autoChunk.spec.ts` | `./autoChunk` | `@/rules/autoChunk` |
+| `tests/rules/grammarRules.spec.ts` | `./grammarRules`, `./types` | `@/rules/grammarRules`, `@/rules/types` |
+| `tests/utils/textUtils.spec.ts` | `./textUtils` | `@/utils/textUtils` |
+
+### Debug Checklist
+
+If a test fails to resolve an import:
+
+1. **Check `vite.config.ts`** — Confirm `@` alias points to `./src`.
+2. **Check `tsconfig.json`** — Confirm `"@/*": ["src/*"]` exists under `compilerOptions.paths`.
+3. **Check file location** — Source file must exist under `src/` (not `tests/`).
+4. **Check Vitest scan scope** — Test file must be under `tests/` with `.spec.ts` or `.test.ts` extension.
+5. **Run `npm test`** — Vitest prints `Cannot find module` with the exact unresolved path.
+6. **Run `npm run build`** — `vue-tsc --noEmit` validates TypeScript path resolution.
+
+### Commands
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Type-check + production build
+npm run build
+
+# Preview production build
+npx vite preview
+```
+
 ## 🚀 Getting Started
 
 ### Environment Setup

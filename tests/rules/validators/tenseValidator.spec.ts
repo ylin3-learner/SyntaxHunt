@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateTense } from './tenseValidator';
+import { validateTense } from '@/rules/validators/tenseValidator';
 
 describe('tenseValidator', () => {
   it('should flag present tense with past adverb', () => {

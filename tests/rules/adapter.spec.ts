@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { convertLegacyQuestion, formatAnswerForDisplay, mapOffsetToChunkIndex } from './adapter';
-import type { QuestionData } from './types';
+import { convertLegacyQuestion, formatAnswerForDisplay, mapOffsetToChunkIndex } from '@/rules/adapter';
+import type { QuestionData } from '@/rules/types';
 
 const parseCsvLine = (line: string): string[] => {
   const fields: string[] = [];

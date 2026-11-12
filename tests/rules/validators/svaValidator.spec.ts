@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateSVA } from './svaValidator';
+import { validateSVA } from '@/rules/validators/svaValidator';
 
 describe('svaValidator', () => {
   it('should flag "He go" vs "He goes"', () => {

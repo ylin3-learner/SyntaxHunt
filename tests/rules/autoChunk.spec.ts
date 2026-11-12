@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoChunk, defaultUiModeForConcept, getVerbForms } from './autoChunk';
+import { autoChunk, defaultUiModeForConcept, getVerbForms } from '@/rules/autoChunk';
 
 describe('autoChunk', () => {
   it('keeps bracketed phrases as a single chunk before applying other tokenization', () => {

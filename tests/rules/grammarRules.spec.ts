@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { diagnoseGrammar } from './grammarRules';
-import type { QuestionData, Chunk } from './types';
+import { diagnoseGrammar } from '@/rules/grammarRules';
+import type { QuestionData, Chunk } from '@/rules/types';
 
 // 建立一個通用的 Mock 題目資料
 const mockQuestion: QuestionData = {

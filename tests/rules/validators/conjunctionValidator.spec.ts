@@ -1,7 +1,7 @@
 /// <reference types="vitest" />
 import { describe, it, expect } from 'vitest';
-import { diagnoseConjunctions } from './specialStructures';
-import type { QuestionData } from '../types'; // 引入型別
+import { diagnoseConjunctions } from '@/rules/validators/specialStructures';
+import type { QuestionData } from '@/rules/types'; // 引入型別
 
 // 建立完整的 Mock QuestionData
 const mockQuestion: QuestionData = {

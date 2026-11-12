@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runDiagnosisPipeline } from './pipeline';
-import type { DiagnosticLayer, DiagnosticContext } from '../types';
-import { L5HighlightFallback } from './layers/L5_HighlightFallback';
+import { runDiagnosisPipeline } from '@/rules/diagnostics/pipeline';
+import type { DiagnosticLayer, DiagnosticContext } from '@/rules/types';
+import { L5HighlightFallback } from '@/rules/diagnostics/layers/L5_HighlightFallback';
 
 describe('Diagnostic Pipeline (Chain of Responsibility)', () => {
     const mockCtx: DiagnosticContext = {

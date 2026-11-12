@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanToken, mapOffsetToChunkIndex, normalizeAnswer } from './textUtils';
+import { cleanToken, mapOffsetToChunkIndex, normalizeAnswer } from '@/utils/textUtils';
 
 describe('shared text utilities', () => {
   it('cleans bracketed tokens and normalizes answer tokens consistently', () => {

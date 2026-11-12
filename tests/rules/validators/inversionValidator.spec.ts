@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateInversion } from './inversionValidator'; // 修正 Import
+import { validateInversion } from '@/rules/validators/inversionValidator'; // 修正 Import
 
 describe('inversionValidator', () => {
   it('should flag "Never I have" vs "Never have I"', () => {

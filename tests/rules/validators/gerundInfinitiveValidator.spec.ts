@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateGerundInfinitive } from './gerundInfinitiveValidator';
+import { validateGerundInfinitive } from '@/rules/validators/gerundInfinitiveValidator';
 
 describe('gerundInfinitiveValidator', () => {
   it('should flag "enjoy to V"', () => {

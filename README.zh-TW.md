@@ -585,6 +585,257 @@ src/rules/
 
 ---
 
+## 🧪 測試檔案引用流程與路徑別名（除錯指南）
+
+### 總覽
+
+所有測試檔案都集中在 `tests/`，Vitest 僅掃描 `tests/**/*.spec.ts` 與 `tests/**/*.test.ts`。  
+`src/` 目錄刻意不放置任何測試檔案，避免測試檔意外被編譯進 production build。
+
+專案設定了路徑別名 `@` → `src`，讓測試檔可以無痛引用原始碼模組，無需依賴脆弱的相對路徑。
+
+### 目錄對應 (tests/ → src/)
+
+```
+tests/                         ← Vitest 掃描範圍
+├── rules/
+│   ├── adapter.spec.ts
+│   ├── autoChunk.spec.ts
+│   ├── grammarRules.spec.ts
+│   ├── diagnostics/
+│   │   ├── pipeline.spec.ts
+│   │   └── layers/
+│   │       ├── L1_LocalRules.spec.ts
+│   │       ├── L2_CustomRules.spec.ts
+│   │       └── L3_StructuralDiff.spec.ts
+│   └── validators/
+│       ├── conjunctionValidator.spec.ts
+│       ├── doubleNegativeValidator.spec.ts
+│       ├── gerundInfinitiveValidator.spec.ts
+│       ├── inversionValidator.spec.ts
+│       ├── modalValidator.spec.ts
+│       ├── subjunctiveValidator.spec.ts
+│       ├── svaValidator.spec.ts
+│       └── tenseValidator.spec.ts
+├── utils/
+│   └── textUtils.spec.ts
+├── ChunkPreview.spec.ts
+├── CloudDatabase.spec.ts
+├── ContrastPuzzle.spec.ts
+├── EditorFormFields.spec.ts
+├── GrammarCanvas.spec.ts
+├── GrammarCanvasUI.spec.ts
+├── NoticingBoard.spec.ts
+├── QuestionBuilder.spec.ts
+├── QuestionFlow.spec.ts
+├── TeacherAnalytics.spec.ts
+├── testUI.spec.ts
+├── useQuestionForm.spec.ts
+├── verbTable.test.ts
+└── grammarTopics.test.ts
+
+src/                           ← 被測試的原始碼（別名為 @）
+├── rules/
+│   ├── types.ts
+│   ├── adapter.ts
+│   ├── autoChunk.ts
+│   ├── grammarRules.ts
+│   ├── diagnostics/
+│   │   ├── pipeline.ts
+│   │   └── layers/
+│   │       ├── L1_LocalRules.ts
+│   │       ├── L2_CustomRules.ts
+│   │       ├── L3_StructuralDiff.ts
+│   │       ├── L4_LanguageTool.ts
+│   │       └── L5_HighlightFallback.ts
+│   └── validators/
+│       ├── specialStructures.ts
+│       ├── svaValidator.ts
+│       ├── tenseValidator.ts
+│       ├── gerundInfinitiveValidator.ts
+│       ├── doubleNegativeValidator.ts
+│       ├── inversionValidator.ts
+│       ├── modalValidator.ts
+│       └── subjunctiveValidator.ts
+├── utils/
+│   └── textUtils.ts
+├── services/
+│   ├── CloudDatabase.ts
+│   └── supabaseClient.ts
+├── composables/
+│   └── useQuestionForm.ts
+├── domain/
+│   └── QuestionBuilder.ts
+└── components/
+    ├── ChunkPreview.vue
+    ├── ContrastPuzzle.vue
+    ├── EditorFormFields.vue
+    ├── GrammarCanvas.vue
+    ├── NoticingBoard.vue
+    ├── QuestionFlow.vue
+    ├── TeacherAnalytics.vue
+    └── grammar/
+        ├── TileSentenceCanvas.vue
+        ├── FeatureMatrixCanvas.vue
+        ├── PragmaticHpCanvas.vue
+        └── MorphChoiceCanvas.vue
+```
+
+### Mermaid 參考流程圖
+
+```mermaid
+flowchart TD
+    subgraph Runner["Vitest 執行器 (npm test)"]
+        A["vite.config.ts<br/>test.include"] --> B["tests/**/*.spec.ts<br/>tests/**/*.test.ts"]
+    end
+
+    subgraph Tests["tests/ (30 個測試檔案)"]
+        direction TB
+        T1[grammarTopics.test.ts]
+        T2[verbTable.test.ts]
+        T3[QuestionBuilder.spec.ts]
+        T4[useQuestionForm.spec.ts]
+        T5[CloudDatabase.spec.ts]
+        T6[TeacherAnalytics.spec.ts]
+        T7[ChunkPreview.spec.ts]
+        T8[ContrastPuzzle.spec.ts]
+        T9[EditorFormFields.spec.ts]
+        T10[GrammarCanvas.spec.ts]
+        T11[GrammarCanvasUI.spec.ts]
+        T12[NoticingBoard.spec.ts]
+        T13[QuestionFlow.spec.ts]
+        T14[testUI.spec.ts]
+        T15[rules/adapter.spec.ts]
+        T16[rules/autoChunk.spec.ts]
+        T17[rules/grammarRules.spec.ts]
+        T18[rules/diagnostics/pipeline.spec.ts]
+        T19[rules/diagnostics/layers/L1_LocalRules.spec.ts]
+        T20[rules/diagnostics/layers/L2_CustomRules.spec.ts]
+        T21[rules/diagnostics/layers/L3_StructuralDiff.spec.ts]
+        T22[rules/validators/conjunctionValidator.spec.ts]
+        T23[rules/validators/doubleNegativeValidator.spec.ts]
+        T24[rules/validators/gerundInfinitiveValidator.spec.ts]
+        T25[rules/validators/inversionValidator.spec.ts]
+        T26[rules/validators/modalValidator.spec.ts]
+        T27[rules/validators/subjunctiveValidator.spec.ts]
+        T28[rules/validators/svaValidator.spec.ts]
+        T29[rules/validators/tenseValidator.spec.ts]
+        T30[utils/textUtils.spec.ts]
+    end
+
+    subgraph Alias["路徑別名: @ → src/"]
+        style Alias fill:#e1f5fe
+    end
+
+    subgraph Src["src/ (被測試的原始碼)"]
+        direction TB
+        S1[rules/types.ts]
+        S2[rules/adapter.ts]
+        S3[rules/autoChunk.ts]
+        S4[rules/grammarRules.ts]
+        S5[rules/diagnostics/pipeline.ts]
+        S6[rules/diagnostics/layers/L*.ts]
+        S7[rules/validators/*.ts]
+        S8[utils/textUtils.ts]
+        S9[services/CloudDatabase.ts]
+        S10[services/supabaseClient.ts]
+        S11[composables/useQuestionForm.ts]
+        S12[domain/QuestionBuilder.ts]
+        S13[components/*.vue]
+    end
+
+    subgraph Mocks["vi.mock (Vitest 模擬)"]
+        M1[supabaseClient]
+        M2[useSpeech]
+        M3[useSound]
+        M4[CloudDatabase]
+    end
+
+    B --> Tests
+    Tests -->|import from '@/...'| Alias
+    Alias --> Src
+    Tests -.->|vi.mock| Mocks
+    Mocks --> Src
+
+    style Runner fill:#e8f5e9
+    style Tests fill:#fff3e0
+    style Src fill:#fce4ec
+    style Mocks fill:#f3e5f5
+```
+
+### 配置檔案
+
+**vite.config.ts** — 路徑別名 + Vitest 掃描範圍：
+
+```ts
+import { fileURLToPath, URL } from 'node:url';
+// ...
+resolve: {
+  alias: {
+    '@': fileURLToPath(new URL('./src', import.meta.url)),
+  },
+},
+test: {
+  environment: 'jsdom',
+  globals: true,
+  include: ['tests/**/*.spec.ts', 'tests/**/*.test.ts'],
+},
+```
+
+**tsconfig.json** — TypeScript 路徑識別（VS Code / `vue-tsc`）：
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  }
+}
+```
+
+### Import 路徑對照（除錯參考）
+
+所有遷移後的測試檔案都使用 `@/` 絕對路徑別名，而非相對路徑：
+
+| 測試檔案 | 原來（相對路徑）| 現在（`@/` 別名） |
+|----------|-------------------|--------------------|
+| `tests/rules/validators/*.spec.ts` | `./specialStructures`, `../types` | `@/rules/validators/specialStructures`, `@/rules/types` |
+| `tests/rules/diagnostics/layers/L*.spec.ts` | `./L1_LocalRules`, `../../types` | `@/rules/diagnostics/layers/L1_LocalRules`, `@/rules/types` |
+| `tests/rules/diagnostics/pipeline.spec.ts` | `./pipeline`, `../types`, `./layers/L5_HighlightFallback` | `@/rules/diagnostics/pipeline`, `@/rules/types`, `@/rules/diagnostics/layers/L5_HighlightFallback` |
+| `tests/rules/adapter.spec.ts` | `./adapter`, `./types` | `@/rules/adapter`, `@/rules/types` |
+| `tests/rules/autoChunk.spec.ts` | `./autoChunk` | `@/rules/autoChunk` |
+| `tests/rules/grammarRules.spec.ts` | `./grammarRules`, `./types` | `@/rules/grammarRules`, `@/rules/types` |
+| `tests/utils/textUtils.spec.ts` | `./textUtils` | `@/utils/textUtils` |
+
+### 除錯檢查清單
+
+若測試無法解析 Import 路徑：
+
+1. **檢查 `vite.config.ts`** — 確認 `@` 別名指向 `./src`。
+2. **檢查 `tsconfig.json`** — 確認 `compilerOptions.paths` 下有 `"@/*": ["src/*"]`。
+3. **檢查檔案位置** — 原始碼檔案必須位於 `src/`（而非 `tests/`）。
+4. **檢查 Vitest 掃描範圍** — 測試檔案必須位於 `tests/`，副檔名為 `.spec.ts` 或 `.test.ts`。
+5. **執行 `npm test`** — Vitest 會印出 `Cannot find module` 及未解析的完整路徑。
+6. **執行 `npm run build`** — `vue-tsc --noEmit` 會驗證 TypeScript 路徑解析。
+
+### 指令
+
+```bash
+# 執行所有測試
+npm test
+
+# 監聽模式執行測試
+npm run test:watch
+
+# 型別檢查 + 生產建置
+npm run build
+
+# 預覽生產建置
+npx vite preview
+```
+
 ## 🚀 快速開始
 
 ### 環境設定

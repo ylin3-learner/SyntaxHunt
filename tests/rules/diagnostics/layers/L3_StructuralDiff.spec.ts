@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { L3StructuralDiff } from './L3_StructuralDiff';
-import type { DiagnosticContext } from '../../types';
+import { L3StructuralDiff } from '@/rules/diagnostics/layers/L3_StructuralDiff';
+import type { DiagnosticContext } from '@/rules/types';
 
 describe('L3 Structural Diff Layer (LCS)', () => {
     const baseCtx = {

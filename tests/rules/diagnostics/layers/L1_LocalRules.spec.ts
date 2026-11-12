@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { L1LocalRules } from './L1_LocalRules';
-import type { DiagnosticContext } from '../../types';
+import { L1LocalRules } from '@/rules/diagnostics/layers/L1_LocalRules';
+import type { DiagnosticContext } from '@/rules/types';
 
 describe('L1 Local Rules Layer', () => {
     it('should return definite signals and filter out UNKNOWN_ERROR', async () => {

@@ -6,6 +6,10 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
     "types": ["vitest/globals", "node", "vitest/config"]
   },
   "include": ["src", "tests", "vite.config.ts", "src/**/*.d.ts"]
