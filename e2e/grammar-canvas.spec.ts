@@ -33,27 +33,54 @@ const reduceQuestion = {
 };
 
 test.describe('Grammar Canvas E2E - 隔離環境測試', () => {
-
   test.beforeEach(async ({ page }) => {
+    // 終極大絕招：攔截 Console 錯誤與 Page 崩潰錯誤
+    page.on('pageerror', (error) => {
+      console.error('[Browser PageError]:', error.message);
+    });
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') {
+        console.error('[Browser Console Error]:', msg.text());
+      }
+    });
+
     // 1. 攔截 Supabase 請求，防止卡死
     await page.route('**/rest/v1/questions*', async (route) => {
       await route.fulfill({ status: 200, json: [] });
     });
 
-    // 2. 偽造老師 ID，讓 App 不要跳出「輸入班級代碼」的畫面
+    // 2. 偽造環境與攔截瀏覽器 API
     await page.addInitScript(() => {
       window.sessionStorage.setItem('teacher_id', 'test-teacher-id');
+      window.sessionStorage.setItem('student_uuid', 'test-student-id');
 
-      // 🚨 3. 攔截 TTS 相關 API (加入 SpeechSynthesisUtterance)
+      // 攔截 TTS
       (window as any).speechSynthesis = {
-        speak: () => { },
-        cancel: () => { },
-        getVoices: () => [],
-        onvoiceschanged: null,
+        speak: () => { }, cancel: () => { }, getVoices: () => [], onvoiceschanged: null,
+      };
+      (window as any).SpeechSynthesisUtterance = class { };
+
+      // 攔截 AudioContext
+      (window as any).AudioContext = class {
+        createOscillator() { return { connect: () => { }, start: () => { }, stop: () => { }, frequency: { setValueAtTime: () => { } } }; }
+        createGain() { return { connect: () => { }, gain: { setValueAtTime: () => { }, exponentialRampToValueAtTime: () => { } } }; }
+        destination = {};
+        currentTime = 0;
       };
 
-      (window as any).SpeechSynthesisUtterance = class {
-        constructor() { }
+      // 新增：攔截 WebSocket，避免 Supabase Realtime 嘗試連線假網址報錯
+      (window as any).WebSocket = class MockWebSocket {
+        onopen: any = null;
+        onmessage: any = null;
+        onclose: any = null;
+        onerror: any = null;
+        readyState: number = 1;
+
+        constructor() {
+          // 什麼都不做，避免觸發連線
+        }
+        close() { }
+        send() { }
       };
     });
   });
@@ -64,12 +91,12 @@ test.describe('Grammar Canvas E2E - 隔離環境測試', () => {
     }, buildQuestion);
 
     await page.goto('/');
+    // 等待一下，讓 Vue 掛載
+    await page.waitForTimeout(1000);
 
-    // 改用 expect().toBeVisible()，Playwright 會在超時時間內自動重試
     const tiles = page.locator('.word-bank .tile');
     await expect(tiles.first()).toBeVisible();
     await expect(tiles).toHaveCount(3);
-
     await expect(page.locator('.check-answer-button')).toBeVisible();
   });
 
@@ -79,12 +106,11 @@ test.describe('Grammar Canvas E2E - 隔離環境測試', () => {
     }, reduceQuestion);
 
     await page.goto('/');
+    await page.waitForTimeout(1000);
 
-    // 改用 expect().toBeVisible()
     const removable = page.locator('.removable-word');
     await expect(removable.first()).toBeVisible();
-    await expect(removable).toHaveCount(4); // The writer, who, is, here 都是 draggable
-
+    await expect(removable).toHaveCount(4);
     await expect(page.locator('.trash-zone-wrapper')).toBeVisible();
   });
 });

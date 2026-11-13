@@ -10,13 +10,10 @@ export default defineConfig({
   retries: ci ? 2 : 0,
   workers: ci ? 1 : undefined,
   reporter: 'html',
-
   timeout: 60 * 1000,
-
   expect: {
     timeout: 15000,
   },
-
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'on',
@@ -24,18 +21,23 @@ export default defineConfig({
     video: 'on-first-retry',
     actionTimeout: 15000,
   },
-
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-
   webServer: {
-    command: ci ? 'npm run build -- --base=/ && npx vite preview --port 5173' : 'npm run dev',
+    // 🚨 關鍵：在指令前面塞入假的環境變數，避免 createClient 崩潰
+    command: ci
+      ? 'cross-env VITE_SUPABASE_URL=http://localhost:54321 VITE_SUPABASE_ANON_KEY=fake-key npm run build -- --base=/ && npx vite preview --port 5173'
+      : 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !ci,
     timeout: 120 * 1000,
+    env: {
+      VITE_SUPABASE_URL: 'http://localhost:54321',
+      VITE_SUPABASE_ANON_KEY: 'fake-key'
+    }
   },
 });
