@@ -146,6 +146,19 @@ onMounted(async () => {
   const targetTeacherId = activeTeacherId && activeTeacherId !== 'public_room' ? activeTeacherId : undefined;
   const cloudQuestions = await CloudDatabase.fetchQuestions(targetTeacherId);
 
+  if (!targetTeacherId) {
+  console.warn('🚨 [App] 未偵測到 Teacher ID，跳過雲端拉取，直接使用本機或預設題庫。');
+  // ... 載入本機或預設
+} else {
+  const cloudQuestions = await CloudDatabase.fetchQuestions(targetTeacherId);
+  if (cloudQuestions && cloudQuestions.length > 0) {
+    updateQuestionBank(cloudQuestions);
+  } else {
+    // 這裡要非常小心，如果雲端是空的，不要隨便寫入預設題！
+    console.warn('🚨 [App] 雲端題庫為空，請進後台確認。');
+  }
+}
+
   if (cloudQuestions && cloudQuestions.length > 0) {
     updateQuestionBank(cloudQuestions);
   } else {

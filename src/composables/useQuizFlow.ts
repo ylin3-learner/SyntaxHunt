@@ -269,6 +269,21 @@ export function useQuizFlow() {
   };
 
   const persistQuestionBank = async (questions: QuestionData[]) => {
+    // 防呆 1：如果題庫是空的，絕對不允許寫入雲端！
+    if (!questions || questions.length === 0) {
+      console.warn('🚨 [Guard] 題庫為空，已攔截雲端覆蓋動作！');
+      return false;
+    }
+
+    // 防呆 2：如果題庫只有 1 題，而且 ID 是 'q1'（系統預設假題），絕對不允許寫入！
+    if (questions.length === 1 && questions[0].id === 'q1') {
+      console.warn('🚨 [Guard] 偵測到只有預設題庫，已攔截雲端覆蓋動作！');
+      return false;
+    }
+
+    // 防呆 3：如果正在寫入，但題目數量比雲端少很多，強制阻擋（可選）
+    // (這部分可以先不加，避免誤擋正常的刪題操作)
+
     localStorage.setItem('custom_questions', JSON.stringify(questions));
     return CloudDatabase.saveQuestions(questions);
   };

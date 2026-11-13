@@ -48,7 +48,10 @@ export const CloudDatabase = {
         .eq('teacher_id', teacherId) // 使用找到的 teacherId
         .order('created_at', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('🚨 [CloudDatabase] 讀取題庫失敗:', error);
+        return null; // 或 []
+      }
       if (!data || data.length === 0) return null;
 
       const questions = data.map((row, index) => {

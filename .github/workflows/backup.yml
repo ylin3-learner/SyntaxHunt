@@ -1,0 +1,37 @@
+name: Backup Supabase Database
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 每天 UTC 時間 00:00 (台灣時間早上 8 點) 自動執行
+  workflow_dispatch: # 允許你在 GitHub 網頁上手動點擊執行
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 確保能取得所有歷史紀錄
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run backup script
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: node backup-db.js
+
+      - name: Commit and push backup
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add backups/
+          git commit -m "Automated database backup [skip ci]" || echo "No changes to commit"
+          git push
