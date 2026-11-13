@@ -47,35 +47,30 @@ test.describe('Grammar Canvas E2E - 隔離環境測試', () => {
   });
 
   test('BUILD 模式：應渲染字庫與作答區', async ({ page }) => {
-    // ✅ 只注入 BUILD 題目
     await page.addInitScript((q) => {
       window.localStorage.setItem('custom_questions', JSON.stringify([q]));
     }, buildQuestion);
 
     await page.goto('/');
 
-    // 等待 GrammarCanvas 的異步組件載入
-    await page.waitForSelector('.word-bank .tile', { timeout: 10000 });
-
+    // 改用 expect().toBeVisible()，Playwright 會在超時時間內自動重試
     const tiles = page.locator('.word-bank .tile');
+    await expect(tiles.first()).toBeVisible();
     await expect(tiles).toHaveCount(3);
 
     await expect(page.locator('.check-answer-button')).toBeVisible();
   });
 
   test('REDUCE 模式：應渲染可移除字磚與垃圾桶', async ({ page }) => {
-    // ✅ 只注入 REDUCE 題目（這樣它就是第 1 題）
     await page.addInitScript((q) => {
       window.localStorage.setItem('custom_questions', JSON.stringify([q]));
     }, reduceQuestion);
 
     await page.goto('/');
 
-    // 等待 ShredderReduceCanvas 載入
-    await page.waitForSelector('.removable-word', { timeout: 10000 });
-
+    // 改用 expect().toBeVisible()
     const removable = page.locator('.removable-word');
-    // 根據你的題目資料，'who' 是可以被移除的
+    await expect(removable.first()).toBeVisible();
     await expect(removable).toHaveCount(4); // The writer, who, is, here 都是 draggable
 
     await expect(page.locator('.trash-zone-wrapper')).toBeVisible();

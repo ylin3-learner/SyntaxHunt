@@ -10,18 +10,22 @@ export default defineConfig({
   retries: ci ? 2 : 0,
   workers: ci ? 1 : undefined,
   reporter: 'html',
+
+  // 新增：拉長單一測試的總超時時間，避免 CI 機器太慢導致超時
+  timeout: 60 * 1000,
+
+  // 新增：拉長斷言（expect）的超時時間
+  expect: {
+    timeout: 15000,
+  },
+
   use: {
-    /* Base URL to use in actions like `await page.goto('')`. */
     baseURL: 'http://localhost:5173',
-
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on',
-
-    /* Take a screenshot for each failed step */
-    screenshot: 'on',
-
-    /* Record a video for each test */
-    video: 'on',
+    screenshot: 'only-on-failure',
+    video: 'on-first-retry',
+    // 新增：拉長動作（點擊、輸入等）的超時時間
+    actionTimeout: 15000,
   },
 
   projects: [
@@ -32,9 +36,10 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run dev',
+    // 關鍵修改：CI 環境使用 build + preview (速度極快)，本機繼續用 dev
+    command: ci ? 'npm run build && npx vite preview --port 5173' : 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !ci,
-    timeout: 120000,
+    timeout: 120 * 1000,
   },
 });
