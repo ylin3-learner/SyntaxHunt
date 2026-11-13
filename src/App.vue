@@ -194,7 +194,7 @@ const fullSentenceData = computed(() => {
   if (!q) return { target: '', display: '', modifier: '' };
 
   const noun = q.targetNoun;
-  
+
   // ✅ 新增：安全轉型，避免 currentMode 為 build/reduce 時發生 TS 錯誤
   const safeLegacyFeature = (currentMode.value === 'build' || currentMode.value === 'reduce' ? 'relative' : currentMode.value) as 'relative' | 'preposition';
 
@@ -205,12 +205,20 @@ const fullSentenceData = computed(() => {
         ? q.grammarFeature.relative.label
         : q.grammarFeature[safeLegacyFeature].label // 👈 使用安全轉型後的變數
       : formatAnswerForDisplay(microQuestion.value?.correctAnswer ?? []);
-      
+
   return { target: `${noun} ${modifier} is my favorite.`, display: `${noun} | ${modifier} | is my favorite.`, modifier };
 });
 
 const handleMisconception = (code: string) => {
-  if (!sessionLog.value.includes(code)) sessionLog.value.push(code);
+  console.log(`🚨 [Trace-5: App 接收到迷思] Code: ${code}`);
+
+  if (!sessionLog.value.includes(code)) {
+    sessionLog.value.push(code);
+    console.log(`🚨 [Trace-5] 已寫入 sessionLog，目前長度: ${sessionLog.value.length}`);
+  }
+  else {
+    console.log(`🚨 [Trace-5] 該迷思已存在，不重複加入`);
+  }
   const sst: SSTCategory = code.startsWith('M:') ? 'Omission' : code.startsWith('U:') ? 'Addition' : code.startsWith('O:') ? 'Misordering' : code === 'DUPLICATE_PRONOUN' || code === 'NOT_REDUCED' || code === 'INCOMPLETE_REDUCTION' ? 'Addition' : code === 'WRONG_ORDER' || code === 'PUZZLE_ERROR' ? 'Misordering' : 'Misformation';
 
   CloudDatabase.logEvent({
@@ -276,7 +284,7 @@ const handleTimeoutNext = () => quizFlow.nextQuestion();
           </div>
 
           <!-- 新增：單元切換器 -->
-           <!-- 修改：如果 lockedUnit === 'all' 且非上課模式，才顯示選單 -->
+          <!-- 修改：如果 lockedUnit === 'all' 且非上課模式，才顯示選單 -->
           <div v-if="availableUnits.length > 0 && !isClassMode && lockedUnit === 'all'" class="unit-selector">
             <select :value="unitFilter" @change="changeUnit(($event.target as HTMLSelectElement).value)">
               <option value="all">📚 全部單元</option>

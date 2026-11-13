@@ -8,6 +8,8 @@ const props = defineProps<{
   misconceptions: string[];
 }>();
 
+console.log('🚨 [Trace-6: SummaryReport 收到迷思列表]', props.misconceptions);
+
 const emit = defineEmits<{
   (e: 'restart'): void;
 }>();

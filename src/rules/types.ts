@@ -79,6 +79,7 @@ export interface Chunk {
   id: string;
   text: string;
   draggable?: boolean;
+  isTargetKeep?: boolean; // 新增：標記為不可移除的目標保留片語
   can_morph?: boolean;
   morph_options?: string[];
   options?: string[];

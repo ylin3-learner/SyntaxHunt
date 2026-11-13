@@ -14,7 +14,6 @@ export interface FormPayload {
     selectedChapter: number;
     uiMode: UIMode;
 
-    // 新增這裡，為了解決 FormPayload 找不到 customRules 的錯誤
     customRules?: CustomGrammarRule[];
 
     selectedCanvasMode: CanvasMode;
@@ -134,7 +133,7 @@ export const buildQuestion = (form: FormPayload): { question?: QuestionData; err
             isTimed: form.isTimedForm,
             timeLimit: form.isTimedForm ? form.timeLimitForm : undefined,
             explanation: form.explanationTitle || form.explanationDesc ? { title: form.explanationTitle, desc: form.explanationDesc } : undefined,
-            customRules: form.customRules, // 將自訂規則加入題目資料中
+            customRules: form.customRules,
             ...(form.selectedCanvasMode === 'PRAGMATIC_HP' ? { pragmatic_target: { statusGap: form.statusGap, npcLabel: form.npcLabel.trim() || undefined } } : {}),
             ...(form.selectedCanvasMode === 'MATRIX_GATE' ? {
                 matrix_config: {
@@ -197,20 +196,85 @@ export const buildQuestion = (form: FormPayload): { question?: QuestionData; err
         const prefix = form.clozePrefix || form.targetNoun;
         const suffix = form.clozeSuffix || 'is my favorite.';
         const audioText = `${prefix} ${form.relativeSentence.replace(/[\[\]]/g, '')} ${suffix}`.replace(/\s+/g, ' ').trim();
-        newQuestion.inputData = { audioText, options: [{ image: form.imageUrl, text: form.correctLabel || '', isCorrect: true }, { image: form.distractorImageUrl || '', text: form.distractorLabel || '', isCorrect: false }] };
-        newQuestion.noticingData = { examples: [audioText], question: `請觀察以上句子，關係代名詞 who 代替的是什麼？`, options: [{ text: '事物（Things）', isCorrect: false }, { text: '人（People）', isCorrect: true }], explanation: `沒錯！當先行詞是「人」的時候，我們使用 who 來引導關係子句。` };
+        newQuestion.inputData = {
+            audioText,
+            options: [
+                { image: form.imageUrl, text: form.correctLabel || '', isCorrect: true },
+                { image: form.distractorImageUrl || '', text: form.distractorLabel || '', isCorrect: false }
+            ]
+        };
+        newQuestion.noticingData = {
+            examples: [audioText],
+            question: `請觀察以上句子，關係代名詞 who 代替的是什麼？`,
+            options: [{ text: '事物（Things）', isCorrect: false }, { text: '人（People）', isCorrect: true }],
+            explanation: `沒錯！當先行詞是「人」的時候，我們使用 who 來引導關係子句。`
+        };
         if (form.clozePrefix || form.clozeSuffix) newQuestion.contextCloze = { prefix: form.clozePrefix, suffix: form.clozeSuffix };
 
-        // 組裝標準題的字磚資料，讓「字磚重組」(micro) 能於 TileSentenceCanvas BUILD/REDUCE 模式渲染
-        const buildSource = (form.grammarSentence || form.relativeSentence || '').trim();
-        const buildAnswer = (form.grammarAnswer || buildSource).trim();
-        if (buildSource) {
-            newQuestion.chunks = generateTiles(buildSource).map((text, i) => ({
-                id: `${newQuestion.id}-chunk-${i}`,
+        // 建立混合字磚陣列
+        const finalChunks: any[] = [];
+
+        // 1. 原句字磚 (可移除)
+        relCorrect.forEach((text, i) => {
+            finalChunks.push({
+                id: `${newQuestion.id}-rel-${i}`,
                 text,
                 draggable: true,
-            }));
-            newQuestion.correctAnswer = buildAnswer.split(/\s+/).filter(Boolean);
+                isTargetKeep: false
+            });
+        });
+
+        // 2. 目標保留片語 (不可移除)
+        if (form.prepositionSentence) {
+            const prepTiles = generateTiles(form.prepositionSentence);
+            prepTiles.forEach((text, i) => {
+                finalChunks.push({
+                    id: `${newQuestion.id}-prep-${i}`,
+                    text,
+                    draggable: false,
+                    isTargetKeep: true
+                });
+            });
+        }
+
+        // 3. 干擾磚 (可移除，僅在 BUILD 模式加入，避免破壞 REDUCE 的減法邏輯)
+        if (form.questionMode === 'build') {
+            distractors.forEach((text, i) => {
+                finalChunks.push({
+                    id: `${newQuestion.id}-dist-${i}`,
+                    text,
+                    draggable: true,
+                    isTargetKeep: false
+                });
+            });
+        }
+
+        // 決定正確答案
+        let correctTokens: string[] = [];
+        if (form.questionMode === 'reduce' && form.prepositionSentence) {
+            // Reduce 正確答案 = 原本的主詞 + 保留的簡化片語 + 剩下的句子
+            const prepTiles = generateTiles(form.prepositionSentence).map(t => t.replace(/[\[\]]/g, ''));
+
+            // 如果這題是克漏字，正確答案只需包含「中間的簡化句」
+            if (form.clozePrefix || form.clozeSuffix) {
+                correctTokens = [...prepTiles];
+            } else {
+                // 否則正確答案是完整句子
+                correctTokens = [...prepTiles]; // 這裡視你的架構而定，如果 chunks 只包含相對子句，那只需比對 prepTiles
+            }
+        } else {
+            const buildAnswer = (form.grammarAnswer || form.relativeSentence || '').trim();
+            correctTokens = buildAnswer.split(/\s+/).filter(Boolean).map(t => t.replace(/[\[\]]/g, ''));
+        }
+
+        console.log('🚨 [Trace-QuestionBuilder] 模式:', form.questionMode);
+        console.log('🚨 [Trace-QuestionBuilder] 句型A:', form.relativeSentence);
+        console.log('🚨 [Trace-QuestionBuilder] 綠色框(簡化句):', form.prepositionSentence);
+        console.log('🚨 [Trace-QuestionBuilder] 最終 chunks:', finalChunks);
+
+        if (finalChunks.length > 0) {
+            newQuestion.chunks = finalChunks;
+            newQuestion.correctAnswer = correctTokens;
             newQuestion.ui_mode = form.questionMode === 'reduce' ? 'REDUCE' : 'BUILD';
             newQuestion.canvas_mode = newQuestion.ui_mode;
         }

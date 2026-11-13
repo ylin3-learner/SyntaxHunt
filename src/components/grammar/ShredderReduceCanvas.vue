@@ -30,7 +30,6 @@ const isWrong = ref(false);
 const draggedTileIndex = ref<number | null>(null);
 
 const initTiles = () => {
-  // 加上安全防護，避免 undefined
   const safeChunks = props.initialChunks || [];
   answerArea.value = JSON.parse(JSON.stringify(safeChunks));
   trashArea.value = [];
@@ -108,7 +107,7 @@ const checkAnswer = async (force = false) => {
 
   if (pipelineSignals.length === 0) return;
 
-  signals.value = pipelineSignals.slice(0, 1); // REDUCE 只顯示第一個信號
+  signals.value = pipelineSignals.slice(0, 1);
   playError();
   isWrong.value = true;
 
@@ -124,20 +123,38 @@ const isError = (index: number) => signals.value.some(s => s.index === index);
 
 <template>
   <section class="shredder-canvas reduce-sentence-mode" :class="{ 'success-bg': isSuccess, 'shake': isWrong }">
+
     <div class="sentence-display">
+      <span v-if="question.contextCloze?.prefix" class="cloze-context-text">
+        {{ question.contextCloze.prefix }}
+      </span>
+
       <template v-for="(tile, index) in answerArea" :key="tile.id">
-        <button v-if="tile.draggable" type="button" class="removable-word" draggable="true"
+        <!-- 🟢 目標保留字磚 (不可點擊) -->
+        <span v-if="tile.isTargetKeep" class="target-word" :class="{ 'tile-success': isSuccess }">
+          {{ tile.text.replace(/[\[\]]/g, '') }}
+        </span>
+        
+        <!-- 🔴 原句與干擾字磚 (可點擊移除) -->
+        <button v-else-if="tile.draggable" type="button" class="removable-word" draggable="true"
           @dragstart="handleDragStart(index)" @dragover.prevent @drop="handleDrop(index)"
           :aria-label="'移除「' + tile.text.replace(/[\[\]]/g, '') + '」'"
           :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }" @click="discardTile(tile)">
           {{ tile.text.replace(/[\[\]]/g, '') }} <span class="remove-hint">×</span>
         </button>
+        
+        <!-- ⚪ 固定文字 -->
         <span v-else class="fixed-word" :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }">
           {{ tile.text.replace(/[\[\]]/g, '') }}
         </span>
       </template>
+
+      <span v-if="question.contextCloze?.suffix" class="cloze-context-text">
+        {{ question.contextCloze.suffix }}
+      </span>
     </div>
 
+    <!-- 垃圾桶與警告區塊保持不變 -->
     <div class="trash-zone-wrapper">
       <div class="trash-label">🗑️ Removed tiles ({{ trashArea.length }}) · Click to restore</div>
       <div class="trash-area">
@@ -145,8 +162,7 @@ const isError = (index: number) => signals.value.some(s => s.index === index);
           <span>{{ tile.text.replace(/[\[\]]/g, '') }}</span>
           <button type="button" class="trash-restore-button" @click="restoreTile(tile)">Restore ↶</button>
         </div>
-        <div v-if="trashArea.length === 0" class="trash-placeholder">Click on underlined words above to remove them.
-        </div>
+        <div v-if="trashArea.length === 0" class="trash-placeholder">Click on underlined words above to remove them.</div>
       </div>
     </div>
 
@@ -163,6 +179,19 @@ const isError = (index: number) => signals.value.some(s => s.index === index);
 </template>
 
 <style scoped>
+/* 目標保留字磚的樣式：藍色、不可點擊、無打叉 */
+.target-word {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border: 2px solid #1cb0f6;
+  border-radius: 8px;
+  background: #e6f7ff;
+  color: #1899d6;
+  font-size: inherit;
+  font-weight: bold;
+  cursor: default; /* 不可點擊 */
+}
 .reduce-sentence-mode {
   display: flex;
   flex-direction: column;
@@ -185,6 +214,13 @@ const isError = (index: number) => signals.value.some(s => s.index === index);
   font-size: clamp(1.2rem, 3vw, 1.8rem);
   align-items: center;
   line-height: 1.6;
+}
+
+/* ✅ 新增：克漏字前後文的樣式 */
+.cloze-context-text {
+  color: #526879;
+  font-weight: bold;
+  padding: 0 4px;
 }
 
 .fixed-word {

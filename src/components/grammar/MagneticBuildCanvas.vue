@@ -132,14 +132,21 @@ const checkAnswer = async (force = false) => {
   const ctx = { studentTokens, correctTokens, question: props.question };
   const pipelineSignals = await runDiagnosisPipeline(ctx);
 
-  if (pipelineSignals.length === 0) return;
+  console.log('🚨 [Trace-1: Pipeline 回傳]', JSON.stringify(pipelineSignals, null, 2));
+
+  if (pipelineSignals.length === 0) {
+    console.warn('🚨 [Trace-1] Pipeline 回傳空陣列，不會有迷思磚！');
+    return;
+  }
 
   signals.value = pipelineSignals;
   playError();
   isWrong.value = true;
 
+  console.log('🚨 [Trace-2: 準備 emit misconception]', signals.value[0].code);
   pipelineSignals.forEach((signal) => {
     if (signal.code !== 'HIGHLIGHT_ONLY' && signal.code !== 'TRY_AGAIN') {
+      console.log(`🚨 [Trace-2] 發出迷思信號: ${signal.code}`);
       emit('misconception', signal.code);
     }
   });

@@ -23,6 +23,11 @@ const emit = defineEmits<{
   (e: 'continue'): void;
 }>();
 
+const debugMisconception = (code: string) => {
+  console.log(`🚨 [Trace-3: GrammarCanvas 收到並轉發] Code: ${code}`);
+  emit('misconception', code);
+};
+
 const canvasMode = computed(() => getQuestionCanvasMode(props.question));
 
 const selectedCanvas = computed(() => {
@@ -44,6 +49,13 @@ const selectedCanvas = computed(() => {
 </script>
 
 <template>
-  <component :is="selectedCanvas" :question="question" :initial-chunks="initialChunks" :speech-rate="speechRate"
-    @success="emit('success')" @misconception="emit('misconception', $event)" @continue="emit('continue')" />
+  <component 
+    :is="selectedCanvas" 
+    :question="question" 
+    :initial-chunks="initialChunks" 
+    :speech-rate="speechRate"
+    @success="emit('success')" 
+    @misconception="debugMisconception" 
+    @continue="emit('continue')" 
+  />
 </template>

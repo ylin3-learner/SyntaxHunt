@@ -27,7 +27,10 @@ onMounted(() => {
 <template>
   <GrammarCanvas :question="props.question" :initial-chunks="props.question.chunks || []"
     :speech-rate="props.question.speechRate || 0.8" @success="emit('success')" @continue="emit('continue', true)"
-    @misconception="emit('misconception', $event)" />
+    @misconception="(code) => {
+      console.log('🚨 [Trace-4: StageMicro 轉發]', code);
+      emit('misconception', code);
+    }" />
 </template>
 
 <style scoped></style>
