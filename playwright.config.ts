@@ -28,9 +28,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: ci 
-      ? 'npm run build -- --base=/ && npx vite preview --port 5173' 
-      : 'npm run dev',
+    // 👈 關鍵：無論本地還是 CI，一律使用 dev 模式，保證 base 路徑絕對是 '/'
+    command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !ci,
     timeout: 120 * 1000,
