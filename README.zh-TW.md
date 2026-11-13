@@ -176,12 +176,13 @@ graph TD
     StageRouter -->|"success"| StageSuccess["StageSuccess.vue"]
     
     %% 微觀階段 (核心)
-    StageMicro -->|"pass question & chunks"| CanvasRouter["GrammarCanvas.vue<br/>(Canvas Dispatcher)"]
+    StageMicro -->|"pass question & chunks"| CanvasRouter["GrammarCanvas.vue<br/>(Pure Canvas Dispatcher)"]
 
     %% ==========================================
-    %% 畫布路由分發 (Canvas Routing)
+    %% 畫布路由分發 (Canvas Routing - 徹底解耦)
     %% ==========================================
-    CanvasRouter -->|"has chunks (BUILD/REDUCE)"| Tile["TileSentenceCanvas.vue<br/>(Core Engine)"]
+    CanvasRouter -->|"canvas_mode: BUILD"| Mag["MagneticBuildCanvas.vue<br/>(紅字磚庫 & 拼句)"]
+    CanvasRouter -->|"canvas_mode: REDUCE"| Shred["ShredderReduceCanvas.vue<br/>(紅字刪除 & 藍字保留)"]
     CanvasRouter -->|"canvas_mode: MATRIX_GATE"| Matrix["FeatureMatrixCanvas.vue"]
     CanvasRouter -->|"canvas_mode: PRAGMATIC_HP"| HP["PragmaticHpCanvas.vue"]
     CanvasRouter -->|"canvas_mode: GRAVITY_SWITCH"| Gravity["TimelineMorphCanvas.vue"]
@@ -189,47 +190,51 @@ graph TD
     
     MorphRouter -->|"MODAL_VERB"| Modal["ModalGaugeCanvas.vue"]
     MorphRouter -->|"SUBJUNCTIVE / TENSE_ASPECT"| Gravity
-    MorphRouter -->|"Others"| Tile
-    
-    CanvasRouter -->|"Legacy BUILD"| Mag["MagneticBuildCanvas.vue"]
-    CanvasRouter -->|"Legacy REDUCE"| Shred["ShredderReduceCanvas.vue"]
-    
-    Mag -.->|"wraps"| Tile
-    Shred -.->|"wraps"| Tile
+    MorphRouter -->|"Others"| Tile["TileSentenceCanvas.vue<br/>(MORPH Engine Only)"]
 
     %% ==========================================
-    %% TileSentenceCanvas 內部渲染 (UI Modes)
-    %% ==========================================
-    Tile --> TileMode{"ui_mode"}
-    
-    TileMode -->|"BUILD"| ClozeCheck{"has contextCloze?"}
-    ClozeCheck -->|"Yes"| ClozeUI["Cloze (Fill-in-the-blank)"]
-    ClozeCheck -->|"No"| BuildUI["Full Sentence Builder"]
-    
-    TileMode -->|"REDUCE"| ReduceUI["Card + Trash Can"]
-    TileMode -->|"MORPH"| MorphUI["Fixed Sentence + Capsules"]
-
-    %% ==========================================
-    %% 樣式設定 (可選)
+    %% 樣式設定
     %% ==========================================
     classDef root fill:#f9f9f9,stroke:#333,stroke-width:2px;
     classDef teacher fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
     classDef student fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
     classDef core fill:#e8f5e9,stroke:#388e3c,stroke-width:3px,color:#1b5e20;
-    classDef legacy fill:#eceff1,stroke:#90a4ae,stroke-width:1px,stroke-dasharray: 5 5;
 
     class App root;
     class AdminModal,Editor,FormType,GForm,SForm,Builder teacher;
     class StageRouter,StagePreview,StageInput,StageMacro,StageMicro,StageSuccess,CanvasRouter,Matrix,HP,Gravity,MorphRouter,Modal student;
-    class Tile,ClozeUI,BuildUI,ReduceUI,MorphUI core;
-    class Mag,Shred legacy;
+    class Mag,Shred,Tile core;
 ```
 
-**🛠️ 如何 Debug UI 問題？（追蹤檢查表）**
-1. **檢查 `enabledStages`**：在 `useQuizFlow.ts` 加 `console.log`，確認老師設定的陣列順序（例如 `['micro', 'input']`）是否正確。
-2. **檢查 `currentStage`**：確認 `App.vue` 是否渲染了正確的階段組件。
-3. **檢查 `GrammarCanvas` 路由**：查看 `selectedCanvas` 的 computed 邏輯。這題有 `chunks` 嗎？`ui_mode` 是 `BUILD` 嗎？
-4. **檢查 `TileSentenceCanvas`**：確認 `initialChunks` 是否有值。如果為空，字庫就會是空白的。
+### 階段路由優先級（防止幽靈白畫面）
+
+為了防止老師不小心勾選了沒有資料的階段（如 `pronunciation`）而導致白畫面，`useQuizFlow.ts` 實施了嚴格的優先級：
+
+1. **Grammar 類型**：強制僅保留 `['micro']`。
+2. **Reduce 模式**：強制為 `['input', 'micro']`（若無 `inputData` 則僅保留 `['micro']`）。
+3. **老師自訂的 `enabledStages`**：動態過濾，若該階段缺乏對應資料（如缺少 `noticingData`），則自動從陣列中移除。
+
+```typescript
+// src/composables/useQuizFlow.ts
+const getEnabledStages = computed<NonNullable<QuestionData['enabledStages']>>(() => {
+  const q = currentQuestion.value;
+
+  // 1. 最高優先級：Grammar 題強制只走 micro
+  if (q.type === 'grammar') return ['micro'];
+
+  // 2. 次高優先級：Reduce 題強制只走 input -> micro (避免亂跳 pronunciation)
+  if (q.mode === 'reduce') {
+    return q.inputData ? ['input', 'micro'] : ['micro'];
+  }
+
+  // 3. 老師自訂順序 (經動態資料防呆過濾)
+  // ...
+});
+```
+
+### 迷思磚追蹤（事件冒泡）
+
+Canvas 組件內由診斷管線產生的迷思信號，會嚴格透過 `GrammarCanvas` ➔ `StageMicro` ➔ `App.vue` 冒泡。`App.vue` 會將其寫入 `sessionLog` 供 `SummaryReport` 使用，並同步記錄至 Supabase。
 
 ---
 
@@ -436,7 +441,7 @@ flowchart TD
 | :--- | :--- | :--- | :--- |
 | **1. `BUILD` (磁吸插槽)** | 第1章(五大句型)、第17章(連接詞)、第18章(名詞子句)、第19章(句型)、第15章(倒裝句)、第16章(關係子句-組裝) | 處理**語序與結構**。只要是把字塊排成正確順序，全用 `BUILD`。 | 舊版 `MacroDragCanvas` 收編於此。 |
 | **2. `MORPH` (摺紙變形)** | 第2章(時態)、第9章(比較級)、第10章(動名詞)、第12章(被動語態) | 處理**單字型態變化**。點擊字塊切換形式，句子其他部分固定。 | 舊版 `MorphChoiceCanvas`、`TimelineMorphCanvas` 整合為一。 |
-| **3. `REDUCE` (碎紙機)** | 第7章(分詞構句)、第16章(關係子句-簡化)、第18章(代名詞替換) | 處理**刪減與合併**。把多餘的字丟掉，或把兩個字合併。 | 舊版 `ShredderReduceCanvas`。 |
+| **3. `REDUCE` (碎紙機)** | 第7章(分詞構句)、第16章(關係子句-簡化)、第18章(代名詞替換) | 處理**刪減與替換**。學生點擊紅色的多餘字磚將其丟棄，而藍色的目標保留片語（`isTargetKeep`）則固定不動。系統嚴格排除干擾磚，以維持認知焦點。 | 舊版 `ShredderReduceCanvas`。 |
 | **4. `MATRIX_GATE` (特徵解鎖)** | 第13章(特殊動詞 spend/cost)、第14章(感官/使役動詞) | 處理**易混淆字詞的句法限制**。學生必須先選對特徵開關，才能解鎖字卡。 | 新增模式，完全取代舊版盲猜字卡的 `BUILD` 題。 |
 | **5. `PRAGMATIC_HP` (語情血條)** | 第4章(助動詞/情態)、第11章(情緒動詞) | 處理**語氣與社交距離**。VADER 分析冒犯度，扣血或補血。 | 新增模式。 |
 | **6. `GRAVITY_SWITCH` (重力開關)** | 第20章(假設語氣/條件句) | 處理**非現實語境**。切換開關，句子漂浮，時態退後一步。 | 新增模式。 |
@@ -504,9 +509,8 @@ sequenceDiagram
 ## ✨ 主要功能
 
 ### 給學生
-- **句子化減法 UI（Reduce 模式）**：學生看到的是完整的句子，只需點擊有底線的多餘字詞，即可將其丟入下方的垃圾桶。介面移除了所有拖曳與排序操作，讓認知焦點完全集中在「刪除多餘成分」。
+- **句子化減法 UI（Reduce 模式）**：學生看到的是完整的句子，只需點擊有底線的多餘字詞，即可將其丟入下方的垃圾桶。藍色的目標保留片語則固定不動，引導學生完成正確的簡化。
 - **膠囊變形（Morph 模式）**：句子順序完全固定，遇到可變形的紫色字詞時，點擊該字詞（膠囊）會在正下方展開下拉選單供選擇。大幅降低視覺干擾與認知負荷。
-- **標準題與轉換題 (Standard & Reduce)**：包含聽力輸入、聚焦形式（使用獨創的**句子化減法垃圾桶**機制）、語音輸出與意識提升。UI 嚴格隔離教學目標，避免不必要的操作干擾。
 - **上課模式鎖定 (Class Mode Lock)**：當老師開啟上課模式時，「下一關」按鈕會被禁用。
 - **片語塊視覺化**：多字片語顯示為不可分割的藍色磚塊。
 - **無標籤空間拼圖**：巨觀拖拉階段只顯示圖片，不顯示文字，避免洩題。
@@ -523,17 +527,6 @@ sequenceDiagram
 - **單元級別鎖定 (Unit Locking)**：老師可在班級控制面板選擇特定單元並發布，強制學生端只能看到該單元的題目，隱藏切換選單，防止學生偷跑或分心。
 - **一鍵掃碼加入 (QR Code)**：老師可在班級控制面板點擊生成全螢幕 QR Code，學生用手機或平板掃描即可自動帶入 `?room=XXXX` 參數並加入專屬班級頻道，省去手動輸入代碼的麻煩。
 
-### 如何使用通用文法題
-
-1. 開啟 **教師備課中心**，在題目編輯器選擇 **通用文法題**。
-2. 先選課綱章節，再選具體文法考點。
-3. 輸入來源句與精確的正確答案。
-4. 點選 **本地切詞**，或手動拆解句子。
-5. 使用 `MORPH` 考點時，只勾選一個可變形目標字塊，並輸入逗號分隔的形式。
-6. 點選 **加入題庫**。若要指定學生目前作答的題目，請在該題列按 **發送給全班**。
-
-> **教師登入提醒：**教師登入已全面改為 Supabase Auth（`signInWithPassword`，Email + 密碼）。現在您可以直接在登入彈窗中點擊「**點此註冊**」來建立新的教師帳號，或者到 Supabase 後台手動新增。
-
 ---
 
 ## 🛠️ 技術棧與工程
@@ -549,42 +542,6 @@ sequenceDiagram
 
 ---
 
-## 📋 進度追蹤 (Progress Tracking)
-
-### 🏗️ 責任鏈模式重構 (Chain of Responsibility Refactoring)
-
-**狀態**: ✅ 架構完成，測試全部通過
-
-本專案已將文法診斷管線從單體 `diagnoseGrammar()` 重構為**責任鏈模式 (Chain of Responsibility)**，達成高內聚、低耦合的架構目標。
-
-#### 📁 目錄結構 (Diagnostics & Validators)
-```text
-src/rules/
-├── diagnostics/
-│   ├── pipeline.ts                  # Pipeline Manager
-│   ├── layers/
-│   │   ├── L1_LocalRules.ts         # Layer 1: Dispatcher (Integrates Validators)
-│   │   ├── L2_CustomRules.ts        # Layer 2: Custom Rules (Smart Variant Expansion)
-│   │   ├── L3_StructuralDiff.ts     # Layer 3: LCS Structural Diff
-│   │   ├── L4_LanguageTool.ts       # Layer 4: Remote LanguageTool API
-│   │   └── L5_HighlightFallback.ts  # Layer 5: Ultimate Highlight Fallback
-└── validators/                      # Modular Grammar Validators
-    ├── svaValidator.ts              # Subject-Verb Agreement (NLP + Irregular verbs)
-    ├── tenseValidator.ts            # 12-Tense Check (NLP auxiliary extraction)
-    ├── gerundInfinitiveValidator.ts # Gerund vs. Infinitive (Dictionary + Exceptions)
-    ├── doubleNegativeValidator.ts   # Double Negative (Regex)
-    ├── inversionValidator.ts        # Inversion (Auxiliary placement)
-    └── specialStructures.ts         # Conjunctions, Modals, Subjunctive
-```
-
-#### 🧪 測試狀態
-- ✅ `src/rules/diagnostics/pipeline.test.ts`
-- ✅ `src/rules/diagnostics/layers/L1_LocalRules.test.ts`
-- ✅ `src/rules/diagnostics/layers/L2_CustomRules.test.ts`
-- ✅ `src/rules/diagnostics/layers/L3_StructuralDiff.test.ts`
-
----
-
 ## 🧪 測試檔案引用流程與路徑別名（除錯指南）
 
 ### 總覽
@@ -593,175 +550,6 @@ src/rules/
 `src/` 目錄刻意不放置任何測試檔案，避免測試檔意外被編譯進 production build。
 
 專案設定了路徑別名 `@` → `src`，讓測試檔可以無痛引用原始碼模組，無需依賴脆弱的相對路徑。
-
-### 目錄對應 (tests/ → src/)
-
-```
-tests/                         ← Vitest 掃描範圍
-├── rules/
-│   ├── adapter.spec.ts
-│   ├── autoChunk.spec.ts
-│   ├── grammarRules.spec.ts
-│   ├── diagnostics/
-│   │   ├── pipeline.spec.ts
-│   │   └── layers/
-│   │       ├── L1_LocalRules.spec.ts
-│   │       ├── L2_CustomRules.spec.ts
-│   │       └── L3_StructuralDiff.spec.ts
-│   └── validators/
-│       ├── conjunctionValidator.spec.ts
-│       ├── doubleNegativeValidator.spec.ts
-│       ├── gerundInfinitiveValidator.spec.ts
-│       ├── inversionValidator.spec.ts
-│       ├── modalValidator.spec.ts
-│       ├── subjunctiveValidator.spec.ts
-│       ├── svaValidator.spec.ts
-│       └── tenseValidator.spec.ts
-├── utils/
-│   └── textUtils.spec.ts
-├── ChunkPreview.spec.ts
-├── CloudDatabase.spec.ts
-├── ContrastPuzzle.spec.ts
-├── EditorFormFields.spec.ts
-├── GrammarCanvas.spec.ts
-├── GrammarCanvasUI.spec.ts
-├── NoticingBoard.spec.ts
-├── QuestionBuilder.spec.ts
-├── QuestionFlow.spec.ts
-├── TeacherAnalytics.spec.ts
-├── testUI.spec.ts
-├── useQuestionForm.spec.ts
-├── verbTable.test.ts
-└── grammarTopics.test.ts
-
-src/                           ← 被測試的原始碼（別名為 @）
-├── rules/
-│   ├── types.ts
-│   ├── adapter.ts
-│   ├── autoChunk.ts
-│   ├── grammarRules.ts
-│   ├── diagnostics/
-│   │   ├── pipeline.ts
-│   │   └── layers/
-│   │       ├── L1_LocalRules.ts
-│   │       ├── L2_CustomRules.ts
-│   │       ├── L3_StructuralDiff.ts
-│   │       ├── L4_LanguageTool.ts
-│   │       └── L5_HighlightFallback.ts
-│   └── validators/
-│       ├── specialStructures.ts
-│       ├── svaValidator.ts
-│       ├── tenseValidator.ts
-│       ├── gerundInfinitiveValidator.ts
-│       ├── doubleNegativeValidator.ts
-│       ├── inversionValidator.ts
-│       ├── modalValidator.ts
-│       └── subjunctiveValidator.ts
-├── utils/
-│   └── textUtils.ts
-├── services/
-│   ├── CloudDatabase.ts
-│   └── supabaseClient.ts
-├── composables/
-│   └── useQuestionForm.ts
-├── domain/
-│   └── QuestionBuilder.ts
-└── components/
-    ├── ChunkPreview.vue
-    ├── ContrastPuzzle.vue
-    ├── EditorFormFields.vue
-    ├── GrammarCanvas.vue
-    ├── NoticingBoard.vue
-    ├── QuestionFlow.vue
-    ├── TeacherAnalytics.vue
-    └── grammar/
-        ├── TileSentenceCanvas.vue
-        ├── FeatureMatrixCanvas.vue
-        ├── PragmaticHpCanvas.vue
-        └── MorphChoiceCanvas.vue
-```
-
-### Mermaid 參考流程圖
-
-```mermaid
-flowchart TD
-    subgraph Runner["Vitest 執行器 (npm test)"]
-        A["vite.config.ts<br/>test.include"] --> B["tests/**/*.spec.ts<br/>tests/**/*.test.ts"]
-    end
-
-    subgraph Tests["tests/ (30 個測試檔案)"]
-        direction TB
-        T1[grammarTopics.test.ts]
-        T2[verbTable.test.ts]
-        T3[QuestionBuilder.spec.ts]
-        T4[useQuestionForm.spec.ts]
-        T5[CloudDatabase.spec.ts]
-        T6[TeacherAnalytics.spec.ts]
-        T7[ChunkPreview.spec.ts]
-        T8[ContrastPuzzle.spec.ts]
-        T9[EditorFormFields.spec.ts]
-        T10[GrammarCanvas.spec.ts]
-        T11[GrammarCanvasUI.spec.ts]
-        T12[NoticingBoard.spec.ts]
-        T13[QuestionFlow.spec.ts]
-        T14[testUI.spec.ts]
-        T15[rules/adapter.spec.ts]
-        T16[rules/autoChunk.spec.ts]
-        T17[rules/grammarRules.spec.ts]
-        T18[rules/diagnostics/pipeline.spec.ts]
-        T19[rules/diagnostics/layers/L1_LocalRules.spec.ts]
-        T20[rules/diagnostics/layers/L2_CustomRules.spec.ts]
-        T21[rules/diagnostics/layers/L3_StructuralDiff.spec.ts]
-        T22[rules/validators/conjunctionValidator.spec.ts]
-        T23[rules/validators/doubleNegativeValidator.spec.ts]
-        T24[rules/validators/gerundInfinitiveValidator.spec.ts]
-        T25[rules/validators/inversionValidator.spec.ts]
-        T26[rules/validators/modalValidator.spec.ts]
-        T27[rules/validators/subjunctiveValidator.spec.ts]
-        T28[rules/validators/svaValidator.spec.ts]
-        T29[rules/validators/tenseValidator.spec.ts]
-        T30[utils/textUtils.spec.ts]
-    end
-
-    subgraph Alias["路徑別名: @ → src/"]
-        style Alias fill:#e1f5fe
-    end
-
-    subgraph Src["src/ (被測試的原始碼)"]
-        direction TB
-        S1[rules/types.ts]
-        S2[rules/adapter.ts]
-        S3[rules/autoChunk.ts]
-        S4[rules/grammarRules.ts]
-        S5[rules/diagnostics/pipeline.ts]
-        S6[rules/diagnostics/layers/L*.ts]
-        S7[rules/validators/*.ts]
-        S8[utils/textUtils.ts]
-        S9[services/CloudDatabase.ts]
-        S10[services/supabaseClient.ts]
-        S11[composables/useQuestionForm.ts]
-        S12[domain/QuestionBuilder.ts]
-        S13[components/*.vue]
-    end
-
-    subgraph Mocks["vi.mock (Vitest 模擬)"]
-        M1[supabaseClient]
-        M2[useSpeech]
-        M3[useSound]
-        M4[CloudDatabase]
-    end
-
-    B --> Tests
-    Tests -->|import from '@/...'| Alias
-    Alias --> Src
-    Tests -.->|vi.mock| Mocks
-    Mocks --> Src
-
-    style Runner fill:#e8f5e9
-    style Tests fill:#fff3e0
-    style Src fill:#fce4ec
-    style Mocks fill:#f3e5f5
-```
 
 ### 配置檔案
 
@@ -795,31 +583,6 @@ test: {
 }
 ```
 
-### Import 路徑對照（除錯參考）
-
-所有遷移後的測試檔案都使用 `@/` 絕對路徑別名，而非相對路徑：
-
-| 測試檔案 | 原來（相對路徑）| 現在（`@/` 別名） |
-|----------|-------------------|--------------------|
-| `tests/rules/validators/*.spec.ts` | `./specialStructures`, `../types` | `@/rules/validators/specialStructures`, `@/rules/types` |
-| `tests/rules/diagnostics/layers/L*.spec.ts` | `./L1_LocalRules`, `../../types` | `@/rules/diagnostics/layers/L1_LocalRules`, `@/rules/types` |
-| `tests/rules/diagnostics/pipeline.spec.ts` | `./pipeline`, `../types`, `./layers/L5_HighlightFallback` | `@/rules/diagnostics/pipeline`, `@/rules/types`, `@/rules/diagnostics/layers/L5_HighlightFallback` |
-| `tests/rules/adapter.spec.ts` | `./adapter`, `./types` | `@/rules/adapter`, `@/rules/types` |
-| `tests/rules/autoChunk.spec.ts` | `./autoChunk` | `@/rules/autoChunk` |
-| `tests/rules/grammarRules.spec.ts` | `./grammarRules`, `./types` | `@/rules/grammarRules`, `@/rules/types` |
-| `tests/utils/textUtils.spec.ts` | `./textUtils` | `@/utils/textUtils` |
-
-### 除錯檢查清單
-
-若測試無法解析 Import 路徑：
-
-1. **檢查 `vite.config.ts`** — 確認 `@` 別名指向 `./src`。
-2. **檢查 `tsconfig.json`** — 確認 `compilerOptions.paths` 下有 `"@/*": ["src/*"]`。
-3. **檢查檔案位置** — 原始碼檔案必須位於 `src/`（而非 `tests/`）。
-4. **檢查 Vitest 掃描範圍** — 測試檔案必須位於 `tests/`，副檔名為 `.spec.ts` 或 `.test.ts`。
-5. **執行 `npm test`** — Vitest 會印出 `Cannot find module` 及未解析的完整路徑。
-6. **執行 `npm run build`** — `vue-tsc --noEmit` 會驗證 TypeScript 路徑解析。
-
 ### 指令
 
 ```bash
@@ -836,56 +599,7 @@ npm run build
 npx vite preview
 ```
 
-## 📚 UI Flow & Grammar Canvas Modes
-
-本節說明 UI 渲染流程以及不同類型的題目對應的 Canvas 元件。
-
-### 題目到 Canvas 的路由
-
-`GrammarCanvas.vue` 組件根據 `ui_mode` 和 `canvas_mode` 將題目路由到對應的 Canvas：
-
-| 模式 | Canvas 組件 | key DOM セレクタ |
-|------|-------------|-------------------|
-| **BUILD** (`ui_mode: 'BUILD'`)` | `MagneticBuildCanvas` | `.word-bank .tile` — 可拖曳字庫磚 |
-| **REDUCE** (`ui_mode: 'REDUCE'`)` | `ShredderReduceCanvas` | `.removable-word` — 答區可移除的單詞 |
-| **MORPH** (`ui_mode: 'MORPH'`)` | `TileSentenceCanvas` | `.morph-capsule` — 可變形的單字按鈕 |
-| **MATRIX_GATE**` | `FeatureMatrixCanvas` | `.decode-button` — 功能解鎖按鈕 |
-| **PRAGMATIC_HP**` | `PragmaticHpCanvas` | `.pragmatic-word-bank` — 字幕銀行按鈕 |
-| **GRAVITY_SWITCH**` | `MorphChoiceCanvas` | `.gravity-irreal` — 重力切換 |
-
-### Stage 整合
-
-- `StageMicro.vue` 將 `GrammarCanvas` 作為其核心渲染器
-- 題目數據透過 `useQuizFlow.microQuestion` computed property 進入
-- `getEnabledStages` 根據可用的題目數據過濾階段（例如：`inputData` 給 StageInput，`chunks` 給 Micro）
-- **防止空白 UI**：缺少必要數據的階段會從啟用列表中動態移除
-
-### Canvas 組件約束（架構鐵律）
-
-- `MagneticBuildCanvas`、`ShredderReduceCanvas` 和 `TileSentenceCanvas` 必須保持獨立、解耦的組件
-- 不得將這些組件合併為單一的monolithic renderer
-- 每個 Canvas 通過明確的 props (`question`, `initialChunks`) 接收題目數據
-- `GrammarCanvas.vue` 中的依賴注入和路由分發邏輯必須保持完整
-
-### E2E 測試
-
-- `tests/e2e/grammar-canvas.spec.ts` 中的 Playwright E2E 測試驗證 BUILD 和 REDUCE Canvas 渲染
-- 測試透過 `localStorage` 注入題目數據並斷言對應的 DOM 元素存在
-- 失敗時的偵錯快照會捕獲 URL、body HTML 和 body text，用於 CI/CD 崩潰分析
-
-### Flow Description (預設：Build Mode, 非 Grammar 問題)
-
-```
-preview → input → macro → micro → pronunciation → noticing → success
-```
-
-**模式變體:**
-- **build mode** (預設): complete sequence input → macro → micro → pronunciation → noticing
-- **reduce mode**: 無 chunks → ShredderReduceCanvas (僅 input → micro)，有 chunks → TileSentenceCanvas (顯示完整句子結構)
-- **grammar type**: 僅顯示 micro 階段
-
 ---
-*文檔更新以反映 Playwright E2E 整合和組件路由 (v2026.11.13)*
 
 ## 🚀 快速開始
 
