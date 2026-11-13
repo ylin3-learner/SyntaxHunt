@@ -28,16 +28,15 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // 🚨 關鍵：在指令前面塞入假的環境變數，避免 createClient 崩潰
-    command: ci
-      ? 'cross-env VITE_SUPABASE_URL=http://localhost:54321 VITE_SUPABASE_ANON_KEY=fake-key npm run build -- --base=/ && npx vite preview --port 5173'
+    command: ci 
+      ? 'npm run build -- --base=/ && npx vite preview --port 5173' 
       : 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !ci,
     timeout: 120 * 1000,
     env: {
       VITE_SUPABASE_URL: 'http://localhost:54321',
-      VITE_SUPABASE_ANON_KEY: 'fake-key'
+      VITE_SUPABASE_ANON_KEY: 'fake-key',
     }
   },
 });
