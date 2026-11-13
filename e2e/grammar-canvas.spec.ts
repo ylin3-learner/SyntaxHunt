@@ -35,14 +35,26 @@ const reduceQuestion = {
 test.describe('Grammar Canvas E2E - 隔離環境測試', () => {
 
   test.beforeEach(async ({ page }) => {
-    // 攔截 Supabase 請求，防止卡死
+    // 1. 攔截 Supabase 請求，防止卡死
     await page.route('**/rest/v1/questions*', async (route) => {
       await route.fulfill({ status: 200, json: [] });
     });
 
-    // 偽造老師 ID，讓 App 不要跳出「輸入班級代碼」的畫面
+    // 2. 偽造老師 ID，讓 App 不要跳出「輸入班級代碼」的畫面
     await page.addInitScript(() => {
       window.sessionStorage.setItem('teacher_id', 'test-teacher-id');
+
+      // 🚨 3. 攔截 TTS 相關 API (加入 SpeechSynthesisUtterance)
+      (window as any).speechSynthesis = {
+        speak: () => { },
+        cancel: () => { },
+        getVoices: () => [],
+        onvoiceschanged: null,
+      };
+
+      (window as any).SpeechSynthesisUtterance = class {
+        constructor() { }
+      };
     });
   });
 
