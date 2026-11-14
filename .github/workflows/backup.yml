@@ -8,11 +8,15 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
+    # 👇 關鍵：給予 GitHub Actions 寫入權限
+    permissions:
+      contents: write 
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # 確保能取得所有歷史紀錄
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -25,7 +29,8 @@ jobs:
       - name: Run backup script
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # 這裡必須改成你剛剛在 GitHub Secrets 設定的 Service Role Key！
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }} 
         run: node backup-db.js
 
       - name: Commit and push backup
