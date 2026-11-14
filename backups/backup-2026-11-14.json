@@ -1,0 +1,102 @@
+[
+  {
+    "id": "q1",
+    "data": {
+      "id": "q1",
+      "mode": "build",
+      "type": "standard",
+      "imageUrl": "https://api.dicebear.com/7.x/adventurer/svg?seed=AnimeGirl",
+      "inputData": {
+        "options": [
+          {
+            "text": "who wears a blue uniform",
+            "image": "https://api.dicebear.com/7.x/adventurer/svg?seed=AnimeGirl",
+            "isCorrect": true
+          },
+          {
+            "text": "who wears a red dress",
+            "image": "https://api.dicebear.com/7.x/adventurer/svg?seed=OtherGirl",
+            "isCorrect": false
+          }
+        ],
+        "audioText": "The girl who wears a blue uniform is my sister."
+      },
+      "sortOrder": 0,
+      "antecedent": {
+        "noun": "The girl",
+        "number": "singular",
+        "person": "person"
+      },
+      "targetNoun": "The girl",
+      "explanation": {
+        "desc": "在英文中，修飾語要放在名詞的後面喔！",
+        "title": "✨ 你發現了嗎？"
+      },
+      "noticingData": {
+        "options": [
+          {
+            "text": "事物（Things）",
+            "isCorrect": false
+          },
+          {
+            "text": "人（People）",
+            "isCorrect": true
+          }
+        ],
+        "examples": [
+          "The girl who wears a blue uniform is my sister.",
+          "The boy who plays basketball is my brother."
+        ],
+        "question": "請觀察這兩個句子，關係代名詞 who 代替的是什麼？",
+        "explanation": "沒錯！當先行詞是「人」的時候，我們使用 who 來引導關係子句。"
+      },
+      "enabledStages": [
+        "input",
+        "macro",
+        "micro",
+        "pronunciation",
+        "noticing"
+      ],
+      "grammarFeature": {
+        "relative": {
+          "label": "who wears a blue uniform",
+          "tiles": [
+            "wears",
+            "uniform",
+            "who",
+            "blue",
+            "a",
+            "she"
+          ],
+          "distractors": [
+            "she"
+          ],
+          "correctAnswer": [
+            "who",
+            "wears",
+            "a",
+            "blue",
+            "uniform"
+          ]
+        },
+        "preposition": {
+          "label": "in a blue uniform",
+          "tiles": [
+            "uniform",
+            "in",
+            "blue",
+            "a"
+          ],
+          "correctAnswer": [
+            "in",
+            "a",
+            "blue",
+            "uniform"
+          ]
+        }
+      }
+    },
+    "created_at": "2026-11-13T06:15:16.104946+00:00",
+    "teacher_id": "f81d83e4-db55-4ad8-b52c-9421612ffcb2"
+  }
+]
