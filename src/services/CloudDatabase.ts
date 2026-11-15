@@ -70,69 +70,160 @@ export const CloudDatabase = {
     }
   },
 
-  // 將題庫存到雲端（包含同步刪除）
-  async saveQuestions(questions: QuestionData[]): Promise<boolean> {
-    // 改用 getUser 檢查真實登入狀態
+  // 將單題新增到雲端
+  async addQuestion(question: QuestionData): Promise<boolean> {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      console.log('💡 未登入教師身分（或 Session 已過期），已跳過雲端儲存，僅保留本機進度。');
-      return false; // 改為 false，讓上層知道寫入失敗！
+      console.log('💡 未登入教師身分，無法新增題目到雲端。');
+      return false;
     }
 
     const teacherId = user.id;
 
     try {
-      // 1. 先取得「該老師」雲端現有的所有題目 ID
-      const { data: cloudData, error: fetchError } = await supabase
+      const { error } = await supabase
         .from('questions')
-        .select('id')
-        .eq('teacher_id', teacherId);
+        .insert({
+          id: question.id,
+          data: { ...question, sortOrder: question.sortOrder ?? 0, teacher_id: teacherId },
+        });
 
-      if (fetchError) throw fetchError;
-
-      const cloudIds = cloudData?.map(d => d.id) || [];
-      const localIds = questions.map(q => q.id);
-
-      // 2. 組裝寫入資料，補上 teacher_id
-      const rows = questions.map((question, sortOrder) => ({
-        id: question.id,
-        data: { ...question, sortOrder },
-        teacher_id: teacherId,
-      }));
-
-      // 3. 找出「該老師的雲端有，但本地已經被刪除」的 ID
-      const idsToDelete = cloudIds.filter(id => !localIds.includes(id));
-
-      // 4. 執行批次刪除 (只會刪到自己的)
-      if (idsToDelete.length > 0) {
-        const { error: deleteError } = await supabase
-          .from('questions')
-          .delete()
-          .in('id', idsToDelete)
-          .eq('teacher_id', teacherId);
-
-        if (deleteError) throw deleteError;
-      }
-
-      // 5. 執行 upsert
-      if (questions.length > 0) {
-        const { error: upsertError } = await supabase
-          .from('questions')
-          .upsert(rows, { onConflict: 'id' });
-
-        if (upsertError) throw upsertError;
-      }
-
-      console.log('☁️ 題庫順序儲存完成:', rows.map(row => ({
-        id: row.id,
-        sortOrder: row.data.sortOrder,
-      })));
+      if (error) throw error;
+      console.log('☁️ [CloudDatabase] 單題新增成功:', question.id);
       return true;
     } catch (error) {
-      console.error('儲存到雲端失敗:', error);
-      return false; // 發生任何錯誤也回傳 false
+      console.error('新增單題失敗:', error);
+      return false;
     }
+  },
+
+  // 更新單題到雲端
+  async updateQuestion(question: QuestionData): Promise<boolean> {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.log('💡 未登入教師身分，無法更新題目到雲端。');
+      return false;
+    }
+
+    const teacherId = user.id;
+
+    try {
+      const { error } = await supabase
+        .from('questions')
+        .upsert({
+          id: question.id,
+          data: { ...question, teacher_id: teacherId },
+        }, { onConflict: 'id' });
+
+      if (error) throw error;
+      console.log('☁️ [CloudDatabase] 單題更新成功:', question.id);
+      return true;
+    } catch (error) {
+      console.error('更新單題失敗:', error);
+      return false;
+    }
+  },
+
+  // 刪除單題（軟刪除：標記 is_deleted=true，永久資料不流失）
+  async deleteQuestion(id: string): Promise<boolean> {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.log('💡 未登入教師身分，無法刪除題目。');
+      return false;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('questions')
+        .update({ is_deleted: true })
+        .eq('id', id);
+
+      if (error) throw error;
+      console.log('☁️ [CloudDatabase] 單題軟刪除成功:', id);
+      return true;
+    } catch (error) {
+      console.error('刪除單題失敗:', error);
+      return false;
+    }
+  },
+
+  // 將當前問題派送到教室（只更新 classroom_state，不觸動 questions 表）
+  // 這是「派送」與「儲存」徹底解耦的關鍵
+  async pushQuestionToClassroom({
+    classroomId,
+    questionId,
+  }: {
+    classroomId: string;
+    questionId: string;
+  }): Promise<boolean> {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.log('💡 未登入教師身分，無法派送題目到教室。');
+      return false;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('classroom_state')
+        .upsert({
+          classroom_id: classroomId,
+          current_question_id: questionId,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'classroom_id' });
+
+      if (error) throw error;
+      console.log('☁️ [CloudDatabase] 已派送題目到教室:', { classroomId, questionId });
+      return true;
+    } catch (error) {
+      console.error('派送題目到教室失敗:', error);
+      return false;
+    }
+  },
+
+  // 批次儲存題庫（僅在老師明確點擊「儲存題庫」時呼叫）
+  // 相比原 saveQuestions，此版本移除了「本地沒的就刪雲端」的危險邏輯
+  async saveQuestionsBatch(questions: QuestionData[]): Promise<boolean> {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.log('💡 未登入教師身分，已跳過雲端儲存，僅保留本機進度。');
+      return false;
+    }
+
+    const teacherId = user.id;
+
+    try {
+      // 1. 組裝寫入資料，補上 teacher_id（只 upsert 有效題目）
+      const rows = questions.map((question, sortOrder) => ({
+        id: question.id,
+        data: { ...question, sortOrder: sortOrder ?? 0, teacher_id: teacherId },
+      }));
+
+      // 2. 批次 upsert (新增與更新)
+      // 注意：我們不再嘗試偵測「本地沒有的就刪雲端」，改為只新增/更新
+      const { error: upsertError } = await supabase
+        .from('questions')
+        .upsert(rows, { onConflict: 'id' });
+
+      if (upsertError) throw upsertError;
+
+      console.log('☁️ [CloudDatabase] 批次題庫儲存完成:', rows.length, '題');
+      return true;
+    } catch (error) {
+      console.error('批次儲存到雲端失敗:', error);
+      return false;
+    }
+  },
+
+  // 將題庫存到雲端（包含同步刪除）—— 保留舊函數名稱以保持相容性
+  // 但已移除「本地沒的就刪雲端」的邏輯，改為只 upsert
+  async saveQuestions(questions: QuestionData[]): Promise<boolean> {
+    // 直接改用新的安全版本
+    return this.saveQuestionsBatch(questions);
   },
 
   // 寫入學習軌跡
