@@ -252,19 +252,23 @@ const handleSaveAndPush = async (id: string) => {
 
   if (form.value.editingId === id) resetForm();
 
-  // 先將最新的本地題庫（包含剛建好的新題）寫入雲端資料庫
-  console.log('☁️ [Teacher] 派送前，正在將題庫寫入雲端...');
-  const success = await CloudDatabase.saveQuestions(localQuestions.value);
+  // 【設計變更】派送只更新 classroom_state，不觸動 questions 表
+  // 這樣一來，即便本地題庫資料不完整，也不會誤刪雲端題庫
+  console.log('☁️ [Teacher] 發送當前題目到教室...');
+  const success = await CloudDatabase.pushQuestionToClassroom({
+    classroomId: props.roomCode || '',
+    questionId: id,
+  });
 
   if (!success) {
-    alert('⚠️ 題目儲存至雲端失敗，請檢查網路連線後再嘗試派送。');
+    alert('⚠️ 派送失敗，請檢查網路連線後再嘗試。');
     return;
   }
 
-  // 確保寫入成功後，才更新本地狀態並發送廣播
+  // 確保派送成功後，才更新本地狀態並發送廣播
   emit('sync-local', localQuestions.value);
   emit('push', id);
-  console.log('🚀 [Teacher] 已寫入雲端並發出派送廣播！');
+  console.log('🚀 [Teacher] 已派送題目並發出廣播！');
 };
 const saveAllAndClose = () => {
   if (localQuestions.value.length === 0) { alert('題庫不能為空'); return; }

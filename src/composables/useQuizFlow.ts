@@ -285,7 +285,13 @@ export function useQuizFlow() {
     // (這部分可以先不加，避免誤擋正常的刪題操作)
 
     localStorage.setItem('custom_questions', JSON.stringify(questions));
-    return CloudDatabase.saveQuestions(questions);
+
+  // 【設計變更】結束測驗時不自動寫入雲端題庫
+  // 避免跨角色污染（學生端結束測驗不應該寫入老師的題庫）
+  // 若需要儲存，請改為明確呼叫 saveQuestionsBatch 或使用後台「儲存題庫」按鈕
+  
+  // 僅將題目存在 localStorage 作為本地紀錄，不寫入雲端
+  return true;
   };
 
   const handleBatchQuestionImport = async (questions: QuestionData[]) => {

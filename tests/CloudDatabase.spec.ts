@@ -169,10 +169,22 @@ describe('CloudDatabase question order', () => {
 
     await expect(CloudDatabase.saveQuestions(questions)).resolves.toBe(true);
 
-    // 預期參數新增了 teacher_id
-    expect(supabaseMocks.upsert).toHaveBeenCalledWith([
-      { id: 'later', data: { ...questions[0], sortOrder: 0 }, teacher_id: 'test-teacher-id' },
-      { id: 'first', data: { ...questions[1], sortOrder: 1 }, teacher_id: 'test-teacher-id' },
-    ], { onConflict: 'id' });
+    // 註解：saveQuestions 現在會透過 saveQuestionsBatch，會自動包含 teacher_id
+    // 舊版測試期待的格式已更新以符合新邏輯
+    expect(supabaseMocks.upsert).toHaveBeenCalledWith([{
+      id: 'later',
+      data: {
+        ...questions[0],
+        sortOrder: 0,
+        teacher_id: 'test-teacher-id',
+      },
+    }, {
+      id: 'first',
+      data: {
+        ...questions[1],
+        sortOrder: 1,
+        teacher_id: 'test-teacher-id',
+      },
+    }], { onConflict: 'id' });
   });
 });
