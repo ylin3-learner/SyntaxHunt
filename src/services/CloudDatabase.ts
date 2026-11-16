@@ -170,10 +170,10 @@ export const CloudDatabase = {
       const { error } = await supabase
         .from('classroom_state')
         .upsert({
-          classroom_id: classroomId,
+          room_code: classroomId,
           current_question_id: questionId,
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'classroom_id' });
+        }, { onConflict: 'room_code' });
 
       if (error) throw error;
       console.log('☁️ [CloudDatabase] 已派送題目到教室:', { classroomId, questionId });
