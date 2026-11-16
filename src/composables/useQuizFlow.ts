@@ -50,7 +50,13 @@ export function useQuizFlow() {
       return ['micro'];
     }
 
-    // 2. 次高優先級：如果是 reduce 模式，強制只走 input -> micro (絕不允許 pronunciation)
+    // 2. chunk 類型：只保留 preview stage，完全阻擋 input/macro/micro/pronunciation/noticing
+    if (q.type === 'chunk') {
+      console.log('[DEBUG] getEnabledStages: chunk type detected, returning [preview]');
+      return ['preview'];
+    }
+
+    // 3. 次高優先級：如果是 reduce 模式，強制只走 input -> micro (絕不允許 pronunciation)
     if (q.mode === 'reduce') {
       return q.inputData ? ['input', 'micro'] : ['micro'];
     }
@@ -186,7 +192,19 @@ export function useQuizFlow() {
     if (nextStage) {
       currentStage.value = nextStage;
     } else {
-      currentStage.value = 'success';
+      // 沒有下一個階段時，如果還有下一題則直接跳轉到下一題
+      // 但如果老師開啟了上課模式，則阻擋自動跳轉，需等待老師派送下一題
+      if (isClassMode.value) {
+        console.log('[DEBUG] handleSuccess: 上課模式開啟，阻擋自動跳轉，等待老師派送下一題');
+        currentStage.value = 'success';
+      } else if (currentIndex.value < filteredQuestions.value.length - 1) {
+        console.log('[DEBUG] handleSuccess: 當前題目沒有更多階段，直接跳轉到下一題');
+        currentIndex.value++;
+        checkAndSetInitialStage();
+      } else {
+        currentStage.value = 'success';
+        showSummary.value = true;
+      }
     }
   };
 
@@ -197,7 +215,25 @@ export function useQuizFlow() {
     console.log(`[DEBUG QuizFlow] handlePreviewSuccess: enabledStages = ${JSON.stringify(getEnabledStages.value)}`);
 
     if (currentQuestion.value.type === 'chunk') {
-      handleSuccess();
+      // For chunk questions: directly advance to next question (similar to handleSuccess flow)
+      // but without going through the stage sequence (since chunk only has ['preview'])
+      playSuccess();
+      trackCompleted();
+      
+      console.log('[DEBUG] chunk handlePreviewSuccess: currentIndex:', currentIndex.value, 'filteredLength:', filteredQuestions.value.length);
+      console.log('[DEBUG] chunk handlePreviewSuccess: enabledStages:', getEnabledStages.value);
+      console.log('[DEBUG] chunk handlePreviewSuccess: isClassMode:', isClassMode.value);
+      
+      if (completedCount.value <= currentIndex.value) completedCount.value = currentIndex.value + 1;
+      
+      if (currentIndex.value < filteredQuestions.value.length - 1) {
+        currentIndex.value++; 
+        checkAndSetInitialStage();
+        console.log('[DEBUG] chunk handlePreviewSuccess: advanced to next question, new index:', currentIndex.value);
+      } else {
+        showSummary.value = true;
+        console.log('[DEBUG] chunk handlePreviewSuccess: showing summary');
+      }
       return;
     }
     handleSuccess();

@@ -113,4 +113,84 @@ test.describe('Grammar Canvas E2E - 隔離環境測試', () => {
     await expect(removable).toHaveCount(4);
     await expect(page.locator('.trash-zone-wrapper')).toBeVisible();
   });
+
+  test('片語題：應渲染片語預覽與測驗 UI', async ({ page }) => {
+    interface ChunkQuestion {
+  id: string;
+  type: 'chunk';
+  ui_mode: string;
+  canvas_mode: string;
+  targetNoun: string;
+  antecedent: { noun: string; number: 'singular' | 'plural'; person: 'person' | 'thing' };
+  chunks: { id: string; text: string; draggable?: boolean }[];
+  correctAnswer: string[];
+  previewData: {
+    targetImage: string;
+    chunkText: string;
+    chunkZh: string;
+    quizOptions: { text: string; isCorrect: boolean }[];
+  };
+}
+
+const chunkQuestion: ChunkQuestion = {
+      id: 'e2e-chunk',
+      type: 'chunk',
+      ui_mode: 'BUILD',
+      canvas_mode: 'BUILD',
+      targetNoun: 'The boy',
+      antecedent: { noun: 'The boy', number: 'singular', person: 'person' },
+      chunks: [
+        { id: '1', text: 'The', draggable: true },
+        { id: '2', text: 'boy', draggable: true },
+      ],
+      correctAnswer: ['The', 'boy'],
+      previewData: {
+        targetImage: '/test-image.jpg',
+        chunkText: 'The boy',
+        chunkZh: '男孩',
+        quizOptions: [
+          { text: 'The boy', isCorrect: true },
+          { text: 'A boy', isCorrect: false },
+          { text: 'Boys', isCorrect: false },
+        ],
+      },
+    };
+
+    await page.addInitScript((q: ChunkQuestion) => {
+      window.localStorage.setItem('custom_questions', JSON.stringify([q]));
+    }, chunkQuestion);
+
+    await page.goto('/');
+    await page.waitForTimeout(1000);
+
+    // 檢查是否顯示 StagePreview（ChunkPreview）
+    const previewSection = page.locator('.stage-preview');
+    await expect(previewSection).toBeVisible();
+
+    // 檢查大圖片
+    const targetImage = page.locator('.target-image img');
+    await expect(targetImage).toBeVisible();
+    await expect(targetImage).toHaveAttribute('src', '/test-image.jpg');
+
+    // 檢查英文片語
+    const chunkText = page.locator('.chunk-text');
+    await expect(chunkText).toBeVisible();
+    await expect(chunkText).toContainText('The boy');
+
+    // 檢查中文意思
+    const chunkZh = page.locator('.chunk-zh');
+    await expect(chunkZh).toBeVisible();
+    await expect(chunkZh).toContainText('男孩');
+
+    // 檢查 TTS 按鈕
+    const ttsButton = page.locator('.tts-button');
+    await expect(ttsButton).toBeVisible();
+
+    // 檢查三個選項按鈕
+    const quizOptions = page.locator('.quiz-option');
+    await expect(quizOptions).toHaveCount(3);
+
+    // 檢查第一個選項是正確的
+    await expect(quizOptions.first()).toContainText('The boy');
+  });
 });

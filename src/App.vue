@@ -93,6 +93,7 @@ watch(currentStage, (newStage, oldStage) => {
 
 const currentStageComponent = computed(() => {
   if (currentQuestion.value?.type === 'contrast') return StageContrast;
+  if (currentQuestion.value?.type === 'chunk') return StagePreview;
 
   let comp = null;
 
