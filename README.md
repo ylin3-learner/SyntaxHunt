@@ -444,7 +444,7 @@ To address different cognitive loads and grammar concepts across chapters, the s
 | :--- | :--- | :--- | :--- |
 | **1. `BUILD` (Magnetic Slots)** | Ch.1 (Sentence Patterns), Ch.17 (Conjunctions), Ch.18 (Noun Clauses), Ch.19 (Patterns), Ch.15 (Inversion), Ch.16 (Relative Clauses - Assembly) | Handles **word order and structure**. Any task requiring arranging chunks into the correct sequence uses `BUILD`. | Old `MacroDragCanvas` is absorbed here. |
 | **2. `MORPH` (Origami Morph)** | Ch.2 (Tenses), Ch.9 (Comparatives), Ch.10 (Gerunds), Ch.12 (Passive Voice) | Handles **morphological changes**. Click a chunk to switch forms; the rest of the sentence remains fixed. | Old `MorphChoiceCanvas`, `TimelineMorphCanvas` are consolidated. |
-| **3. `REDUCE` (Shredder)** | Ch.7 (Participle Clauses), Ch.16 (Relative Clauses - Reduction), Ch.18 (Pronoun Replacement) | Handles **deletion and replacement**. Students click red removable words to discard them, while blue target phrases (`isTargetKeep`) remain fixed. Distractors are strictly excluded to maintain cognitive focus. | Old `ShredderReduceCanvas`. |
+| **3. `REDUCE` (Shredder)** | Ch.7 (Participle Clauses), Ch.16 (Relative Clauses - Reduction), Ch.18 (Pronoun Replacement) | Handles **deletion and replacement**. Students click red removable words to discard them, and use left/right arrows to reorder the retained blue target phrases (`isTargetKeep`) to form the correct simplified sentence. |
 | **4. `MATRIX_GATE` (Feature Lock)** | Ch.13 (Special Verbs like spend/cost), Ch.14 (Sensory/Causative Verbs) | Handles **syntactic constraints of confusable words**. Students must select the correct feature toggle to unlock the word cards. | New mode. Replaces the old guess-and-check `BUILD` tasks. |
 | **5. `PRAGMATIC_HP` (Pragmatic HP)** | Ch.4 (Modals/Auxiliaries), Ch.11 (Emotive Verbs) | Handles **tone and social distance**. VADER analyzes offensiveness, causing HP loss or gain. | New mode. |
 | **6. `GRAVITY_SWITCH` (Gravity Switch)** | Ch.20 (Subjunctive/Unreal Conditionals) | Handles **unreal contexts**. Switch the toggle, the sentence floats, and the tense steps back. | New mode. |
@@ -515,7 +515,7 @@ To ensure a seamless classroom experience, the real-time broadcast mechanism han
 ## ✨ Key Features
 
 ### For Students
-- **Sentence-based Subtraction UI (Reduce Mode)**: Students read a natural sentence and click on underlined redundant words to discard them into the trash can. Blue target phrases remain fixed to guide them toward the correct reduction.
+- **Sentence-based Subtraction UI (Reduce Mode)**: Students read a natural sentence, click red underlined redundant words to discard them into the trash can, and use the on-tile arrows to reorder the remaining blue target phrases. The UI guarantees that the final simplified sentence matches the target grammar structure perfectly.
 - **Inline Morphing Capsules (Morph Mode)**: The sentence remains fixed. Clicking a purple "capsule" word reveals a dropdown directly beneath it to select the correct morphological form, eliminating visual clutter and reducing cognitive load.
 - **Class Mode Lock**: When the teacher enables Class Mode, the "Next" button is disabled. Students must wait for the teacher's push command.
 - **Phrase Chunking Visuals**: Multi-word units appear as distinct blue tiles.
@@ -596,6 +596,7 @@ The Playwright E2E pipeline was stabilized for headless CI environments:
 - **Base path override**: In CI, Vite is built with `--base=/` to avoid 404s from dynamic chunk loading.
 - **API mocking**: `WebSocket`, `AudioContext`, and `SpeechSynthesis` are mocked to prevent crashes in headless Chrome.
 - **Environment variables**: Dummy Supabase credentials are injected via `webServer.env` to avoid client initialization errors.
+- **Comprehensive REDUCE Interaction**: E2E tests explicitly verify the REDUCE canvas, ensuring the correct number of `.target-word` (blue) and `.removable-word` (red) tiles render, and that the reordering logic works.
 
 ---
 
