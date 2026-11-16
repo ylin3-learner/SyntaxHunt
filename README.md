@@ -549,6 +549,56 @@ To ensure a seamless classroom experience, the real-time broadcast mechanism han
 
 ---
 
+## 🛡️ Data Safety & Fault Tolerance
+
+### Soft Delete (is_deleted)
+
+All deletion operations now use a **soft delete** mechanism instead of physical deletion.
+
+- A boolean column `is_deleted` is added to the `questions` table.
+- `deleteQuestion(id)` sets `is_deleted = true` rather than removing the row.
+- `fetchQuestions` automatically filters `.eq('is_deleted', false)`.
+
+This ensures that accidental deletions or faulty local states can never permanently destroy the question bank.
+
+### Precise CRUD APIs (Decoupled from Push)
+
+The monolithic `saveQuestions` logic has been refactored into granular, intention-revealing methods:
+
+| API | Purpose | Database Operation |
+| :--- | :--- | :--- |
+| `addQuestion(question)` | Create a single question | `INSERT` |
+| `updateQuestion(question)` | Update a specific question | `UPDATE ... WHERE id = ?` |
+| `deleteQuestion(id)` | Soft-delete a question | `UPDATE is_deleted = true` |
+| `pushQuestionToClassroom({ classroomId, questionId })` | Send a question to students | Only updates `classroom_state` |
+| `saveQuestionsBatch(questions)` | Explicit bulk save | Only called on explicit save |
+
+**Key principle: “Push” is not “Save”.** The push action only updates `classroom_state.current_question_id` and never touches the `questions` table.
+
+### Cross-Role Pollution Prevention
+
+`useQuizFlow.ts` (student side) no longer writes to the `questions` table upon quiz completion. Only the teacher’s explicit save action can modify the question bank.
+
+### Automated Daily Backup (GitHub Actions)
+
+A scheduled GitHub Actions workflow (`backup.yml`) runs every day at 00:00 UTC.
+
+- Connects to Supabase using a `SERVICE_ROLE_KEY` (stored in GitHub Secrets).
+- Exports the entire `questions` table to `backups/backup-YYYY-MM-DD.json`.
+- Commits the backup file back to the repository.
+
+This creates a versioned, off-platform disaster recovery archive.
+
+### CI/CD Stability for E2E Tests
+
+The Playwright E2E pipeline was stabilized for headless CI environments:
+
+- **Base path override**: In CI, Vite is built with `--base=/` to avoid 404s from dynamic chunk loading.
+- **API mocking**: `WebSocket`, `AudioContext`, and `SpeechSynthesis` are mocked to prevent crashes in headless Chrome.
+- **Environment variables**: Dummy Supabase credentials are injected via `webServer.env` to avoid client initialization errors.
+
+---
+
 ## 🧪 Test File Reference Flow & Path Alias (Debug Guide)
 
 ### Overview
@@ -659,6 +709,16 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    npx supabase functions deploy lt-proxy
    ```
 4. Create a Teacher account in **Supabase Dashboard -> Authentication -> Users**.
+
+### GitHub Actions Backup Setup
+
+To enable the automated daily backup:
+
+1. Go to **Repository Settings → Secrets and variables → Actions**.
+2. Create a new repository secret named `SUPABASE_SERVICE_ROLE_KEY` and paste your Supabase **service role key** (found in Supabase Dashboard → Settings → API).
+3. Ensure `VITE_SUPABASE_URL` is also set as a repository secret.
+
+The backup workflow will run automatically. You can also trigger it manually from the **Actions** tab.
 
 ### Development & Testing
 ```bash

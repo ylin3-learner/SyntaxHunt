@@ -542,6 +542,56 @@ sequenceDiagram
 
 ---
 
+## 🛡️ 資料安全與容錯機制
+
+### 軟刪除（is_deleted）
+
+所有刪除操作已改為**軟刪除**，不再進行物理刪除。
+
+- `questions` 表新增布林欄位 `is_deleted`。
+- `deleteQuestion(id)` 設定 `is_deleted = true`，而非移除整筆資料。
+- `fetchQuestions` 自動過濾 `.eq('is_deleted', false)`。
+
+這確保了即使發生誤刪或本地狀態異常，題庫也永遠不會被永久摧毀。
+
+### 精準 CRUD API（與派送解耦）
+
+原本單一的 `saveQuestions` 已重構為多個粒度更細、意圖更明確的方法：
+
+| API | 用途 | 資料庫操作 |
+| :--- | :--- | :--- |
+| `addQuestion(question)` | 新增單題 | `INSERT` |
+| `updateQuestion(question)` | 更新指定題目 | `UPDATE ... WHERE id = ?` |
+| `deleteQuestion(id)` | 軟刪除題目 | `UPDATE is_deleted = true` |
+| `pushQuestionToClassroom({ classroomId, questionId })` | 派送題目給學生 | 僅更新 `classroom_state` |
+| `saveQuestionsBatch(questions)` | 明確的批次儲存 | 僅在老師主動點擊「儲存」時呼叫 |
+
+**核心原則：「派送」≠「儲存」。** 派送動作只更新 `classroom_state.current_question_id`，完全不觸碰 `questions` 表。
+
+### 跨角色污染防護
+
+`useQuizFlow.ts`（學生端）在測驗結束後，不再寫入 `questions` 表。只有老師在後台的主動儲存操作，才能修改題庫。
+
+### GitHub Actions 每日自動備份
+
+已設定排程的 GitHub Actions 工作流程（`backup.yml`），每天 UTC 00:00 執行。
+
+- 使用 `SERVICE_ROLE_KEY`（儲存於 GitHub Secrets）連線至 Supabase。
+- 將完整的 `questions` 表匯出為 `backups/backup-YYYY-MM-DD.json`。
+- 將備份檔案 Commit 回儲存庫。
+
+這建立了一個具版本控制、且獨立於平台的災難復原檔案。
+
+### E2E 測試的 CI/CD 穩定性
+
+Playwright E2E 流程已針對無頭 CI 環境進行穩定化：
+
+- **Base 路徑覆寫**：在 CI 中，Vite 以 `--base=/` 建置，避免動態 chunk 載入產生 404。
+- **API 模擬**：`WebSocket`、`AudioContext` 與 `SpeechSynthesis` 皆被模擬，防止無頭 Chrome 崩潰。
+- **環境變數**：透過 `webServer.env` 注入假的 Supabase 憑證，避免客戶端初始化錯誤。
+
+---
+
 ## 🧪 測試檔案引用流程與路徑別名（除錯指南）
 
 ### 總覽
@@ -624,6 +674,16 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    npx supabase functions deploy lt-proxy
    ```
 4. 到 **Supabase Dashboard -> Authentication -> Users** 建立一組教師帳號。
+
+### GitHub Actions 備份設定
+
+啟用每日自動備份：
+
+1. 前往 **Repository Settings → Secrets and variables → Actions**。
+2. 建立名為 `SUPABASE_SERVICE_ROLE_KEY` 的 repository secret，貼上你的 Supabase **service role key**（位置：Supabase Dashboard → Settings → API）。
+3. 確認 `VITE_SUPABASE_URL` 也已設為 repository secret。
+
+備份工作流程會自動執行。你也可以在 **Actions** 分頁中手動觸發。
 
 ### 開發與測試
 ```bash
