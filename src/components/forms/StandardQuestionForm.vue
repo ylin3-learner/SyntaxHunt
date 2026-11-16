@@ -160,7 +160,7 @@ const getStageLabel = (stage: TeachingStage) => {
 
     <div class="form-group">
         <label>{{ form.questionType === 'contrast' ? '名詞圖片 (拼圖右側)' : form.questionType === 'chunk' ? '片語情境圖片' : '正確角色圖片'
-            }}</label>
+        }}</label>
         <div class="upload-area" :class="{ 'active-upload': activeUploadTarget === 'noun' }"
             @click="triggerUpload('noun')">
             <img v-if="form.imageUrl" :src="form.imageUrl" class="preview-img" />
@@ -242,15 +242,16 @@ const getStageLabel = (stage: TeachingStage) => {
     </div>
 
     <div v-if="form.questionType === 'standard' && form.questionMode === 'reduce'" class="funnel-preview">
-        <div class="funnel-title">🔍 系統自動拆解預覽 (可手動修改保留內容)</div>
+        <div class="funnel-title">🔍 系統自動拆解預覽 (決定學生最終要排出的語序)</div>
         <div class="funnel-row"><span class="funnel-label" style="color: #166534;">🟢 保留 (簡化句)</span><input
                 v-model="form.prepositionSentence" type="text" class="funnel-input-kept"
-                placeholder="Ex: [with a dictionary]" /></div>
+                placeholder="Ex: with [a dictionary]" /></div>
         <div class="funnel-row"><span class="funnel-label">🗑️ 丟棄 (垃圾桶)</span><span class="funnel-value discarded">{{
             funnelDiscarded || '（無多餘詞彙）' }}</span></div>
         <p
             style="font-size: 0.85rem; color: #b45309; margin-top: 8px; background: #fef3c7; padding: 8px; border-radius: 8px;">
-            💡 提示：如果「動詞」要轉換為「介系詞」（例如 who is carrying ➔ with），請直接在綠色框內加上介系詞，系統會自動把該字加入學生的字磚庫。</p>
+            💡 提示：如果「動詞」要轉換為「介系詞」（例如 who is carrying ➔ with），請在綠色框內輸入**完整的目標順序**（例如：`with [a
+            dictionary]`），系統會自動把該字加入學生的字磚庫並作為正確答案。</p>
     </div>
 
     <div class="form-group" v-if="form.questionType === 'standard'">

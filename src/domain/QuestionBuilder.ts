@@ -214,37 +214,45 @@ export const buildQuestion = (form: FormPayload): { question?: QuestionData; err
 
         // 建立混合字磚陣列
         const finalChunks: any[] = [];
-
-        // 1. 原句字磚 (可移除，除非在 keptTiles 中指定為保留 → 藍色)
         const keptTexts = (form.keptTiles || []).map(t => t.replace(/[\[\]]/g, "").toLowerCase());
+        const seenTexts = new Set<string>();
+
+        // 1. 放入 relCorrect（原句字磚）
         relCorrect.forEach((text, i) => {
             const cleanText = text.replace(/[\[\]]/g, "").toLowerCase();
+            seenTexts.add(cleanText);
             finalChunks.push({
                 id: `${newQuestion.id}-rel-${i}`,
                 text,
                 draggable: true,
-                isTargetKeep: keptTexts.includes(cleanText) // keptTiles 中的詞彙標記為藍色保留（不可刪除）
+                isTargetKeep: keptTexts.includes(cleanText)
             });
         });
 
-        // 2. 目標保留片語 (不可移除) - 僅加入 relCorrect 中尚未出現的 tiles，避免重複
+        // 2. 放入 prepTiles（目標簡化句字磚，決定順序）
         if (form.prepositionSentence) {
             const prepTiles2 = generateTiles(form.prepositionSentence);
-            const relTexts = relCorrect.map(t => t.replace(/[\[\]]/g, "").toLowerCase());
             prepTiles2.forEach((text, i) => {
                 const cleanText = text.replace(/[\[\]]/g, "").toLowerCase();
-                if (!relTexts.includes(cleanText) && !keptTexts.includes(cleanText)) {
+
+                if (!seenTexts.has(cleanText)) {
+                    seenTexts.add(cleanText);
                     finalChunks.push({
                         id: `${newQuestion.id}-prep-${i}`,
                         text,
-                        draggable: false,
+                        draggable: true,
                         isTargetKeep: true
                     });
+                } else {
+                    const existing = finalChunks.find(c => c.text.replace(/[\[\]]/g, "").toLowerCase() === cleanText);
+                    if (existing) {
+                        existing.isTargetKeep = true;
+                    }
                 }
             });
         }
 
-        // 3. 干擾磚 (可移除，僅在 BUILD 模式加入，避免破壞 REDUCE 的減法邏輯)
+        // 3. 干擾磚（僅 BUILD 模式加入）
         if (form.questionMode === 'build') {
             distractors.forEach((text, i) => {
                 finalChunks.push({
@@ -256,30 +264,27 @@ export const buildQuestion = (form: FormPayload): { question?: QuestionData; err
             });
         }
 
-        // 決定正確答案
+        // 👇 決定正確答案（以綠色框為最高指導原則）
         let correctTokens: string[] = [];
         if (form.questionMode === 'reduce') {
             if (form.prepositionSentence) {
-                const prepTexts = generateTiles(form.prepositionSentence).map(t => t.replace(/[\[\]]/g, ''));
-                const keptTexts = finalChunks
+                // 直接採用老師在綠色框輸入的順序作為標準答案
+                const prepTokens = generateTiles(form.prepositionSentence).map(t => t.replace(/[\[\]]/g, ''));
+
+                // 把句型 A 裡標記為保留，但沒在綠色框出現的字，附加在後面（防呆）
+                const otherKeptTexts = finalChunks
                     .filter(c => c.isTargetKeep)
-                    .map(c => c.text.replace(/[\[\]]/g, ''));
-                const otherKeptTexts = keptTexts.filter(t => !prepTexts.map(p => p.toLowerCase()).includes(t.toLowerCase()));
-                correctTokens = [...prepTexts, ...otherKeptTexts];
+                    .map(c => c.text.replace(/[\[\]]/g, ''))
+                    .filter(t => !prepTokens.map(p => p.toLowerCase()).includes(t.toLowerCase()));
+
+                correctTokens = [...prepTokens, ...otherKeptTexts];
             } else {
-                correctTokens = finalChunks
-                    .filter(c => c.isTargetKeep)
-                    .map(c => c.text.replace(/[\[\]]/g, ''));
+                correctTokens = finalChunks.filter(c => c.isTargetKeep).map(c => c.text.replace(/[\[\]]/g, ''));
             }
         } else {
             const buildAnswer = (form.grammarAnswer || form.relativeSentence || '').trim();
             correctTokens = buildAnswer.split(/\s+/).filter(Boolean).map(t => t.replace(/[\[\]]/g, ''));
         }
-
-        console.log('🚨 [Trace-QuestionBuilder] 模式:', form.questionMode);
-        console.log('🚨 [Trace-QuestionBuilder] 句型A:', form.relativeSentence);
-        console.log('🚨 [Trace-QuestionBuilder] 綠色框(簡化句):', form.prepositionSentence);
-        console.log('🚨 [Trace-QuestionBuilder] 最終 chunks:', finalChunks);
 
         if (finalChunks.length > 0) {
             newQuestion.chunks = finalChunks;
