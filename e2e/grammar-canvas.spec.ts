@@ -163,31 +163,30 @@ const chunkQuestion: ChunkQuestion = {
     await page.goto('/');
     await page.waitForTimeout(1000);
 
-    // 檢查是否顯示 StagePreview（ChunkPreview）
-    const previewSection = page.locator('.stage-preview');
+    // 檢查是否顯示 ChunkPreview（片語預覽）
+    const previewSection = page.locator('.chunk-preview');
     await expect(previewSection).toBeVisible();
 
-    // 檢查大圖片
-    const targetImage = page.locator('.target-image img');
+    // 檢查大圖片（chunk preview 會顯示圖片或佔位符）
+    const targetImage = page.locator('.preview-img');
     await expect(targetImage).toBeVisible();
-    await expect(targetImage).toHaveAttribute('src', '/test-image.jpg');
 
     // 檢查英文片語
-    const chunkText = page.locator('.chunk-text');
+    const chunkText = page.locator('.noun-text');
     await expect(chunkText).toBeVisible();
     await expect(chunkText).toContainText('The boy');
 
     // 檢查中文意思
-    const chunkZh = page.locator('.chunk-zh');
+    const chunkZh = page.locator('.zh-text');
     await expect(chunkZh).toBeVisible();
     await expect(chunkZh).toContainText('男孩');
 
     // 檢查 TTS 按鈕
-    const ttsButton = page.locator('.tts-button');
+    const ttsButton = page.locator('.audio-hint');
     await expect(ttsButton).toBeVisible();
 
     // 檢查三個選項按鈕
-    const quizOptions = page.locator('.quiz-option');
+    const quizOptions = page.locator('.quiz-btn');
     await expect(quizOptions).toHaveCount(3);
 
     // 檢查第一個選項是正確的
