@@ -172,10 +172,23 @@ export const CloudDatabase = {
         .upsert({
           room_code: classroomId,
           current_question_id: questionId,
+          teacher_id: user.id,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'room_code' });
 
-      if (error) throw error;
+      if (error) {
+        // If onConflict fails (no unique constraint on room_code), try updating by teacher_id
+        console.log('onConflict failed, trying update by teacher_id:', error.message);
+        const { error: updateError } = await supabase
+          .from('classroom_state')
+          .update({
+            current_question_id: questionId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('teacher_id', user.id);
+
+        if (updateError) throw updateError;
+      }
       console.log('☁️ [CloudDatabase] 已派送題目到教室:', { classroomId, questionId });
       return true;
     } catch (error) {
