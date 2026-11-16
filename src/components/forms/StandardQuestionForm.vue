@@ -16,6 +16,40 @@ const funnelDiscarded = computed(() =>
     props.form.relativeSentence.replace(/\[[^\]]+\]/g, '').replace(/\s+/g, ' ').trim()
 );
 
+// 解析句型 A 為字磚（與 QuestionBuilder 的 generateTiles 邏輯一致：[] 內為單一 chunk）
+const relativeTiles = computed<{ text: string; display: string }[]>(() => {
+    const sentence = props.form.relativeSentence || '';
+    const regex = /\[([^\]]+)\]|([^\s]+)/g;
+    const tiles: { text: string; display: string }[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(sentence)) !== null) {
+        if (match[1]) tiles.push({ text: match[1], display: match[1] });
+        else if (match[2]) tiles.push({ text: match[2], display: match[2] });
+    }
+    return tiles;
+});
+
+const normalizeTile = (text: string) => text.replace(/[\[\]]/g, '').trim().toLowerCase();
+
+const isTileKept = (text: string) => {
+    const key = normalizeTile(text);
+    return (props.form.keptTiles || []).some(t => normalizeTile(t) === key);
+};
+
+// 點擊字磚切換「藍色保留（不可刪除）」與「紅色可刪除」
+const toggleTile = (text: string) => {
+    const key = normalizeTile(text);
+    const kept = props.form.keptTiles || [];
+    const existingIdx = kept.findIndex(t => normalizeTile(t) === key);
+    const next = [...kept];
+    if (existingIdx === -1) {
+        next.push(text.replace(/[\[\]]/g, '').trim());
+    } else {
+        next.splice(existingIdx, 1);
+    }
+    props.form.keptTiles = next;
+};
+
 // 這裡定義了所有可勾選的階段
 const allStages = [
     { value: 'preview', label: '預覽' },
@@ -190,6 +224,21 @@ const getStageLabel = (stage: TeachingStage) => {
         <input v-model="form.relativeSentence" type="text"
             :placeholder="form.questionMode === 'reduce' ? 'Ex: who wears [a blue uniform]' : 'Ex: who wears a blue uniform'"
             @focus="$emit('update:activeUploadTarget', null)" />
+        <div v-if="form.questionType === 'standard' && form.questionMode === 'reduce'" class="tile-toggle-panel">
+            <div class="tile-toggle-title">
+                🎯 點擊下方字磚切換保留狀態：
+                <span class="legend-blue">藍色 = 學生必須保留（不可刪除）</span>
+                ｜
+                <span class="legend-red">紅色 = 可刪除</span>
+            </div>
+            <div class="tile-toggle-list">
+                <button v-for="(tile, idx) in relativeTiles" :key="idx" type="button" class="tile-toggle-btn"
+                    :class="{ 'is-kept': isTileKept(tile.text) }" @click.prevent="toggleTile(tile.text)">
+                    {{ tile.display }}
+                </button>
+                <span v-if="relativeTiles.length === 0" class="tile-toggle-empty">請先在上方輸入句型 A</span>
+            </div>
+        </div>
     </div>
 
     <div v-if="form.questionType === 'standard' && form.questionMode === 'reduce'" class="funnel-preview">
@@ -525,6 +574,65 @@ const getStageLabel = (stage: TeachingStage) => {
     border: 1px solid #fecaca;
     text-decoration: line-through;
     opacity: 0.7;
+}
+
+.tile-toggle-panel {
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border: 1px dashed #94a3b8;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tile-toggle-title {
+    font-size: 0.85rem;
+    color: #475569;
+    font-weight: bold;
+}
+
+.tile-toggle-title .legend-blue {
+    color: #1899d6;
+}
+
+.tile-toggle-title .legend-red {
+    color: #ea2b2b;
+}
+
+.tile-toggle-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tile-toggle-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    border: 2px solid #ff4b4b;
+    background: #fff0f0;
+    color: #ea2b2b;
+    transition: all 0.15s;
+}
+
+.tile-toggle-btn:hover {
+    transform: scale(1.05);
+}
+
+.tile-toggle-btn.is-kept {
+    border-color: #1cb0f6;
+    background: #e6f7ff;
+    color: #1899d6;
+    box-shadow: 0 2px 4px rgba(28, 176, 246, 0.2);
+}
+
+.tile-toggle-empty {
+    color: #94a3b8;
+    font-size: 0.85rem;
 }
 
 @keyframes fadeIn {

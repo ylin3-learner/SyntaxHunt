@@ -40,6 +40,7 @@ export interface FormPayload {
     matrixOptionsInput: string;
     relativeSentence: string;
     prepositionSentence: string;
+    keptTiles: string[]; // 老師在句型 A 編輯區直接標記為藍色（目標保留）的詞彙純文字
     distractorsInput: string;
     chineseSentence: string;
     chineseHighlight: string;
@@ -214,26 +215,32 @@ export const buildQuestion = (form: FormPayload): { question?: QuestionData; err
         // 建立混合字磚陣列
         const finalChunks: any[] = [];
 
-        // 1. 原句字磚 (可移除)
+        // 1. 原句字磚 (可移除，除非在 keptTiles 中指定為保留 → 藍色)
+        const keptTexts = (form.keptTiles || []).map(t => t.replace(/[\[\]]/g, "").toLowerCase());
         relCorrect.forEach((text, i) => {
+            const cleanText = text.replace(/[\[\]]/g, "").toLowerCase();
             finalChunks.push({
                 id: `${newQuestion.id}-rel-${i}`,
                 text,
                 draggable: true,
-                isTargetKeep: false
+                isTargetKeep: keptTexts.includes(cleanText) // keptTiles 中的詞彙標記為藍色保留（不可刪除）
             });
         });
 
-        // 2. 目標保留片語 (不可移除)
+        // 2. 目標保留片語 (不可移除) - 僅加入 relCorrect 中尚未出現的 tiles，避免重複
         if (form.prepositionSentence) {
-            const prepTiles = generateTiles(form.prepositionSentence);
-            prepTiles.forEach((text, i) => {
-                finalChunks.push({
-                    id: `${newQuestion.id}-prep-${i}`,
-                    text,
-                    draggable: false,
-                    isTargetKeep: true
-                });
+            const prepTiles2 = generateTiles(form.prepositionSentence);
+            const relTexts = relCorrect.map(t => t.replace(/[\[\]]/g, "").toLowerCase());
+            prepTiles2.forEach((text, i) => {
+                const cleanText = text.replace(/[\[\]]/g, "").toLowerCase();
+                if (!relTexts.includes(cleanText) && !keptTexts.includes(cleanText)) {
+                    finalChunks.push({
+                        id: `${newQuestion.id}-prep-${i}`,
+                        text,
+                        draggable: false,
+                        isTargetKeep: true
+                    });
+                }
             });
         }
 
@@ -251,16 +258,18 @@ export const buildQuestion = (form: FormPayload): { question?: QuestionData; err
 
         // 決定正確答案
         let correctTokens: string[] = [];
-        if (form.questionMode === 'reduce' && form.prepositionSentence) {
-            // Reduce 正確答案 = 原本的主詞 + 保留的簡化片語 + 剩下的句子
-            const prepTiles = generateTiles(form.prepositionSentence).map(t => t.replace(/[\[\]]/g, ''));
-
-            // 如果這題是克漏字，正確答案只需包含「中間的簡化句」
-            if (form.clozePrefix || form.clozeSuffix) {
-                correctTokens = [...prepTiles];
+        if (form.questionMode === 'reduce') {
+            if (form.prepositionSentence) {
+                const prepTexts = generateTiles(form.prepositionSentence).map(t => t.replace(/[\[\]]/g, ''));
+                const keptTexts = finalChunks
+                    .filter(c => c.isTargetKeep)
+                    .map(c => c.text.replace(/[\[\]]/g, ''));
+                const otherKeptTexts = keptTexts.filter(t => !prepTexts.map(p => p.toLowerCase()).includes(t.toLowerCase()));
+                correctTokens = [...prepTexts, ...otherKeptTexts];
             } else {
-                // 否則正確答案是完整句子
-                correctTokens = [...prepTiles]; // 這裡視你的架構而定，如果 chunks 只包含相對子句，那只需比對 prepTiles
+                correctTokens = finalChunks
+                    .filter(c => c.isTargetKeep)
+                    .map(c => c.text.replace(/[\[\]]/g, ''));
             }
         } else {
             const buildAnswer = (form.grammarAnswer || form.relativeSentence || '').trim();

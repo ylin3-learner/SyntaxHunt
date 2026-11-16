@@ -147,6 +147,7 @@ const editQuestion = (q: QuestionData) => {
     form.value.questionMode = q.mode || 'build';
     form.value.relativeSentence = q.grammarFeature?.relative.label || '';
     form.value.prepositionSentence = q.grammarFeature?.preposition.label || '';
+    form.value.keptTiles = q.chunks?.filter(c => c.isTargetKeep).map(c => c.text.replace(/[\[\]]/g, '')) || [];
     form.value.chunkZhInput = q.previewData?.chunkZh || '';
     form.value.chunkQuizInput = q.previewData?.quizOptions?.filter(o => !o.isCorrect).map(o => o.text).join(', ') || '';
     form.value.distractorImageUrl = q.inputData?.options.find(o => !o.isCorrect)?.image || '';

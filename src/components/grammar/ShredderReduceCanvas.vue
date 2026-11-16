@@ -28,6 +28,7 @@ const signals = ref<DiagnosticSignal[]>([]);
 const isSuccess = ref(false);
 const isWrong = ref(false);
 const draggedTileIndex = ref<number | null>(null);
+const isDragging = ref(false);
 
 const initTiles = () => {
   const safeChunks = props.initialChunks || [];
@@ -40,19 +41,29 @@ let successTimeout: ReturnType<typeof setTimeout> | undefined;
 onBeforeUnmount(() => { if (successTimeout) clearTimeout(successTimeout); });
 
 const discardTile = (tile: Chunk) => {
-  if (isSuccess.value) return;
+  if (isSuccess.value || isDragging.value) return;
   const index = answerArea.value.findIndex(t => t.id === tile.id);
   if (index !== -1) {
     const [removed] = answerArea.value.splice(index, 1);
-    trashArea.value.push(removed);
-    resetState();
-    void checkAnswer();
+    if (removed) {
+      trashArea.value.push(removed);
+      resetState();
+      void checkAnswer();
+    }
   }
 };
 
 const handleDragStart = (index: number) => {
   if (isSuccess.value) return;
   draggedTileIndex.value = index;
+  isDragging.value = true;
+};
+
+const handleDragEnd = () => {
+  setTimeout(() => {
+    draggedTileIndex.value = null;
+    isDragging.value = false;
+  }, 50);
 };
 
 const handleDrop = (dropIndex: number) => {
@@ -61,10 +72,26 @@ const handleDrop = (dropIndex: number) => {
   if (startIndex === dropIndex) return;
 
   const item = answerArea.value.splice(startIndex, 1)[0];
-  answerArea.value.splice(dropIndex, 0, item);
+  if (item) {
+    answerArea.value.splice(dropIndex, 0, item);
+  }
   draggedTileIndex.value = null;
+  isDragging.value = false;
   resetState();
   void checkAnswer();
+};
+
+const moveTile = (index: number, direction: 'left' | 'right') => {
+  if (isSuccess.value) return;
+  const targetIndex = direction === 'left' ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= answerArea.value.length) return;
+
+  const item = answerArea.value.splice(index, 1)[0];
+  if (item) {
+    answerArea.value.splice(targetIndex, 0, item);
+    resetState();
+    void checkAnswer();
+  }
 };
 
 const restoreTile = (tile: Chunk) => {
@@ -72,10 +99,12 @@ const restoreTile = (tile: Chunk) => {
   const index = trashArea.value.findIndex(t => t.id === tile.id);
   if (index !== -1) {
     const [restored] = trashArea.value.splice(index, 1);
-    answerArea.value.push(restored);
-    answerArea.value.sort((a, b) => props.initialChunks.findIndex(c => c.id === a.id) - props.initialChunks.findIndex(c => c.id === b.id));
-    resetState();
-    void checkAnswer();
+    if (restored) {
+      answerArea.value.push(restored);
+      answerArea.value.sort((a, b) => props.initialChunks.findIndex(c => c.id === a.id) - props.initialChunks.findIndex(c => c.id === b.id));
+      resetState();
+      void checkAnswer();
+    }
   }
 };
 
@@ -90,6 +119,8 @@ const checkAnswer = async (force = false) => {
 
   if (correctTokens.length === 0) return;
 
+  // 順序敏感比對：學生必須將字磚依正確語序排列，才能判定成功。
+  // 這讓學生學習 who is carrying = with 的語序關係（介系詞片語必須緊鄰名詞）。
   const cleanCurrent = normalizeAnswer(studentTokens);
   const cleanTarget = normalizeAnswer(correctTokens);
 
@@ -130,19 +161,26 @@ const isError = (index: number) => signals.value.some(s => s.index === index);
       </span>
 
       <template v-for="(tile, index) in answerArea" :key="tile.id">
-        <!-- 🟢 目標保留字磚 (不可點擊) -->
-        <span v-if="tile.isTargetKeep" class="target-word" :class="{ 'tile-success': isSuccess }">
-          {{ tile.text.replace(/[\[\]]/g, '') }}
-        </span>
-        
-        <!-- 🔴 原句與干擾字磚 (可點擊移除) -->
-        <button v-else-if="tile.draggable" type="button" class="removable-word" draggable="true"
-          @dragstart="handleDragStart(index)" @dragover.prevent @drop="handleDrop(index)"
-          :aria-label="'移除「' + tile.text.replace(/[\[\]]/g, '') + '」'"
-          :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }" @click="discardTile(tile)">
-          {{ tile.text.replace(/[\[\]]/g, '') }} <span class="remove-hint">×</span>
-        </button>
-        
+        <!-- 🟢 目標保留字磚 (藍色，不可刪除，可拖曳/按鈕調整順序) -->
+        <div v-if="tile.isTargetKeep" class="target-word" draggable="true"
+          @dragstart="handleDragStart(index)" @dragend="handleDragEnd" @dragover.prevent @drop="handleDrop(index)"
+          :class="{ 'tile-success': isSuccess, 'is-dragging': draggedTileIndex === index }">
+          <button v-if="answerArea.length > 1 && index > 0" type="button" class="reorder-btn" title="向左移" @click.stop="moveTile(index, 'left')">‹</button>
+          <span>{{ tile.text.replace(/[\[\]]/g, '') }}</span>
+          <button v-if="answerArea.length > 1 && index < answerArea.length - 1" type="button" class="reorder-btn" title="向右移" @click.stop="moveTile(index, 'right')">›</button>
+        </div>
+
+        <!-- 🔴 原句與干擾字磚 (紅色，可點擊移除，可拖曳/按鈕調整順序) -->
+        <div v-else-if="tile.draggable" class="removable-word" draggable="true"
+          @dragstart="handleDragStart(index)" @dragend="handleDragEnd" @dragover.prevent @drop="handleDrop(index)"
+          :class="{ 'tile-error': isError(index), 'tile-success': isSuccess, 'is-dragging': draggedTileIndex === index }"
+          @click="discardTile(tile)">
+          <button v-if="answerArea.length > 1 && index > 0" type="button" class="reorder-btn" title="向左移" @click.stop="moveTile(index, 'left')">‹</button>
+          <span class="removable-text">{{ tile.text.replace(/[\[\]]/g, '') }}</span>
+          <button type="button" class="remove-hint" :aria-label="'移除「' + tile.text.replace(/[\[\]]/g, '') + '」'" @click.stop="discardTile(tile)">×</button>
+          <button v-if="answerArea.length > 1 && index < answerArea.length - 1" type="button" class="reorder-btn" title="向右移" @click.stop="moveTile(index, 'right')">›</button>
+        </div>
+
         <!-- ⚪ 固定文字 -->
         <span v-else class="fixed-word" :class="{ 'tile-error': isError(index), 'tile-success': isSuccess }">
           {{ tile.text.replace(/[\[\]]/g, '') }}
@@ -179,10 +217,11 @@ const isError = (index: number) => signals.value.some(s => s.index === index);
 </template>
 
 <style scoped>
-/* 目標保留字磚的樣式：藍色、不可點擊、無打叉 */
+/* 目標保留字磚的樣式：藍色、可拖曳/按鈕調整順序 */
 .target-word {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   padding: 2px 10px;
   border: 2px solid #1cb0f6;
   border-radius: 8px;
@@ -190,7 +229,37 @@ const isError = (index: number) => signals.value.some(s => s.index === index);
   color: #1899d6;
   font-size: inherit;
   font-weight: bold;
-  cursor: default; /* 不可點擊 */
+  cursor: grab;
+  user-select: none;
+  transition: all 0.2s;
+}
+
+.target-word:active {
+  cursor: grabbing;
+}
+
+.removable-text {
+  cursor: pointer;
+}
+
+.reorder-btn {
+  background: transparent;
+  border: none;
+  color: currentColor;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.reorder-btn:hover {
+  opacity: 1;
+}
+
+.is-dragging {
+  opacity: 0.4;
 }
 .reduce-sentence-mode {
   display: flex;
@@ -230,7 +299,7 @@ const isError = (index: number) => signals.value.some(s => s.index === index);
 .removable-word {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   padding: 2px 10px;
   border: 2px solid #ff4b4b;
   border-radius: 8px;
@@ -239,6 +308,7 @@ const isError = (index: number) => signals.value.some(s => s.index === index);
   font-size: inherit;
   font-weight: bold;
   cursor: grab;
+  user-select: none;
   transition: all 0.2s;
 }
 
@@ -254,6 +324,15 @@ const isError = (index: number) => signals.value.some(s => s.index === index);
 .remove-hint {
   font-size: 1.2rem;
   opacity: 0.6;
+  background: transparent;
+  border: none;
+  color: currentColor;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.remove-hint:hover {
+  opacity: 1;
 }
 
 .trash-zone-wrapper {

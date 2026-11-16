@@ -23,12 +23,14 @@ const reduceQuestion = {
   canvas_mode: 'REDUCE',
   targetNoun: 'The writer',
   antecedent: { noun: 'The writer', number: 'singular', person: 'person' },
-  correctAnswer: ['The writer', 'is', 'here'],
+  contextCloze: { prefix: 'The writer', suffix: 'is Mr. Lee.' },
+  correctAnswer: ['with', 'a dictionary'],
   chunks: [
-    { id: '1', text: 'The writer', draggable: true },
-    { id: '2', text: 'who', draggable: true },
-    { id: '3', text: 'is', draggable: true },
-    { id: '4', text: 'here', draggable: true },
+    { id: '1', text: 'who', draggable: true },
+    { id: '2', text: 'is', draggable: true },
+    { id: '3', text: 'carrying', draggable: true },
+    { id: '4', text: '[a dictionary]', draggable: true, isTargetKeep: true },
+    { id: '5', text: 'with', draggable: false, isTargetKeep: true },
   ],
 };
 
@@ -100,7 +102,7 @@ test.describe('Grammar Canvas E2E - 隔離環境測試', () => {
     await expect(page.locator('.check-answer-button')).toBeVisible();
   });
 
-  test('REDUCE 模式：應渲染可移除字磚與垃圾桶', async ({ page }) => {
+  test('REDUCE 模式：應渲染可移除字磚與垃圾桶，並支援拖拽調整語序', async ({ page }) => {
     await page.addInitScript((q) => {
       window.localStorage.setItem('custom_questions', JSON.stringify([q]));
     }, reduceQuestion);
@@ -108,10 +110,32 @@ test.describe('Grammar Canvas E2E - 隔離環境測試', () => {
     await page.goto('/');
     await page.waitForTimeout(1000);
 
+    // 被標記為 isTargetKeep 的字磚（藍色）不會渲染為可移除字磚：a dictionary 與 with
+    const kept = page.locator('.target-word');
+    await expect(kept).toHaveCount(2);
+    await expect(kept.nth(0)).toContainText('a dictionary');
+    await expect(kept.nth(1)).toContainText('with');
+
+    // 剩下的可移除字磚為紅色（可丟入垃圾桶）
     const removable = page.locator('.removable-word');
-    await expect(removable.first()).toBeVisible();
-    await expect(removable).toHaveCount(4);
+    await expect(removable).toHaveCount(3);
     await expect(page.locator('.trash-zone-wrapper')).toBeVisible();
+
+    // 依序丟棄 who / is / carrying，答案區剩 [a dictionary, with]
+    await page.locator('.removable-word').nth(0).click();
+    await page.locator('.removable-word').nth(0).click();
+    await page.locator('.removable-word').nth(0).click();
+    await page.waitForTimeout(300);
+
+    // 語序錯誤（a dictionary 在 with 前），不應成功
+    await expect(page.locator('.reduce-sentence-mode')).not.toHaveClass(/success-bg/);
+
+    // 用左右箭頭將 with 移到 a dictionary 之前 → [with, a dictionary]
+    await page.locator('.target-word .reorder-btn').nth(0).click();
+    await page.waitForTimeout(300);
+
+    // 語序正確，判定成功
+    await expect(page.locator('.reduce-sentence-mode')).toHaveClass(/success-bg/);
   });
 
   test('片語題：應渲染片語預覽與測驗 UI', async ({ page }) => {
