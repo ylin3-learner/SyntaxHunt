@@ -506,8 +506,10 @@ sequenceDiagram
 ## 🛡️ Data Consistency & Fault Tolerance (Real-time Broadcast)
 
 To ensure a seamless classroom experience, the real-time broadcast mechanism handles potential race conditions and network desynchronization:
-1. **Zero-Trust Broadcast (Teacher Side)**: The system strictly awaits database confirmation (`await CloudDatabase.saveQuestions`) before broadcasting the new question ID to the classroom. It also intercepts unauthenticated states to prevent false-positive broadcasts.
-2. **Defensive Loading (Student Side)**: If a student receives a pushed `question_id` that does not exist in their local memory (e.g., a newly created question), the client automatically triggers a **Defensive Fetch** to pull the latest question bank from the cloud before switching the UI.
+1. **Zero-Trust Broadcast (Teacher Side)**: The system strictly awaits database confirmation (`await updateQuestion` / `saveQuestions`) before broadcasting the new question ID to the classroom. It also intercepts unauthenticated states to prevent false-positive broadcasts.
+2. **Defensive Loading & Seamless Update (Student Side)**: If a student receives a pushed `question_id`, the client automatically triggers a **Defensive Fetch** to pull the latest question bank from the cloud. 
+   - **If it's a new question**: The UI switches to the new question and resets the stage.
+   - **If it's the same question ID (Live Edit)**: The system updates the question data in place but **preserves the student's current stage and tracking state**, preventing them from losing progress if the teacher fixes a typo or tweaks a chunk mid-lesson.
 3. **Graceful Degradation**: If the sync fails completely, the student's local progress and current question remain unaffected, preventing the session from crashing.
 
 ---
@@ -531,6 +533,8 @@ To ensure a seamless classroom experience, the real-time broadcast mechanism han
 - **Local Deterministic Chunking**: Uses `compromise.js` and an irregular-verb JSON table to automatically generate interactive chunks.
 - **Visual Question Flow**: Open the full-screen node canvas to reorder questions by dragging nodes.
 - **Master Remote Control**: Push questions, force-reset timers, and add time (`+30s`) instantly.
+- **Auto-Persist on Save**: Editing a question or clicking "Push to Class" automatically triggers an `await` database write to ensure the student side always fetches the most up-to-date question data.
+- **Data Validation Guards**: Batch saves are protected by validation checks (e.g., preventing accidental mass deletion or empty overwrites) to ensure the question bank is never catastrophically lost.
 - **Unit-Level Locking**: Force students to stay within a specific unit by selecting and publishing it from the class control panel.
 - **QR Code & Room Code Sharing**: Instantly generate a projector-friendly QR Code. Students can scan it to automatically join the teacher's specific classroom channel.
 
@@ -633,6 +637,7 @@ tests/                         ← Vitest scan scope
 ├── TeacherAnalytics.spec.ts
 ├── testUI.spec.ts
 ├── useQuestionForm.spec.ts
+├── useRealtimeSync.spec.ts
 ├── verbTable.test.ts
 └── grammarTopics.test.ts
 ```
