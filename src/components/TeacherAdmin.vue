@@ -56,13 +56,23 @@ const {
   isEditing, topicsInSelectedChapter, selectedGrammarTopic,
   applyGrammarTopic, resetForm, saveQuestion
 } = useQuestionForm(
-  (event: string, payload: any) => {
+  async (event: string, payload: any) => {
     if (event === 'save-question') {
-      if (form.value.editingId) {
-        const idx = localQuestions.value.findIndex(q => q.id === form.value.editingId);
+      const editingId = form.value.editingId;
+      if (editingId) {
+        const idx = localQuestions.value.findIndex(q => q.id === editingId);
         if (idx !== -1) localQuestions.value[idx] = payload;
       } else {
         localQuestions.value.push(payload);
+      }
+
+      // ✅ 新增：同步儲存到雲端（新增 / 更新）
+      // 確保學生端拉取題庫時能拿到老師最新的編輯結果
+      const saved = editingId
+        ? await CloudDatabase.updateQuestion(payload)
+        : await CloudDatabase.addQuestion(payload);
+      if (!saved) {
+        alert('⚠️ 題目已存在本機，但「雲端儲存失敗」，請檢查網路連線。');
       }
     }
   },
@@ -251,6 +261,21 @@ const handleSaveAndPush = async (id: string) => {
   console.log('🚀 [Teacher] 準備派送題目，ID:', id);
   console.log('🚀 [Teacher] 本地題庫目前有幾題:', localQuestions.value.length);
 
+  // ✅ 新增：如果正在編輯，先將題目儲存到雲端
+  // 這樣才能確保学生端收到最新的題目資料，而不是舊的快照
+  if (form.value.editingId) {
+    const qToSave = localQuestions.value.find(q => q.id === form.value.editingId);
+    if (qToSave) {
+      console.log('💾 [Teacher] 儲存編輯後的題目到雲端...');
+      const saved = await CloudDatabase.updateQuestion(qToSave);
+      if (!saved) {
+        alert('⚠️ 儲存題目失敗，請檢查網路連線。');
+        return;
+      }
+      console.log('✅ [Teacher] 題目已儲存到雲端。');
+    }
+  }
+
   if (form.value.editingId === id) resetForm();
 
   // 【設計變更】派送只更新 classroom_state，不觸動 questions 表
@@ -271,8 +296,15 @@ const handleSaveAndPush = async (id: string) => {
   emit('push', id);
   console.log('🚀 [Teacher] 已派送題目並發出廣播！');
 };
-const saveAllAndClose = () => {
+const saveAllAndClose = async () => {
   if (localQuestions.value.length === 0) { alert('題庫不能為空'); return; }
+
+  // ✅ 新增：關閉前將完整題庫寫入雲端
+  const saved = await CloudDatabase.saveQuestionsBatch(localQuestions.value);
+  if (!saved) {
+    alert('⚠️ 題庫雲端儲存失敗，請檢查網路連線。');
+  }
+
   emit('update', localQuestions.value); emit('close');
 };
 const handleQuestionReorder = (qs: QuestionData[]) => { localQuestions.value = qs; };

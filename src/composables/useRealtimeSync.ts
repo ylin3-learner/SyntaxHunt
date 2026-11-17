@@ -38,16 +38,15 @@ export function useRealtimeSync(
             const targetId = payload.id;
             const targetEndTime = payload.timerEndTime;
 
-            if (targetId && currentQuestion.value?.id !== targetId) {
-                // 1. 先在本地找
+            if (targetId) {
+                // ✅ 修復：無論題目是否已存在於本地，一律重新拉取雲端題庫
+                // 確保老師編輯後推播相同 ID 時，學生端能拿到最新資料
                 let targetQ = questionBank.value.find(q => q.id === targetId);
 
-                // 2. 防禦性載入：如果本地找不到（剛建好的新題），強制去雲端拉取
-                if (!targetQ && currentTeacherId.value) {
-                    console.log(`📡 [Realtime] 本地找不到題目 ${targetId}，強制從雲端拉取題庫...`);
+                if (currentTeacherId.value) {
+                    console.log(`📡 [Realtime] 重新拉取題庫以確保資料最新 (target: ${targetId})...`);
                     const freshQuestions = await CloudDatabase.fetchQuestions(currentTeacherId.value);
                     if (freshQuestions) {
-                        // 更新本地題庫狀態
                         questionBank.value = freshQuestions;
                         fixAntecedentNumbers();
                         targetQ = freshQuestions.find(q => q.id === targetId);
@@ -55,13 +54,20 @@ export function useRealtimeSync(
                     }
                 }
 
-                // 3. 找到題目後，切換當前題目
                 if (targetQ) {
+                    // 計算在更新後題庫中的索引
                     const idx = questionBank.value.findIndex(q => q.id === targetId);
+                    const isSameQuestion = currentQuestion.value?.id === targetId;
+
                     if (idx !== -1) {
                         currentIndex.value = idx;
-                        checkAndSetInitialStage();
-                        trackAnswering();
+
+                        // 僅在切換到不同題目時才重置 stage 與 tracking
+                        // 若是相同 ID（老師修改後重新推播），只更新資料、保留學生進度
+                        if (!isSameQuestion) {
+                            checkAndSetInitialStage();
+                            trackAnswering();
+                        }
                     }
                 } else {
                     console.error(`❌ [Realtime] 嚴重錯誤：無法載入推播的題目 ID: ${targetId}`);
