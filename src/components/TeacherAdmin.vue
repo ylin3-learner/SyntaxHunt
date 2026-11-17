@@ -261,19 +261,18 @@ const handleSaveAndPush = async (id: string) => {
   console.log('🚀 [Teacher] 準備派送題目，ID:', id);
   console.log('🚀 [Teacher] 本地題庫目前有幾題:', localQuestions.value.length);
 
-  // ✅ 新增：如果正在編輯，先將題目儲存到雲端
-  // 這樣才能確保学生端收到最新的題目資料，而不是舊的快照
-  if (form.value.editingId) {
-    const qToSave = localQuestions.value.find(q => q.id === form.value.editingId);
-    if (qToSave) {
-      console.log('💾 [Teacher] 儲存編輯後的題目到雲端...');
-      const saved = await CloudDatabase.updateQuestion(qToSave);
-      if (!saved) {
-        alert('⚠️ 儲存題目失敗，請檢查網路連線。');
-        return;
-      }
-      console.log('✅ [Teacher] 題目已儲存到雲端。');
+  // ✅ 風險 3 修復：派送前「一律」先將該題寫入雲端（不依賴 editingId）
+  // 避免「先點儲存、馬上點派送」的競態條件：儲存是非同步 emit，
+  // 若派送搶在雲端寫入前完成，學生端會拉到舊資料
+  const targetQ = localQuestions.value.find(q => q.id === id);
+  if (targetQ) {
+    console.log('💾 [Teacher] 派送前先儲存題目到雲端...');
+    const saved = await CloudDatabase.updateQuestion(targetQ);
+    if (!saved) {
+      alert('⚠️ 題目雲端儲存失敗，派送已中止。');
+      return;
     }
+    console.log('✅ [Teacher] 題目已儲存到雲端。');
   }
 
   if (form.value.editingId === id) resetForm();

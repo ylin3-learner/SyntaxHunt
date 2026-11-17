@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+﻿import { supabase } from './supabaseClient';
 import type {
   DiagnosticSignal,
   LanguageToolDiagnosticData,
@@ -200,6 +200,18 @@ export const CloudDatabase = {
   // 批次儲存題庫（僅在老師明確點擊「儲存題庫」時呼叫）
   // 相比原 saveQuestions，此版本移除了「本地沒的就刪雲端」的危險邏輯
   async saveQuestionsBatch(questions: QuestionData[]): Promise<boolean> {
+    // 防呆 1：如果題庫是空的，絕對不允許寫入雲端！
+    if (!questions || questions.length === 0) {
+      console.warn('🚨 [Guard] 題庫為空，已攔截雲端覆寫動作！');
+      return false;
+    }
+
+    // 防呆 2：如果題庫只有 1 題，而且 ID 是 'q1'（系統預設假題），絕對不允許寫入！
+    if (questions.length === 1 && questions[0].id === 'q1') {
+      console.warn('🚨 [Guard] 偵測到只有預設題庫，已攔截雲端覆寫動作！');
+      return false;
+    }
+
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
@@ -229,6 +241,42 @@ export const CloudDatabase = {
     } catch (error) {
       console.error('批次儲存到雲端失敗:', error);
       return false;
+    }
+  },
+
+  // 從雲端抓取「單一題目」（減少 Read Storm：相同 ID 重推時不需拉整個題庫）
+  async fetchQuestionById(questionId: string, targetTeacherId?: string): Promise<QuestionData | null> {
+    try {
+      let teacherId = targetTeacherId;
+
+      // 如果沒傳入 targetTeacherId，代表是老師端，檢查登入狀態
+      if (!teacherId) {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) return null;
+        teacherId = user.id;
+      }
+
+      const { data, error } = await supabase
+        .from('questions')
+        .select('data')
+        .eq('teacher_id', teacherId)
+        .eq('id', questionId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('🚨 [CloudDatabase] 讀取單題失敗:', error);
+        return null;
+      }
+      if (!data) return null;
+
+      const question = data.data as QuestionData;
+      return {
+        ...question,
+        sortOrder: Number.isFinite(question.sortOrder) ? question.sortOrder : 0,
+      };
+    } catch (error) {
+      console.error('無法連線到雲端資料庫:', error);
+      return null;
     }
   },
 

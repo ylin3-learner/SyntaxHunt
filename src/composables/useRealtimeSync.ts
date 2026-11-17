@@ -1,4 +1,4 @@
-import { Ref, ref } from 'vue'; // 新增 ref
+﻿import { Ref, ref } from 'vue'; // 新增 ref
 import { useQuizFlow } from './useQuizFlow';
 import { CloudDatabase } from '../services/CloudDatabase';
 import { currentTeacherId } from './useClassroomSync';
@@ -39,38 +39,49 @@ export function useRealtimeSync(
             const targetEndTime = payload.timerEndTime;
 
             if (targetId) {
-                // ✅ 修復：無論題目是否已存在於本地，一律重新拉取雲端題庫
-                // 確保老師編輯後推播相同 ID 時，學生端能拿到最新資料
-                let targetQ = questionBank.value.find(q => q.id === targetId);
+                const isSameQuestion = currentQuestion.value?.id === targetId;
 
-                if (currentTeacherId.value) {
-                    console.log(`📡 [Realtime] 重新拉取題庫以確保資料最新 (target: ${targetId})...`);
-                    const freshQuestions = await CloudDatabase.fetchQuestions(currentTeacherId.value);
-                    if (freshQuestions) {
-                        questionBank.value = freshQuestions;
-                        fixAntecedentNumbers();
-                        targetQ = freshQuestions.find(q => q.id === targetId);
-                        console.log(`📡 [Realtime] 雲端拉取完成，重新尋找結果:`, targetQ ? '找到了' : '還是找不到');
+                if (isSameQuestion && currentTeacherId.value) {
+                    // ✅ 相同題目 ID 重推：只拉取「單一題目」，避免 Read Storm
+                    console.log(`📡 [Realtime] 相同題目 ${targetId} 重推，僅拉取單題...`);
+                    const freshQ = await CloudDatabase.fetchQuestionById(targetId, currentTeacherId.value);
+                    if (freshQ) {
+                        const idx = questionBank.value.findIndex(q => q.id === targetId);
+                        if (idx !== -1) {
+                            questionBank.value[idx] = freshQ;
+                            questionBank.value = [...questionBank.value]; // 觸發 reactivity
+                        }
+                    } else {
+                        // 風險 4：拉取失敗時給予溫和提示，不讓畫面變空白
+                        realtimeNotice.value = '連線不穩，暫時無法更新題目，請重新整理頁面。';
                     }
-                }
+                } else {
+                    // ✅ 不同題目 ID（或首次推播）：全量拉取題庫
+                    let targetQ = questionBank.value.find(q => q.id === targetId);
 
-                if (targetQ) {
-                    // 計算在更新後題庫中的索引
-                    const idx = questionBank.value.findIndex(q => q.id === targetId);
-                    const isSameQuestion = currentQuestion.value?.id === targetId;
+                    if (currentTeacherId.value) {
+                        console.log(`📡 [Realtime] 重新拉取題庫以確保資料最新 (target: ${targetId})...`);
+                        const freshQuestions = await CloudDatabase.fetchQuestions(currentTeacherId.value);
+                        if (freshQuestions) {
+                            questionBank.value = freshQuestions;
+                            fixAntecedentNumbers();
+                            targetQ = freshQuestions.find(q => q.id === targetId);
+                            console.log(`📡 [Realtime] 雲端拉取完成，重新尋找結果:`, targetQ ? '找到了' : '還是找不到');
+                        } else {
+                            realtimeNotice.value = '連線不穩，暫時無法更新題目，請重新整理頁面。';
+                        }
+                    }
 
-                    if (idx !== -1) {
-                        currentIndex.value = idx;
-
-                        // 僅在切換到不同題目時才重置 stage 與 tracking
-                        // 若是相同 ID（老師修改後重新推播），只更新資料、保留學生進度
-                        if (!isSameQuestion) {
+                    if (targetQ) {
+                        const idx = questionBank.value.findIndex(q => q.id === targetId);
+                        if (idx !== -1) {
+                            currentIndex.value = idx;
                             checkAndSetInitialStage();
                             trackAnswering();
                         }
+                    } else {
+                        console.error(`❌ [Realtime] 嚴重錯誤：無法載入推播的題目 ID: ${targetId}`);
                     }
-                } else {
-                    console.error(`❌ [Realtime] 嚴重錯誤：無法載入推播的題目 ID: ${targetId}`);
                 }
             }
 
