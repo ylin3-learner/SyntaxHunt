@@ -242,6 +242,12 @@ Canvas 組件內由診斷管線產生的迷思信號，會嚴格透過 `GrammarC
 
 為了確保學生不會在未繳交評量結果的情況下離開課堂，`SummaryReport.vue` 實作了「零信任離開攔截（Zero-Trust Leave Interception）」與「自動下載」機制。
 
+**核心機制說明：**
+1. **長截圖安全捕捉**：利用 `html2canvas` 搭配動態 `.force-expand` CSS Class 與 `onclone` 回呼函數，強制覆寫容器高度與 `overflow` 屬性，保證下載的 PNG 圖片絕對不會截斷任何迷思紀錄。
+2. **結構化 JSON 匯出**：除了視覺化的 PNG 圖片，另提供「📥 匯出 JSON」按鈕，將 `sessionLog`、學生座號、時間戳記與 ERRANT 錯誤代碼打包為機器可讀的格式，方便老師或研究者進行線下學情分析。
+3. **離開攔截 (`beforeunload`)**：系統註冊全域事件攔截，若學生在下載成功前試圖關閉分頁，瀏覽器會彈出原生警告。
+4. **優雅降級**：若自動下載被瀏覽器阻擋，手動下載按鈕與載入遮罩（`isGenerating`）能確保流暢的使用者體驗。
+
 ```mermaid
 stateDiagram-v2
     [*] --> Generating: 組件掛載 (onMounted)
