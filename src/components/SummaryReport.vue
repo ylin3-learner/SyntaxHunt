@@ -6,6 +6,14 @@ const props = defineProps<{
   completedLevels: number;
   totalLevels: number;
   misconceptions: string[];
+  sessionLog?: Array<{
+    questionId: string;
+    answer: string;
+    isCorrect: boolean;
+    timeSpentMs?: number;
+    errorCodes?: string[];
+  }>;
+  studentSeat?: string;
 }>();
 
 console.log('🚨 [Trace-6: SummaryReport 收到迷思列表]', props.misconceptions);
@@ -17,6 +25,7 @@ const emit = defineEmits<{
 const reportCardRef = ref<HTMLElement | null>(null);
 const isGenerating = ref(false);
 const isDownloaded = ref(false);
+const isDataDownloaded = ref(false);
 let beforeunloadHandler: null | EventListener = null;
 
 const misconceptionText = computed(() => {
@@ -30,16 +39,28 @@ const misconceptionText = computed(() => {
 const downloadScreenshot = async () => {
   if (!reportCardRef.value) return;
   isGenerating.value = true;
-  
+
   try {
+    // 加入 force-expand class 避免截圖截斷
+    const cardEl = reportCardRef.value;
+    cardEl.classList.add('force-expand');
+
     // 使用 html2canvas 將 DOM 轉換為圖片
-    const canvas = await html2canvas(reportCardRef.value, {
-      backgroundColor: '#ffffff', // 確保背景是白色的
-      scale: 2, // 提高解析度，讓圖片在手機上也很清晰
+    const canvas = await html2canvas(cardEl, {
+      backgroundColor: '#ffffff',
+      scale: 2,
       useCORS: true,
+      scrollY: 0,
+      height: cardEl.scrollHeight,
+      windowHeight: cardEl.scrollHeight,
+      onclone: (clonedDoc) => {
+        const clonedCard = clonedDoc.querySelector('.summary-card');
+        if (clonedCard) clonedCard.classList.add('force-expand');
+      },
     });
-    
-    // 將 Canvas 轉為圖片並觸發下載
+
+    cardEl.classList.remove('force-expand');
+
     const image = canvas.toDataURL('image/png');
     const link = document.createElement('a');
     link.href = image;
@@ -49,19 +70,74 @@ const downloadScreenshot = async () => {
     console.error('截圖失敗:', err);
     alert('產生圖片失敗，請直接使用設備的截圖功能。');
   } finally {
+    if (reportCardRef.value) {
+      reportCardRef.value.classList.remove('force-expand');
+    }
     isGenerating.value = false;
   }
 };
+
+const downloadLearningRecord = () => {
+  if (isGenerating.value || isDataDownloaded.value) return;
+  isGenerating.value = true;
+
+  try {
+    const learningRecord = {
+      type: 'syntaxhunter_learning_record',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      studentId: sessionStorage.getItem('student_uuid') || '',
+      studentSeat: props.studentSeat || sessionStorage.getItem('seat_code') || '',
+      teacherId: sessionStorage.getItem('teacher_id') || '',
+      roomCode: sessionStorage.getItem('room_code') || '',
+      completedLevels: props.completedLevels,
+      totalLevels: props.totalLevels,
+      misconceptions: props.misconceptions,
+      sessionLog: props.sessionLog || [],
+    };
+
+    const blob = new Blob([JSON.stringify(learningRecord, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `SyntaxHunter_Data_${props.studentSeat || sessionStorage.getItem('seat_code') || 'unknown'}_${new Date().getTime()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    isDataDownloaded.value = true;
+  } catch (err) {
+    console.error('匯出數據失敗:', err);
+    alert('匯出數據失敗，請稍後再試。');
+  } finally {
+    isGenerating.value = false;
+  }
+};
+
 const autoDownloadAndRegister = async () => {
   if (isGenerating.value) return;
   isGenerating.value = true;
   try {
     if (!reportCardRef.value) return;
-    const canvas = await html2canvas(reportCardRef.value, {
+    const cardEl = reportCardRef.value;
+    cardEl.classList.add('force-expand');
+
+    const canvas = await html2canvas(cardEl, {
       backgroundColor: '#ffffff',
       scale: 2,
       useCORS: true,
+      scrollY: 0,
+      height: cardEl.scrollHeight,
+      windowHeight: cardEl.scrollHeight,
+      onclone: (clonedDoc) => {
+        const clonedCard = clonedDoc.querySelector('.summary-card');
+        if (clonedCard) clonedCard.classList.add('force-expand');
+      },
     });
+
+    cardEl.classList.remove('force-expand');
+
     const image = canvas.toDataURL('image/png');
     const link = document.createElement('a');
     link.href = image;
@@ -72,6 +148,9 @@ const autoDownloadAndRegister = async () => {
   } catch (err) {
     console.error('截圖失敗:', err);
   } finally {
+    if (reportCardRef.value) {
+      reportCardRef.value.classList.remove('force-expand');
+    }
     isGenerating.value = false;
   }
 };
@@ -144,7 +223,12 @@ onBeforeUnmount(() => {
         <span v-if="isGenerating">⏳ 正在生成圖片...</span>
         <span v-else>📸 下載學習紀錄 (傳給老師)</span>
       </button>
-      
+
+      <button class="btn-data-download" @click="downloadLearningRecord" :disabled="isGenerating || isDataDownloaded">
+        <span v-if="isGenerating">⏳ 正在生成資料...</span>
+        <span v-else>📊 匯出原始數據 (JSON)</span>
+      </button>
+
       <button class="btn-restart" @click="emit('restart')" :disabled="isGenerating">
         🔄 重新開始練習
       </button>
@@ -178,6 +262,14 @@ onBeforeUnmount(() => {
   border: 4px solid #58cc02;
   position: relative;
   overflow: hidden;
+}
+
+/* 強制展開（用於 html2canvas clone 時避免截斷） */
+.summary-card.force-expand,
+.summary-card.force-expand * {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
 }
 
 .header .badge {
@@ -247,6 +339,14 @@ onBeforeUnmount(() => {
 }
 .btn-download:active { border-bottom-width: 0; transform: translateY(5px); }
 .btn-download:disabled { opacity: 0.7; cursor: not-allowed; }
+
+.btn-data-download {
+  background: #ff9800; color: white; border: none; border-bottom: 5px solid #e68900;
+  padding: 16px; border-radius: 16px; font-weight: bold; font-size: 1.1rem; cursor: pointer;
+  transition: all 0.1s;
+}
+.btn-data-download:active { border-bottom-width: 0; transform: translateY(5px); }
+.btn-data-download:disabled { opacity: 0.7; cursor: not-allowed; }
 
 .btn-restart {
   background: rgba(255, 255, 255, 0.2); color: white; border: 2px solid white;
