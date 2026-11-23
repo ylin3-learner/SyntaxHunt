@@ -8,7 +8,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "verify": "node scripts/verify.mjs",
+    "verify:e2e": "node scripts/verify.mjs --e2e"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

@@ -1,0 +1,13 @@
+<type>(<scope>): <concise summary>
+
+### Motivation (Why)
+<Problem, bottleneck, and objective>
+
+### Architecture & Implementation Changes (How)
+- <Structural, interface, and algorithm details>
+
+### Key Features & Modules (What)
+- <Delivered capabilities and behaviors>
+
+### Verification
+- <Test pass count, typecheck status, backward-compatibility>
