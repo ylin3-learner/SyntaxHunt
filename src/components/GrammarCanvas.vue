@@ -43,7 +43,10 @@ const selectedCanvas = computed(() => {
   if (mode === 'REDUCE' || q.ui_mode === 'REDUCE') return ShredderReduceCanvas;
   if (mode === 'BUILD' || q.ui_mode === 'BUILD') return MagneticBuildCanvas;
 
-  // 3. MORPH 或其他
+  // 3. MORPH 或其他 - defensive log for unhandled types
+  if (mode !== 'MORPH' && mode !== undefined) {
+    console.warn(`[GrammarCanvas] Unhandled canvas_mode: ${mode}, question type: ${q.type}, ui_mode: ${q.ui_mode}. Falling back to TileSentenceCanvas.`);
+  }
   return TileSentenceCanvas;
 });
 </script>

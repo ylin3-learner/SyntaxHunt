@@ -8,6 +8,20 @@ import { useQuizTimer } from './useQuizTimer';
 import { useSound } from '../utils/useSound';
 import { useClassroomSync, currentTeacherId } from './useClassroomSync';
 
+/** Normalize Firestore question type to internal type system */
+function normalizeQuestionType(question: QuestionData): QuestionData {
+  // Firestore stores legacy types 'sentence_build' and 'magnetic' which are not in the internal type union
+  const rawType = (question as unknown as { type?: string }).type;
+  if (rawType === 'sentence_build' || rawType === 'magnetic') {
+    return {
+      ...question,
+      type: 'grammar',
+      ui_mode: 'BUILD',
+    };
+  }
+  return question;
+}
+
 export function useQuizFlow() {
   const currentIndex = ref(0);
   const currentStage = ref<TeachingStage>('preview');
@@ -290,7 +304,8 @@ export function useQuizFlow() {
 
   const updateQuestionBank = async (updatedQuestions: QuestionData[]) => {
     const currentIdx = currentIndex.value;
-    questionBank.value = updatedQuestions;
+    // Normalize Firestore types (sentence_build, magnetic) to internal types
+    questionBank.value = updatedQuestions.map(normalizeQuestionType);
     fixAntecedentNumbers();
     showSummary.value = false;
 
@@ -331,7 +346,7 @@ export function useQuizFlow() {
   };
 
   const handleBatchQuestionImport = async (questions: QuestionData[]) => {
-    questionBank.value = questions;
+    questionBank.value = questions.map(normalizeQuestionType);
     fixAntecedentNumbers();
     const success = await persistQuestionBank(questions);
     if (!success) alert('注意：批次題目已存在本機，但「雲端同步失敗」，請確認網路連線。');
@@ -347,9 +362,10 @@ export function useQuizFlow() {
     if (!targetQ && currentTeacherId.value) {
       const freshQuestions = await CloudDatabase.fetchQuestions(currentTeacherId.value);
       if (freshQuestions) {
-        questionBank.value = freshQuestions;
+        // Normalize Firestore types for freshly fetched questions
+        questionBank.value = freshQuestions.map(normalizeQuestionType);
         fixAntecedentNumbers();
-        targetQ = freshQuestions.find(q => q.id === id);
+        targetQ = questionBank.value.find(q => q.id === id);
       }
     }
 
