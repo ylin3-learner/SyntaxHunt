@@ -52,8 +52,8 @@ pipeline:
     - refactor_and_hygiene:
         - Enforce project architecture rules (e.g., consolidate any misplaced tests into designated test directories, clean up dead code).
     - verify: run project verification gates (e.g., `npm run verify`, lint, typecheck, full test suite) -> must pass 100% with zero regressions.
-    - circuit_breaker: |
-        If the same verification gate (`verify.mjs`) fails **3 consecutive times** on the same error, STOP retrying immediately. Output the failure summary and instruct the user to run `/handoff` and switch to a stronger Reasoning Model (e.g., Gemini Pro).
+    - circuit_breaker: rely on `verify.mjs` deterministic output; it maintains `.verify-state.json` and automatically emits `CIRCUIT_BREAKER_TRIPPED: Stop retrying and ask human for intervention.` after 3 consecutive failures on the same gate. STOP retrying and request human intervention when this output appears.
+    - strict_type_and_mock_parity: when modifying Domain Models or Interfaces (adding, removing, or changing fields), you MUST synchronously update ALL test mock factories, fixtures, and type definitions in `src/tests/` and `e2e/fixtures/` to maintain 100% type parity. No `any` or `as unknown` type casts allowed.
 
   4_docs_and_handoff:
     - sync_docs: update `README.md` / `README.zh-TW.md` (if present) to reflect newly delivered capabilities and test metrics.

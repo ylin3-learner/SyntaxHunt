@@ -13,3 +13,5 @@ lister.py
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+.verify-state.json
+HANDOFF.md
