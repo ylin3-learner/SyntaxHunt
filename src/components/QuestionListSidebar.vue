@@ -15,6 +15,7 @@ defineProps<{
   targetCountInput: number;
   roomCode?: string;
   activeUnitInput?: string;
+  isSaving?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -143,7 +144,9 @@ const numberValue = (event: Event) =>
     </section>
 
     <footer class="sidebar-footer">
-      <button type="button" class="btn-close" @click="emit('save-close')">✅ 完成備課，開始上課</button>
+      <button type="button" class="btn-close" @click="emit('save-close')" :disabled="isSaving">
+        {{ isSaving ? '⏳ 同步題庫中...' : '✅ 完成備課，開始上課' }}
+      </button>
     </footer>
   </aside>
 </template>
@@ -473,6 +476,12 @@ const numberValue = (event: Event) =>
   color: #fff;
   font-weight: 700;
   cursor: pointer;
+  transition: opacity 0.2s, cursor 0.2s;
+}
+
+.btn-close:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 @media (max-width: 900px) {

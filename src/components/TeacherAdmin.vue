@@ -29,6 +29,7 @@ const showQrModal = ref(false);
 const showQuestionFlow = ref(false);
 const localQuestions = ref<QuestionData[]>(JSON.parse(JSON.stringify(props.currentQuestions)));
 const unitFilter = ref<'all' | 'unclassified' | `unit:${string}`>('all');
+const isSaving = ref(false);
 
 const availableUnits = computed(() => [...new Set(
   localQuestions.value.map(q => typeof q.unit === 'string' ? q.unit.trim() : '').filter(Boolean)
@@ -297,14 +298,22 @@ const handleSaveAndPush = async (id: string) => {
 };
 const saveAllAndClose = async () => {
   if (localQuestions.value.length === 0) { alert('題庫不能為空'); return; }
-
-  // ✅ 新增：關閉前將完整題庫寫入雲端
-  const saved = await CloudDatabase.saveQuestionsBatch(localQuestions.value);
-  if (!saved) {
-    alert('⚠️ 題庫雲端儲存失敗，請檢查網路連線。');
+  if (isSaving.value) return;
+  
+  isSaving.value = true;
+  try {
+    // 使用 Promise.race 避免網路卡死無限等待，最多等 3 秒
+    await Promise.race([
+      CloudDatabase.saveQuestionsBatch(localQuestions.value),
+      new Promise(resolve => setTimeout(resolve, 3000))
+    ]);
+  } catch (e) {
+    console.warn('背景儲存失敗或超時，但允許進入教室', e);
+  } finally {
+    isSaving.value = false;
+    emit('update', localQuestions.value); 
+    emit('close');
   }
-
-  emit('update', localQuestions.value); emit('close');
 };
 const handleQuestionReorder = (qs: QuestionData[]) => { localQuestions.value = qs; };
 const handleBatchImport = (qs: QuestionData[], unit: string) => {
@@ -327,7 +336,8 @@ const openQuestionEdit = (id: string) => { const q = localQuestions.value.find(i
           v-model:is-questions-expanded="isQuestionsExpanded" v-model:is-class-mode-toggle="isClassModeToggle"
           v-model:target-count-input="targetCountInput" v-model:active-unit-input="activeUnitInput"
           :questions="localQuestions" :filtered-questions="filteredQuestions" :available-units="availableUnits"
-          :editing-id="form.editingId" :room-code="props.roomCode" @open-flow="showQuestionFlow = true"
+          :editing-id="form.editingId" :room-code="props.roomCode" :is-saving="isSaving"
+          @open-flow="showQuestionFlow = true"
           @mode-change="handleModeChange" @reset-progress="sendResetProgress" @edit="editQuestion"
           @push="handleSaveAndPush" @delete="deleteQuestion" @new-question="resetForm" @save-close="saveAllAndClose"
           @show-qr="handleShowQr" @lock-unit="handleLockUnit" />
