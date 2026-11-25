@@ -135,7 +135,12 @@ function main() {
   };
 
   fs.mkdirSync(CART_DIR, { recursive: true });
-  fs.writeFileSync(RISKS_PATH, JSON.stringify(risks, null, 2) + '\n', 'utf8');
+  const prevRaw = fs.existsSync(RISKS_PATH) ? fs.readFileSync(RISKS_PATH, "utf8") : "";
+  const stripTs = (s) => s.replace(/"generatedAt":\s*"[^"]*"/g, "");
+  const nextRaw = JSON.stringify(risks, null, 2) + "\n";
+  if (!prevRaw || stripTs(prevRaw) !== stripTs(nextRaw)) {
+    fs.writeFileSync(RISKS_PATH, nextRaw, "utf8");
+  }
 
   const out = [
     '# Risk Analysis',
