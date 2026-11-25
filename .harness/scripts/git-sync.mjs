@@ -51,7 +51,10 @@ function main() {
     console.log(`🔄 [git-sync] Remote has new commits. Switching to git pull --rebase origin ${branch}...`);
   }
 
-  // 2. Fallback path: pull --rebase
+  // 2. Fallback path: clean any unstaged generated map diffs before rebase
+  try {
+    run("git", ["checkout", "--", ".cartographer", "PROJECT_MAP.md"], ROOT);
+  } catch {}
   try {
     run('git', ['pull', '--rebase', 'origin', branch], ROOT, 'inherit');
   } catch {
