@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-25T03:32:11.239Z",
+  "generatedAt": "2026-11-25T03:38:54.491Z",
   "files": {
     ".verify-state.json": {
       "hash": "85778135381722cd",
@@ -142,8 +142,8 @@
       "size": 4909
     },
     ".harness\\scripts\\extract-runtime.mjs": {
-      "hash": "b3509b89a8e5cf22",
-      "size": 8056
+      "hash": "35080f0cab251ae4",
+      "size": 8249
     },
     ".harness\\scripts\\extract-skeleton.mjs": {
       "hash": "9c020bc38e3cd0fc",
@@ -186,8 +186,8 @@
       "size": 3909
     },
     ".harness\\scripts\\verify.mjs": {
-      "hash": "32ed3620efcd2f09",
-      "size": 10296
+      "hash": "acc38550b3e31f53",
+      "size": 10573
     },
     "core\\adapters\\web-ts.adapter.mjs": {
       "hash": "c941b208e847dd9b",

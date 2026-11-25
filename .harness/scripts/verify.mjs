@@ -38,9 +38,12 @@ function runTargetedTests(rootDir) {
   const pkgPath = path.join(rootDir, "package.json");
   const pkg = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, "utf8")) : {};
   const hasVitest = Boolean(pkg.devDependencies?.vitest || pkg.dependencies?.vitest);
+  const hasJest = Boolean(pkg.devDependencies?.jest || pkg.dependencies?.jest);
   try {
     if (hasVitest) {
       execFileSync(process.platform === "win32" ? "npx.cmd" : "npx", ["vitest", "run", ...impactedTests], { cwd: rootDir, stdio: "inherit" });
+    } else if (hasJest) {
+      execFileSync(process.platform === "win32" ? "npx.cmd" : "npx", ["jest", ...impactedTests], { cwd: rootDir, stdio: "inherit", shell: process.platform === "win32" });
     } else {
       execFileSync(process.execPath, ["--test", ...impactedTests], { cwd: rootDir, stdio: "inherit" });
     }
