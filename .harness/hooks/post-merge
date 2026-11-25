@@ -1,0 +1,2 @@
+#!/bin/sh
+node .harness/scripts/sync-map.mjs >/dev/null 2>&1 || true

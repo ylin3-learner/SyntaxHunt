@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -e
+
+echo "[pre-commit] Running Harness regression tests & hygiene gates..."
+npm test
+npm run verify

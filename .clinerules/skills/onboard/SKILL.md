@@ -1,45 +1,35 @@
 ---
 name: onboard
-description: Perform a deep, read-only 4-layer architectural audit of an existing codebase and generate a comprehensive PROGRESS.md without modifying source code.
+description: Low-token codebase onboarding workflow that generates PROJECT_MAP.md, tags [Aggregate Root] modules, and curates the Ubiquitous Language Glossary without full-repo source crawling.
 ---
 
-# onboard
+# Onboarding Workflow (Zero-Crawl, Token-Optimized)
 
-Execute a systematic, zero-mutation codebase cartography pass across 4 layers (Topology, External Call Surfaces, Domain/Routing Flow, Baseline Gate Audit) to generate `PROGRESS.md` and halt immediately without editing `src/`.
+Follow these steps strictly in order to onboard a codebase with minimal token consumption:
 
-## Steps
+## Step 1: Run Deterministic Codebase Sync (0 LLM Tokens)
+- **If MCP is available**: Call the `sync_codebase` tool directly.
+- **If CLI-only**: Run `node .harness/scripts/harness.mjs sync_codebase --json` (or `node .harness/scripts/sync-map.mjs && node .harness/scripts/generate-map-md.mjs`).
+- Do NOT manually list directories or read files before this step completes.
 
-```yaml
-pipeline:
-  1_cartography:
-    - action: |
-        Run `node scripts/cartography.mjs` in the project root to obtain a global architectural view
-        (directory topology, route definitions, external API call points, core type definitions).
-        This is the FIRST step before any manual exploration; do NOT use list_files layer-by-layer.
-    - output: |
-        Capture the cartography Markdown output as the foundation of the Topology layer.
+## Step 2: Inspect Compressed Artifacts Only
+Read **only** these 3 lightweight summary files:
+1. `PROJECT_MAP.md` (auto-generated structure, `[Aggregate Root]` tags, and seeded Section 7 glossary)
+2. `.cartographer/risks.json` (circular dependencies, orphan files, god modules)
+3. `package.json` (tech stack & available scripts)
 
-  2_topology:
-    - inspect: [directory structure from cartography, package manager lockfile, tsconfig paths]
-    - record: source root, package manager, key directory layout in PROGRESS.md
+**Strict Token Guardrail**: Do NOT crawl `src/` or read every entry point/route/store file. Only inspect up to **3** `[Aggregate Root]` source files (first 40 lines only) if a domain term in Section 7 cannot be inferred from its file path and exported symbols.
 
-  3_external_call_surfaces:
-    - inspect: external API call points from cartography output (fetch/axios/SDK clients)
-    - record: all outbound integration points and their locations
+## Step 3: Curate Section 7 (`## 7. Ubiquitous Language Glossary`)
+Review and refine the table in `PROJECT_MAP.md`:
 
-  4_domain_routing_flow:
-    - inspect: route definition files detected by cartography
-    - record: main routes, route-to-handler mappings, domain boundaries
+| Business Domain Term | Technical Module | Aggregate Root |
+| :--- | :--- | :--- |
+| *(e.g. Shopping Cart / Order)* | `src/stores/cartStore.ts` | `[Aggregate Root]` |
 
-  5_baseline_gate_audit:
-    - inspect: run `npm run verify` (or equivalent) to confirm baseline gate status
-    - record: pass/fail of each verification gate
+- Map natural-language business concepts to their concrete technical modules so future `/sprint` tasks locate target files immediately.
+- Preserve all existing auto-detected `[Aggregate Root]` tags and any human-curated rows.
 
-  6_generate_progress:
-    - action: overwrite `PROGRESS.md` with the 4-section schema:
-        1. Current Baseline (cartography + gate audit results)
-        2. Active Target (none yet - onboard is read-only)
-        3. Architectural Invariants & Learned Gotchas (from cartography)
-        4. Upcoming Backlog (suggested next batches based on gaps found)
-    - halt: stop immediately after generating PROGRESS.md; do NOT edit `src/`.
-```
+## Step 4: Verify & Checkpoint
+1. Run `verify_integrity` (MCP) or `npm run verify` (CLI) to ensure `PROJECT_MAP.md` and harness gates pass.
+2. Output a concise onboarding summary (tech stack, total indexed files, top `[Aggregate Root]` modules, and glossary highlights) and ask the user what feature or fix to tackle first with `/sprint`.

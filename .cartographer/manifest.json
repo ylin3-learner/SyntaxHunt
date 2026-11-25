@@ -1,0 +1,549 @@
+{
+  "generatedAt": "2026-11-25T02:28:23.654Z",
+  "files": {
+    ".verify-state.json": {
+      "hash": "85778135381722cd",
+      "size": 82
+    },
+    "backup-db.js": {
+      "hash": "f7fffb2085e06577",
+      "size": 747
+    },
+    "lister.py": {
+      "hash": "2ff6b41e92ea1973",
+      "size": 1323
+    },
+    "package-lock.json": {
+      "hash": "234c49bab16db630",
+      "size": 171937
+    },
+    "package.json": {
+      "hash": "f67ed1a352289c8c",
+      "size": 1327
+    },
+    "playwright.config.ts": {
+      "hash": "490106576047ee77",
+      "size": 993
+    },
+    "tsconfig.e2e.json": {
+      "hash": "ee8257c987b2a150",
+      "size": 156
+    },
+    "tsconfig.json": {
+      "hash": "ab697ea1c4e4ae74",
+      "size": 458
+    },
+    "vite.config.ts": {
+      "hash": "44c290b6ae78bb4f",
+      "size": 558
+    },
+    ".vscode\\extensions.json": {
+      "hash": "f1ac9489e28121ac",
+      "size": 50
+    },
+    ".vscode\\settings.json": {
+      "hash": "7896743f347db17d",
+      "size": 405
+    },
+    "backups\\backup-2026-11-14.json": {
+      "hash": "bc5ebb9be26cbbd1",
+      "size": 2574
+    },
+    "backups\\backup-2026-11-15.json": {
+      "hash": "f5a46d97be7a8920",
+      "size": 127135
+    },
+    "backups\\backup-2026-11-16.json": {
+      "hash": "02729e2a4bb6ee41",
+      "size": 673647
+    },
+    "backups\\backup-2026-11-17.json": {
+      "hash": "e643e5a2b3102c66",
+      "size": 674661
+    },
+    "backups\\backup-2026-11-18.json": {
+      "hash": "181c87acadb5fdd2",
+      "size": 716117
+    },
+    "backups\\backup-2026-11-19.json": {
+      "hash": "ec50fa5e690c5c52",
+      "size": 720010
+    },
+    "backups\\backup-2026-11-20.json": {
+      "hash": "593527ebb6fb2c69",
+      "size": 720034
+    },
+    "backups\\backup-2026-11-21.json": {
+      "hash": "593527ebb6fb2c69",
+      "size": 720034
+    },
+    "backups\\backup-2026-11-22.json": {
+      "hash": "593527ebb6fb2c69",
+      "size": 720034
+    },
+    "backups\\backup-2026-11-23.json": {
+      "hash": "593527ebb6fb2c69",
+      "size": 720034
+    },
+    "e2e\\example.spec.ts": {
+      "hash": "a3cbab846a58843b",
+      "size": 583
+    },
+    "e2e\\grammar-canvas.spec.ts": {
+      "hash": "3f094974547512ef",
+      "size": 7312
+    },
+    "scripts\\cartography.mjs": {
+      "hash": "4e65605cc44e60ad",
+      "size": 4001
+    },
+    "scripts\\handoff-pack.mjs": {
+      "hash": "9ae5984161a9e5d4",
+      "size": 2659
+    },
+    "scripts\\verify.mjs": {
+      "hash": "1fed7aad22ac835c",
+      "size": 18156
+    },
+    "src\\env.d.ts": {
+      "hash": "12f184fba0d4762b",
+      "size": 201
+    },
+    "src\\main.ts": {
+      "hash": "a5e0a8bacce79cbf",
+      "size": 212
+    },
+    "test-results\\.last-run.json": {
+      "hash": "91d1c43004802cd4",
+      "size": 45
+    },
+    "tests\\ChunkPreview.spec.ts": {
+      "hash": "c685a17dd1b13e5c",
+      "size": 917
+    },
+    "tests\\CloudDatabase.spec.ts": {
+      "hash": "d0d75a1b3d01f6a2",
+      "size": 6509
+    },
+    "tests\\ContrastPuzzle.spec.ts": {
+      "hash": "ecdef33830e1b30d",
+      "size": 1189
+    },
+    "tests\\EditorFormFields.spec.ts": {
+      "hash": "20fe78d1d3c3cd49",
+      "size": 1816
+    },
+    "tests\\GrammarCanvas.spec.ts": {
+      "hash": "1b7765d0e7ea6c79",
+      "size": 7432
+    },
+    "tests\\GrammarCanvasUI.spec.ts": {
+      "hash": "fe9f0cd772163cb7",
+      "size": 8149
+    },
+    "tests\\grammarTopics.test.ts": {
+      "hash": "9b928d6f30b02180",
+      "size": 4359
+    },
+    "tests\\NoticingBoard.spec.ts": {
+      "hash": "79c3311ec2b8e46b",
+      "size": 1321
+    },
+    "tests\\QuestionBuilder.spec.ts": {
+      "hash": "46b7215bc35b720c",
+      "size": 426
+    },
+    "tests\\QuestionFlow.spec.ts": {
+      "hash": "43e4fd2e746ea0fd",
+      "size": 3514
+    },
+    "tests\\SummaryReport.spec.ts": {
+      "hash": "fb61fde8655c6da2",
+      "size": 6394
+    },
+    "tests\\TeacherAnalytics.spec.ts": {
+      "hash": "49825da47c6878eb",
+      "size": 4519
+    },
+    "tests\\testUI.spec.ts": {
+      "hash": "c120e9c67cbbb638",
+      "size": 1538
+    },
+    "tests\\useQuestionForm.spec.ts": {
+      "hash": "79e0b58b547ae012",
+      "size": 899
+    },
+    "tests\\useRealtimeSync.spec.ts": {
+      "hash": "b2304109428c2ce5",
+      "size": 5764
+    },
+    "tests\\verbTable.test.ts": {
+      "hash": "00663977133e69f0",
+      "size": 866
+    },
+    ".harness\\scripts\\analyze-risks.mjs": {
+      "hash": "51c23fbb0b6336e0",
+      "size": 4660
+    },
+    ".harness\\scripts\\extract-runtime.mjs": {
+      "hash": "3d78de14558e465b",
+      "size": 5435
+    },
+    ".harness\\scripts\\extract-skeleton.mjs": {
+      "hash": "9c020bc38e3cd0fc",
+      "size": 41
+    },
+    ".harness\\scripts\\generate-map-md.mjs": {
+      "hash": "26bfb97dee02e4c8",
+      "size": 9077
+    },
+    ".harness\\scripts\\handoff-pack.mjs": {
+      "hash": "11c0b9cceec846c0",
+      "size": 7349
+    },
+    ".harness\\scripts\\harness.mjs": {
+      "hash": "304ee9082fa9188c",
+      "size": 1248
+    },
+    ".harness\\scripts\\inject-context.mjs": {
+      "hash": "b6d80a229829cfb1",
+      "size": 3449
+    },
+    ".harness\\scripts\\mcp-server.mjs": {
+      "hash": "66ced831e7e70140",
+      "size": 1680
+    },
+    ".harness\\scripts\\sync-map.mjs": {
+      "hash": "1c32e8538ed2c5da",
+      "size": 1737
+    },
+    ".harness\\scripts\\test-harness.mjs": {
+      "hash": "35ba656b501e21a1",
+      "size": 3909
+    },
+    ".harness\\scripts\\verify.mjs": {
+      "hash": "efe9ab341ce555e3",
+      "size": 8117
+    },
+    "core\\adapters\\web-ts.adapter.mjs": {
+      "hash": "c941b208e847dd9b",
+      "size": 715
+    },
+    "core\\application\\harness-facade.mjs": {
+      "hash": "720411c18c399053",
+      "size": 5759
+    },
+    "core\\domain\\models.mjs": {
+      "hash": "eed0b6e2a4189f10",
+      "size": 5153
+    },
+    "core\\services\\circuit-breaker.mjs": {
+      "hash": "e79c2edaafb34f47",
+      "size": 1467
+    },
+    "core\\services\\graph-engine.mjs": {
+      "hash": "0523770099073462",
+      "size": 5807
+    },
+    "core\\services\\sync-engine.mjs": {
+      "hash": "0f65cf9fc630d053",
+      "size": 2380
+    },
+    "core\\__tests__\\core.test.mjs": {
+      "hash": "f68bf60511596d92",
+      "size": 4056
+    },
+    "src\\composables\\useAdminAuth.ts": {
+      "hash": "002c2befdb6042a4",
+      "size": 4552
+    },
+    "src\\composables\\useClassroomSync.ts": {
+      "hash": "4233a428f044e881",
+      "size": 7654
+    },
+    "src\\composables\\useFocusMonitor.ts": {
+      "hash": "2f66575bb4be75a2",
+      "size": 970
+    },
+    "src\\composables\\useQuestionForm.ts": {
+      "hash": "f03a7c8c54e14447",
+      "size": 6434
+    },
+    "src\\composables\\useQuizFlow.ts": {
+      "hash": "7cf5375ff30d7041",
+      "size": 16843
+    },
+    "src\\composables\\useQuizTimer.ts": {
+      "hash": "bf9d0fb55a340f18",
+      "size": 1166
+    },
+    "src\\composables\\useRealtimeSync.ts": {
+      "hash": "21b570dc275fb4d9",
+      "size": 4909
+    },
+    "src\\composables\\useRoomEntry.ts": {
+      "hash": "f9d5264833127120",
+      "size": 1405
+    },
+    "src\\data\\questions.ts": {
+      "hash": "546974e7c1d4df01",
+      "size": 1775
+    },
+    "src\\domain\\QuestionBuilder.ts": {
+      "hash": "86ed4ce10cd4a81e",
+      "size": 14645
+    },
+    "src\\infrastructure\\ImageService.ts": {
+      "hash": "0d0e0fd58d991bb6",
+      "size": 1002
+    },
+    "src\\rules\\adapter.ts": {
+      "hash": "18c197699fc51bae",
+      "size": 4321
+    },
+    "src\\rules\\autoChunk.ts": {
+      "hash": "1826884c0f241846",
+      "size": 79
+    },
+    "src\\rules\\autoInfer.ts": {
+      "hash": "c9baa04d36a32c20",
+      "size": 3508
+    },
+    "src\\rules\\chunker.ts": {
+      "hash": "2f6cd3c727ec46ff",
+      "size": 7286
+    },
+    "src\\rules\\grammarRules.ts": {
+      "hash": "bdb9c4c5307f3852",
+      "size": 15354
+    },
+    "src\\rules\\grammarTopics.ts": {
+      "hash": "974773aea10e10f5",
+      "size": 11496
+    },
+    "src\\rules\\registry.ts": {
+      "hash": "28fa2a1975a7037a",
+      "size": 922
+    },
+    "src\\rules\\smartChunker.ts": {
+      "hash": "9dfddb0d690f1780",
+      "size": 3090
+    },
+    "src\\rules\\types.ts": {
+      "hash": "fc4d720a87755e42",
+      "size": 7132
+    },
+    "src\\rules\\verbTable.ts": {
+      "hash": "4024e8ff315a47c0",
+      "size": 2359
+    },
+    "src\\services\\CloudDatabase.ts": {
+      "hash": "b4bda7838ae2af83",
+      "size": 11392
+    },
+    "src\\services\\supabaseClient.ts": {
+      "hash": "26bb9a96578e010b",
+      "size": 438
+    },
+    "src\\utils\\shuffle.ts": {
+      "hash": "abad92c6829ec90e",
+      "size": 499
+    },
+    "src\\utils\\textDiff.ts": {
+      "hash": "91193d53eeedcfca",
+      "size": 6414
+    },
+    "src\\utils\\textUtils.ts": {
+      "hash": "0702354e8ac304db",
+      "size": 1401
+    },
+    "src\\utils\\useSound.ts": {
+      "hash": "6beaae31bbe9e257",
+      "size": 3370
+    },
+    "src\\utils\\useSpeech.ts": {
+      "hash": "e51f0f122340bc31",
+      "size": 5901
+    },
+    "supabase\\.temp\\linked-project.json": {
+      "hash": "4c7602c029b551c1",
+      "size": 136
+    },
+    "supabase\\migrations\\20261103000000_diagnosis_cache.sql": {
+      "hash": "e017a8d136d5ae55",
+      "size": 775
+    },
+    "supabase\\migrations\\20261103215800_async_diagnosis_status.sql": {
+      "hash": "d2189608624ad41a",
+      "size": 573
+    },
+    "supabase\\migrations\\20261104100000_languagetool_diagnostics.sql": {
+      "hash": "a1ac3133acb8bb02",
+      "size": 373
+    },
+    "supabase\\migrations\\20261107120000_add_teacher_id_and_seat_code.sql": {
+      "hash": "18182041f86b5198",
+      "size": 1612
+    },
+    "tests\\rules\\adapter.spec.ts": {
+      "hash": "48e2a61b90435569",
+      "size": 8457
+    },
+    "tests\\rules\\autoChunk.spec.ts": {
+      "hash": "f0ed8f035e4f524d",
+      "size": 2995
+    },
+    "tests\\rules\\grammarRules.spec.ts": {
+      "hash": "942f241d5f2899d1",
+      "size": 7406
+    },
+    "tests\\utils\\textUtils.spec.ts": {
+      "hash": "6505fd59bf3297eb",
+      "size": 873
+    },
+    ".harness\\scripts\\lib\\cartographer-core.mjs": {
+      "hash": "923991f37d2f2b18",
+      "size": 10943
+    },
+    "src\\rules\\diagnostics\\init.ts": {
+      "hash": "1cb13d0072f07ac8",
+      "size": 627
+    },
+    "src\\rules\\diagnostics\\pipeline.ts": {
+      "hash": "339330fd35c0fbea",
+      "size": 1478
+    },
+    "src\\rules\\validators\\conjunctionValidator.ts": {
+      "hash": "e4a1745a9e3d6463",
+      "size": 5422
+    },
+    "src\\rules\\validators\\doubleNegativeValidator.ts": {
+      "hash": "9ceee57651135499",
+      "size": 1214
+    },
+    "src\\rules\\validators\\gerundInfinitiveValidator.ts": {
+      "hash": "abac00872d3d4e32",
+      "size": 1659
+    },
+    "src\\rules\\validators\\inversionValidator.ts": {
+      "hash": "e5171c1b2bfc2429",
+      "size": 2770
+    },
+    "src\\rules\\validators\\modalValidator.ts": {
+      "hash": "9a0b825640470213",
+      "size": 1081
+    },
+    "src\\rules\\validators\\specialStructures.ts": {
+      "hash": "092dd91d8de788e6",
+      "size": 5656
+    },
+    "src\\rules\\validators\\subjunctiveValidator.ts": {
+      "hash": "4cf82b4fb8cb6712",
+      "size": 1746
+    },
+    "src\\rules\\validators\\svaValidator.ts": {
+      "hash": "9e055d13bc13780d",
+      "size": 3558
+    },
+    "src\\rules\\validators\\tenseValidator.ts": {
+      "hash": "406f300f1e39897c",
+      "size": 4819
+    },
+    "supabase\\functions\\deepgram-tts\\deno.json": {
+      "hash": "5f961fa51c685ab7",
+      "size": 125
+    },
+    "supabase\\functions\\deepgram-tts\\index.ts": {
+      "hash": "f32a41832d02618b",
+      "size": 1799
+    },
+    "supabase\\functions\\edge-stt\\deno.json": {
+      "hash": "a9a29da36c2576f7",
+      "size": 136
+    },
+    "supabase\\functions\\edge-stt\\index.ts": {
+      "hash": "02d8bb22dba0ccf0",
+      "size": 1588
+    },
+    "supabase\\functions\\lt-proxy\\index.ts": {
+      "hash": "d26e472fc2877592",
+      "size": 2613
+    },
+    "supabase\\functions\\teacher-action\\deno.json": {
+      "hash": "9850639f52ae964b",
+      "size": 230
+    },
+    "supabase\\functions\\teacher-action\\index.ts": {
+      "hash": "f0fdf01b32da67a6",
+      "size": 3672
+    },
+    "tests\\rules\\diagnostics\\pipeline.spec.ts": {
+      "hash": "3ef26cc00f00e190",
+      "size": 2132
+    },
+    "tests\\rules\\validators\\conjunctionValidator.spec.ts": {
+      "hash": "a060cc69c9a84c29",
+      "size": 1538
+    },
+    "tests\\rules\\validators\\doubleNegativeValidator.spec.ts": {
+      "hash": "711f6ff2346020da",
+      "size": 544
+    },
+    "tests\\rules\\validators\\gerundInfinitiveValidator.spec.ts": {
+      "hash": "4d9180b0ea6487ee",
+      "size": 891
+    },
+    "tests\\rules\\validators\\inversionValidator.spec.ts": {
+      "hash": "f3b321aefbbdcc7b",
+      "size": 876
+    },
+    "tests\\rules\\validators\\modalValidator.spec.ts": {
+      "hash": "2c6b449e54aa5852",
+      "size": 1472
+    },
+    "tests\\rules\\validators\\subjunctiveValidator.spec.ts": {
+      "hash": "884bde76a414969c",
+      "size": 1612
+    },
+    "tests\\rules\\validators\\svaValidator.spec.ts": {
+      "hash": "97cc83a328de38d2",
+      "size": 767
+    },
+    "tests\\rules\\validators\\tenseValidator.spec.ts": {
+      "hash": "6563a28d8657d1f2",
+      "size": 1329
+    },
+    "src\\rules\\diagnostics\\layers\\L1_LocalRules.ts": {
+      "hash": "c9f4ea2cd9fe084b",
+      "size": 1537
+    },
+    "src\\rules\\diagnostics\\layers\\L2_CustomRules.ts": {
+      "hash": "538e3842b6d83180",
+      "size": 3269
+    },
+    "src\\rules\\diagnostics\\layers\\L3_StructuralDiff.ts": {
+      "hash": "a201306e982cca32",
+      "size": 1886
+    },
+    "src\\rules\\diagnostics\\layers\\L4_LanguageTool.ts": {
+      "hash": "a23a6ebbd71e998f",
+      "size": 2185
+    },
+    "src\\rules\\diagnostics\\layers\\L5_HighlightFallback.ts": {
+      "hash": "51c8d7fb6edccc3d",
+      "size": 885
+    },
+    "tests\\rules\\diagnostics\\layers\\L1_LocalRules.spec.ts": {
+      "hash": "ac0a347fb3a95a3c",
+      "size": 925
+    },
+    "tests\\rules\\diagnostics\\layers\\L2_CustomRules.spec.ts": {
+      "hash": "03ebd1ec2d674753",
+      "size": 6799
+    },
+    "tests\\rules\\diagnostics\\layers\\L3_StructuralDiff.spec.ts": {
+      "hash": "eb54e852183d53b4",
+      "size": 1208
+    }
+  }
+}
