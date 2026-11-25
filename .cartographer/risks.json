@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-11-25T05:03:32.026Z",
+  "generatedAt": "2026-11-25T06:06:24.171Z",
   "summary": {
-    "totalFiles": 127,
+    "totalFiles": 131,
     "circularDependencies": 0,
-    "orphanFiles": 127,
+    "orphanFiles": 131,
     "godModules": 0
   },
   "circularDependencies": [],
@@ -85,6 +85,8 @@
     "src\\rules\\verbTable.ts",
     "src\\services\\CloudDatabase.ts",
     "src\\services\\supabaseClient.ts",
+    "src\\utils\\morphOptions.ts",
+    "src\\utils\\morphSentence.ts",
     "src\\utils\\shuffle.ts",
     "src\\utils\\textDiff.ts",
     "src\\utils\\textUtils.ts",
@@ -98,6 +100,8 @@
     "tests\\rules\\adapter.spec.ts",
     "tests\\rules\\autoChunk.spec.ts",
     "tests\\rules\\grammarRules.spec.ts",
+    "tests\\utils\\morphOptions.spec.ts",
+    "tests\\utils\\morphSentence.spec.ts",
     "tests\\utils\\textUtils.spec.ts",
     ".harness\\scripts\\lib\\cartographer-core.mjs",
     "src\\rules\\diagnostics\\init.ts",

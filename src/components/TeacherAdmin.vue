@@ -196,7 +196,20 @@ const updateMorphOptions = (id: string, value: string) => {
   if (!chunk) return;
   const options = parseMorphOptions(value);
   chunk.options = options; chunk.morph_options = options; chunk.current_index = Math.max(0, options.indexOf(chunk.text));
+  // Sync back to localQuestions so dispatch saves the latest morph options
+  syncMorphOptionsToLocal();
 };
+
+/** Sync the morph options from form state to localQuestions */
+function syncMorphOptionsToLocal() {
+  const editingId = form.value.editingId;
+  if (!editingId) return;
+  const idx = localQuestions.value.findIndex(q => q.id === editingId);
+  if (idx !== -1) {
+    localQuestions.value[idx].options = form.value.grammarChunks[idx]?.options;
+    localQuestions.value[idx].morph_options = form.value.grammarChunks[idx]?.morph_options;
+  }
+}
 const updateChunkText = (id: string, value: string) => {
   const chunk = form.value.grammarChunks.find(c => c.id === id);
   if (chunk) chunk.text = value;
