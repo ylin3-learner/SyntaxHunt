@@ -33,7 +33,8 @@ function main() {
   // 1. Fast path: try direct push first
   try {
     console.log(`🚀 [git-sync] Pushing ${branch} to origin...`);
-    run('git', ['push', 'origin', branch], ROOT, 'inherit');
+    const out = run('git', ['push', 'origin', branch], ROOT, 'pipe');
+    if (out) process.stdout.write(out);
     console.log(`🎉 [git-sync] Synced and pushed ${branch} successfully!`);
     return;
   } catch (err) {
