@@ -61,7 +61,7 @@ function main() {
       file: path.join(ROOT, 'README.md'),
       block: [
         '<!-- HARNESS:AUTO-STATUS:START -->',
-        `> **Live Harness Status**: \`${passMatches.length}/${totalTests}\` regression checks passing | \`${coreFiles.length}\` DDD core modules (\`${coreCoverage}\` cov) (\`#core/*\`) | \`6\` static hygiene gates active`,
+        `> **Live Harness Status**: \`${passMatches.length}/${totalTests}\` regression checks passing | \`\${coreFiles.length}\` DDD core modules (\`\${coreCoverage}\` cov) (\`#core/*\`) | \`6\` static hygiene gates active`,
         '<!-- HARNESS:AUTO-STATUS:END -->',
       ].join('\n'),
     },
@@ -88,21 +88,21 @@ function main() {
   const initSrc = fs.existsSync(path.join(ROOT, 'init.mjs'))
     ? fs.readFileSync(path.join(ROOT, 'init.mjs'), 'utf8')
     : '';
-  const flagMatches = [...new Set((initSrc.match(/(?:process\.argv|rawArgs)\.includes\(['"](--[a-z-]+)['"]\)/g) || []).map(m => m.match(/--[a-z-]+/)))];
+  const flagMatches = [...new Set((initSrc.match(/(?:process\.argv|rawArgs)\.includes\(['"](--[a-z-]+)['"]\)/g) || []).map(m => m.match(/--[a-z-]+/)[0]))];
   const formattedFlagsEn = flagMatches.map(f => '`' + f + '`').join(', ') || 'none';
   const formattedFlagsZh = flagMatches.map(f => '`' + f + '`').join('、') || '無';
   const scriptRows = Object.entries(pkgJson.scripts || {})
     .map(([k, v]) => `| \`npm run ${k}\` | \`${v}\` |`)
     .join('\n');
 
-  const cmdRegex = /<!-- HARNESS:AUTO-COMMANDS:START -->[\s\(\S\)]*?<!-- HARNESS:AUTO-COMMANDS:END -->/;
+  const cmdRegex = /<!-- HARNESS:AUTO-COMMANDS:START -->[\s\S]*?<!-- HARNESS:AUTO-COMMANDS:END -->/;
   const cmdUpdates = [
     {
       file: path.join(ROOT, 'README.md'),
       block: [
         '<!-- HARNESS:AUTO-COMMANDS:START -->',
         '- **One-Line Target Project Setup**: `node <path-to-kit>/init.mjs --force --commit`',
-        `- **Supported \`init.mjs\` Flags**: ${formattedFlagsEn}`,
+        `- **Supported \`init.mjs\` Flags**: \${formattedFlagsEn}`,
         '',
         '| NPM Command | Underlying Script (Auto-Extracted from `package.json`) |',
         '| :--- | :--- |',
@@ -115,7 +115,7 @@ function main() {
       block: [
         '<!-- HARNESS:AUTO-COMMANDS:START -->',
         '- **目標專案一鍵安裝指令**：`node <path-to-kit>/init.mjs --force --commit`',
-        `- **\`init.mjs\` 支援參數**：${formattedFlagsZh}`,
+        `- **\`init.mjs\` 支援參數**：\${formattedFlagsZh}`,
         '',
         '| NPM 指令 | 實際執行腳本（自動從 `package.json` 擷取） |',
         '| :--- | :--- |',
@@ -131,6 +131,19 @@ function main() {
         fs.writeFileSync(file, doc.replace(cmdRegex, block), 'utf8');
       }
     }
+  }
+
+  // 6.5 Auto-update PROGRESS.md Current Baseline (preserves Backlog & Gotchas)
+  const progressPath = path.join(ROOT, 'PROGRESS.md');
+  if (fs.existsSync(progressPath)) {
+    let prog = fs.readFileSync(progressPath, 'utf8');
+    const shortHash = headCommit.split(' ')[0] || 'unknown';
+    const healthStr = (failMatches.length === 0 && verifyPassed)
+      ? `**ALL PASS** (${testSummary} & \`npm run verify\` — all 6 gates green).`
+      : `**ATTENTION NEEDED** (testSummary, verify: {verifyPassed ? 'PASS' : 'FAIL'}).`;
+    prog = prog.replace(/(- \*\*Last Completed\*\*: )`[^`]+`/, `$1\`${shortHash}\``);
+    prog = prog.replace(/(- \*\*Health Status\*\*: ).*$/m, `$1${healthStr}`);
+    fs.writeFileSync(progressPath, prog, 'utf8');
   }
 
   // 7. Write deterministic HANDOFF.md report
@@ -150,9 +163,9 @@ function main() {
     `- **God Modules**: ${risks.summary?.godModules ?? 0}`,
     '',
     '## 3. Git Repository State',
-    `- **Branch**: \`${branch}\``,
+    `- **Branch**: \`\${branch}\``,
     `- **HEAD Commit**: \`${headCommit}\``,
-    `- **Working Tree**: ${gitClean ? '✅ Clean (0 uncommitted changes)' : `⚠️ Dirty (${dirtyFiles.split("\n").length} modified/untracked files)`}`,
+    `- **Working Tree**: ${gitClean ? '✅ Clean (0 uncommitted changes)' : `⚠️ Dirty (\${dirtyFiles.split('\n').length} modified/untracked files)`}`,
     '',
     '### Recent Commits',
     '```text',

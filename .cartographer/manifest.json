@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-25T02:43:15.124Z",
+  "generatedAt": "2026-11-25T02:51:29.034Z",
   "files": {
     ".verify-state.json": {
       "hash": "85778135381722cd",
@@ -154,8 +154,8 @@
       "size": 9077
     },
     ".harness\\scripts\\handoff-pack.mjs": {
-      "hash": "11c0b9cceec846c0",
-      "size": 7349
+      "hash": "63b6851677dfdabb",
+      "size": 8096
     },
     ".harness\\scripts\\harness.mjs": {
       "hash": "304ee9082fa9188c",

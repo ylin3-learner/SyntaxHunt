@@ -10,3 +10,9 @@ if [ -f ".harness/scripts/sync-map.mjs" ]; then
   node .harness/scripts/sync-map.mjs
   git add .cartographer/ PROJECT_MAP.md 2>/dev/null || true
 fi
+
+if [ -f ".harness/scripts/handoff-pack.mjs" ]; then
+  echo "[pre-commit] Syncing README & PROGRESS baseline..."
+  node .harness/scripts/handoff-pack.mjs >/dev/null
+  git add PROGRESS.md README.md README.zh-TW.md 2>/dev/null || true
+fi

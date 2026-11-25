@@ -1,4 +1,3 @@
 #!/usr/bin/env sh
-if [ -f ".harness/scripts/handoff-pack.mjs" ]; then
-  node .harness/scripts/handoff-pack.mjs >/dev/null 2>&1 || true
-fi
+# Baseline & docs are now synced and staged cleanly in pre-commit
+exit 0
