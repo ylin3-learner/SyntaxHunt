@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-25T02:36:44.329Z",
+  "generatedAt": "2026-11-25T02:37:57.881Z",
   "files": {
     ".verify-state.json": {
       "hash": "85778135381722cd",
@@ -45,46 +45,6 @@
       "hash": "7896743f347db17d",
       "size": 405
     },
-    "backups\\backup-2026-11-14.json": {
-      "hash": "bc5ebb9be26cbbd1",
-      "size": 2574
-    },
-    "backups\\backup-2026-11-15.json": {
-      "hash": "f5a46d97be7a8920",
-      "size": 127135
-    },
-    "backups\\backup-2026-11-16.json": {
-      "hash": "02729e2a4bb6ee41",
-      "size": 673647
-    },
-    "backups\\backup-2026-11-17.json": {
-      "hash": "e643e5a2b3102c66",
-      "size": 674661
-    },
-    "backups\\backup-2026-11-18.json": {
-      "hash": "181c87acadb5fdd2",
-      "size": 716117
-    },
-    "backups\\backup-2026-11-19.json": {
-      "hash": "ec50fa5e690c5c52",
-      "size": 720010
-    },
-    "backups\\backup-2026-11-20.json": {
-      "hash": "593527ebb6fb2c69",
-      "size": 720034
-    },
-    "backups\\backup-2026-11-21.json": {
-      "hash": "593527ebb6fb2c69",
-      "size": 720034
-    },
-    "backups\\backup-2026-11-22.json": {
-      "hash": "593527ebb6fb2c69",
-      "size": 720034
-    },
-    "backups\\backup-2026-11-23.json": {
-      "hash": "593527ebb6fb2c69",
-      "size": 720034
-    },
     "e2e\\example.spec.ts": {
       "hash": "a3cbab846a58843b",
       "size": 583
@@ -112,10 +72,6 @@
     "src\\main.ts": {
       "hash": "a5e0a8bacce79cbf",
       "size": 212
-    },
-    "test-results\\.last-run.json": {
-      "hash": "91d1c43004802cd4",
-      "size": 45
     },
     "tests\\ChunkPreview.spec.ts": {
       "hash": "c685a17dd1b13e5c",
@@ -214,8 +170,8 @@
       "size": 1680
     },
     ".harness\\scripts\\sync-map.mjs": {
-      "hash": "1c32e8538ed2c5da",
-      "size": 1737
+      "hash": "5cf36aac88f0262f",
+      "size": 2220
     },
     ".harness\\scripts\\test-harness.mjs": {
       "hash": "35ba656b501e21a1",

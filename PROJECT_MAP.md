@@ -1,8 +1,8 @@
 # PROJECT_MAP.md
-> Auto-generated repository map (Tiered Top-N Summary, max 200 lines). Total indexed files: **136** | Aggregate Roots: **2**
+> Auto-generated repository map (Tiered Top-N Summary, max 200 lines). Total indexed files: **125** | Aggregate Roots: **2**
 
 ## 1. Repository Overview
-- **Total Indexed Files**: 136
+- **Total Indexed Files**: 125
 - **Detected Aggregate Roots**: 2
 - **Circular Dependencies**: 0
 - **God Modules**: 0
@@ -31,16 +31,16 @@ graph TD
 - `.vscode\extensions.json` (refs: 0)
 - `.vscode\settings.json` (refs: 0)
 - `backup-db.js` (refs: 0)
-- `backups\backup-2026-11-14.json` (refs: 0)
-- `backups\backup-2026-11-15.json` (refs: 0)
-- `backups\backup-2026-11-16.json` (refs: 0)
-- `backups\backup-2026-11-17.json` (refs: 0)
-- `backups\backup-2026-11-18.json` (refs: 0)
-- `backups\backup-2026-11-19.json` (refs: 0)
-- `backups\backup-2026-11-20.json` (refs: 0)
-- `backups\backup-2026-11-21.json` (refs: 0)
-- `backups\backup-2026-11-22.json` (refs: 0)
-- `backups\backup-2026-11-23.json` (refs: 0)
+- `core\__tests__\core.test.mjs` (refs: 0)
+- `core\adapters\web-ts.adapter.mjs` (refs: 0)
+- `core\application\harness-facade.mjs` (refs: 0)
+- `core\services\circuit-breaker.mjs` (refs: 0)
+- `core\services\graph-engine.mjs` (refs: 0)
+- `core\services\sync-engine.mjs` (refs: 0)
+- `e2e\example.spec.ts` (refs: 0)
+- `e2e\grammar-canvas.spec.ts` (refs: 0)
+- `lister.py` (refs: 0)
+- `package-lock.json` (refs: 0)
 
 ### Folded Long-Tail Directories
 - `tests/*` (16 files folded — query via `inspect_impact`)
@@ -48,26 +48,24 @@ graph TD
 - `src/rules/validators/*` (9 files folded — query via `inspect_impact`)
 - `src/composables/*` (8 files folded — query via `inspect_impact`)
 - `tests/rules/validators/*` (8 files folded — query via `inspect_impact`)
-- `(root)/*` (7 files folded — query via `inspect_impact`)
 - `src/rules/diagnostics/*` (7 files folded — query via `inspect_impact`)
+- `(root)/*` (5 files folded — query via `inspect_impact`)
 - `src/utils/*` (5 files folded — query via `inspect_impact`)
 - `supabase/migrations/*` (4 files folded — query via `inspect_impact`)
 - `tests/rules/diagnostics/*` (4 files folded — query via `inspect_impact`)
-- `core/services/*` (3 files folded — query via `inspect_impact`)
 - `scripts/*` (3 files folded — query via `inspect_impact`)
 - `tests/rules/*` (3 files folded — query via `inspect_impact`)
-- `e2e/*` (2 files folded — query via `inspect_impact`)
 - `src/*` (2 files folded — query via `inspect_impact`)
 - `src/services/*` (2 files folded — query via `inspect_impact`)
 - `supabase/functions/deepgram-tts/*` (2 files folded — query via `inspect_impact`)
 - `supabase/functions/edge-stt/*` (2 files folded — query via `inspect_impact`)
 - `supabase/functions/teacher-action/*` (2 files folded — query via `inspect_impact`)
-- `core/__tests__/*` (1 files folded — query via `inspect_impact`)
-- `core/adapters/*` (1 files folded — query via `inspect_impact`)
-- `core/application/*` (1 files folded — query via `inspect_impact`)
 - `src/data/*` (1 files folded — query via `inspect_impact`)
 - `src/domain/*` (1 files folded — query via `inspect_impact`)
 - `src/infrastructure/*` (1 files folded — query via `inspect_impact`)
+- `supabase/.temp/*` (1 files folded — query via `inspect_impact`)
+- `supabase/functions/lt-proxy/*` (1 files folded — query via `inspect_impact`)
+- `tests/utils/*` (1 files folded — query via `inspect_impact`)
 
 ## 4. Verification & Risk Gates
 - Run `node .harness/scripts/harness.mjs inspect_impact --files=<path> --json` before editing.
