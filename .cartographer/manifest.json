@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-25T03:27:49.050Z",
+  "generatedAt": "2026-11-25T03:32:11.239Z",
   "files": {
     ".verify-state.json": {
       "hash": "85778135381722cd",
@@ -18,8 +18,8 @@
       "size": 171937
     },
     "package.json": {
-      "hash": "05ce35dc9ec41f16",
-      "size": 1485
+      "hash": "f797e13a0a7c4f5b",
+      "size": 1434
     },
     "playwright.config.ts": {
       "hash": "490106576047ee77",
@@ -138,84 +138,84 @@
       "size": 866
     },
     ".harness\\scripts\\analyze-risks.mjs": {
-      "hash": "67a2f1f5cd8aaac1",
-      "size": 5078
+      "hash": "63760c90a82f6527",
+      "size": 4909
     },
     ".harness\\scripts\\extract-runtime.mjs": {
-      "hash": "35080f0cab251ae4",
-      "size": 8249
+      "hash": "b3509b89a8e5cf22",
+      "size": 8056
     },
     ".harness\\scripts\\extract-skeleton.mjs": {
-      "hash": "de321b7900f17de4",
-      "size": 43
+      "hash": "9c020bc38e3cd0fc",
+      "size": 41
     },
     ".harness\\scripts\\generate-map-md.mjs": {
-      "hash": "21d8c8646a24defa",
-      "size": 9315
+      "hash": "26bfb97dee02e4c8",
+      "size": 9077
     },
     ".harness\\scripts\\git-sync.mjs": {
-      "hash": "c15a5071cf716805",
-      "size": 3846
+      "hash": "eb361c60bdda32b4",
+      "size": 3747
     },
     ".harness\\scripts\\handoff-pack.mjs": {
-      "hash": "b7d8b215d22f6412",
-      "size": 8494
+      "hash": "1bf99f0dab54c466",
+      "size": 8300
     },
     ".harness\\scripts\\harness.mjs": {
-      "hash": "d37856768f0809ff",
-      "size": 1281
+      "hash": "304ee9082fa9188c",
+      "size": 1248
     },
     ".harness\\scripts\\inject-context.mjs": {
-      "hash": "821e99e4d229a22f",
-      "size": 4687
+      "hash": "e0e58750a7104469",
+      "size": 4559
     },
     ".harness\\scripts\\mcp-server.mjs": {
-      "hash": "d5298eface8f44a4",
-      "size": 1738
+      "hash": "66ced831e7e70140",
+      "size": 1680
     },
     ".harness\\scripts\\release.mjs": {
-      "hash": "e114d32307c2f1c3",
-      "size": 6733
+      "hash": "0d1150eb5a87711d",
+      "size": 6570
     },
     ".harness\\scripts\\sync-map.mjs": {
-      "hash": "8f22f52b1c6320f3",
-      "size": 2277
+      "hash": "5cf36aac88f0262f",
+      "size": 2220
     },
     ".harness\\scripts\\test-harness.mjs": {
-      "hash": "aafc43e0869aa192",
-      "size": 3998
+      "hash": "35ba656b501e21a1",
+      "size": 3909
     },
     ".harness\\scripts\\verify.mjs": {
-      "hash": "fdb69d8bde421f37",
-      "size": 10569
+      "hash": "32ed3620efcd2f09",
+      "size": 10296
     },
     "core\\adapters\\web-ts.adapter.mjs": {
-      "hash": "5d0a6fd079eb9807",
-      "size": 734
+      "hash": "c941b208e847dd9b",
+      "size": 715
     },
     "core\\application\\harness-facade.mjs": {
-      "hash": "a322c511529c6ff7",
-      "size": 5927
+      "hash": "720411c18c399053",
+      "size": 5759
     },
     "core\\domain\\models.mjs": {
-      "hash": "1584c7a445dc6c0f",
-      "size": 5302
+      "hash": "eed0b6e2a4189f10",
+      "size": 5153
     },
     "core\\services\\circuit-breaker.mjs": {
-      "hash": "c1eb016ef03a3629",
-      "size": 1527
+      "hash": "e79c2edaafb34f47",
+      "size": 1467
     },
     "core\\services\\graph-engine.mjs": {
       "hash": "0523770099073462",
       "size": 5807
     },
     "core\\services\\sync-engine.mjs": {
-      "hash": "ed1a3f84dda3cf5b",
-      "size": 2451
+      "hash": "0f65cf9fc630d053",
+      "size": 2380
     },
     "core\\__tests__\\core.test.mjs": {
-      "hash": "aef9c3ccb5bccdb1",
-      "size": 4164
+      "hash": "f68bf60511596d92",
+      "size": 4056
     },
     "src\\composables\\useAdminAuth.ts": {
       "hash": "002c2befdb6042a4",

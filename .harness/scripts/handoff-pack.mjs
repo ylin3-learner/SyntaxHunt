@@ -63,7 +63,7 @@ function main() {
       file: path.join(ROOT, 'README.md'),
       block: [
         '<!-- HARNESS:AUTO-STATUS:START -->',
-        `> **Live Harness Status**: \`${passMatches.length}/${totalTests}\` regression checks passing | \`\${coreFiles.length}\` DDD core modules (\`\${coreCoverage}\` cov) (\`#core/*\`) | \`6\` static hygiene gates active`,
+        `> **Live Harness Status**: \`${passMatches.length}/${totalTests}\` regression checks passing | \`${coreFiles.length}\` DDD core modules (\`${coreCoverage}\` cov) (\`#core/*\`) | \`6\` static hygiene gates active`,
         '<!-- HARNESS:AUTO-STATUS:END -->',
       ].join('\n'),
     },
@@ -104,7 +104,7 @@ function main() {
       block: [
         '<!-- HARNESS:AUTO-COMMANDS:START -->',
         '- **One-Line Target Project Setup**: `node <path-to-kit>/init.mjs --force --commit`',
-        `- **Supported \`init.mjs\` Flags**: \${formattedFlagsEn}`,
+        `- **Supported \`init.mjs\` Flags**: ${formattedFlagsEn}`,
         '',
         '| NPM Command | Underlying Script (Auto-Extracted from `package.json`) |',
         '| :--- | :--- |',
@@ -117,7 +117,7 @@ function main() {
       block: [
         '<!-- HARNESS:AUTO-COMMANDS:START -->',
         '- **目標專案一鍵安裝指令**：`node <path-to-kit>/init.mjs --force --commit`',
-        `- **\`init.mjs\` 支援參數**：\${formattedFlagsZh}`,
+        `- **\`init.mjs\` 支援參數**：${formattedFlagsZh}`,
         '',
         '| NPM 指令 | 實際執行腳本（自動從 `package.json` 擷取） |',
         '| :--- | :--- |',
