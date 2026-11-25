@@ -1,2 +1,7 @@
-#!/bin/sh
+#!/usr/bin/env sh
+# Skip during active rebase to avoid dirtying worktree mid-replay
+GIT_DIR_PATH="$(git rev-parse --git-dir 2>/dev/null || echo .git)"
+if [ -d "$GIT_DIR_PATH/rebase-merge" ] || [ -d "$GIT_DIR_PATH/rebase-apply" ]; then
+  exit 0
+fi
 node .harness/scripts/sync-map.mjs >/dev/null 2>&1 || true

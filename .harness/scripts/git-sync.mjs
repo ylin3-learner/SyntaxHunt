@@ -87,6 +87,16 @@ function main() {
     }
   }
 
+  // 2.5 Refresh map once after rebase finishes cleanly
+  const syncScript = path.join(ROOT, ".harness", "scripts", "sync-map.mjs");
+  if (fs.existsSync(syncScript)) {
+    run(process.execPath, [syncScript], ROOT, "inherit");
+    run("git", ["add", ".cartographer", "PROJECT_MAP.md"], ROOT);
+    const diff = run("git", ["diff", "--cached", "--name-only"], ROOT).trim();
+    if (diff) {
+      run("git", ["commit", "--no-verify", "-m", "chore(harness): refresh map after rebase"], ROOT);
+    }
+  }
   // 3. Push rebased commits
   console.log(`🚀 [git-sync] Pushing rebased ${branch} to origin...`);
   run('git', ['push', 'origin', branch], ROOT, 'inherit');
