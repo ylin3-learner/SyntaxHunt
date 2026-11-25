@@ -4,3 +4,9 @@ set -e
 echo "[pre-commit] Running Harness regression tests & hygiene gates..."
 npm test
 npm run verify
+
+if [ -f ".harness/scripts/sync-map.mjs" ]; then
+  echo "[pre-commit] Refreshing cartographer map & runtime contracts..."
+  node .harness/scripts/sync-map.mjs
+  git add .cartographer/ PROJECT_MAP.md 2>/dev/null || true
+fi

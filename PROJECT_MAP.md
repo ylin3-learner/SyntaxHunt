@@ -74,8 +74,14 @@ graph TD
 - Run `npm run verify` to enforce static ESM hygiene and `>=80%` core coverage.
 
 ## 6. Runtime Context (DB & API)
-- **DB Schemas**: None detected (see `.cartographer/raw/runtime-db.md`).
-- **API Endpoints**: None detected (see `.cartographer/raw/runtime-api.md`).
+**DB Schemas**: Table: `questions` (client:backup-db.js) | Table: `classroom_state` (client:src/composables/useClassroomSync.ts) | Table: `learning_logs` (client:src/services/CloudDatabase.ts) | Table: `diagnosis_cache` (supabase/migrations/20261103000000_diagnosis_cache.sql)
+**API Endpoints**:
+- **INVOKE_FN** `/functions/v1/teacher-action` (src/composables/useClassroomSync.ts)
+- **EDGE_FN** `/functions/v1/deepgram-tts` (supabase/functions/deepgram-tts/index.ts)
+- **EDGE_FN** `/functions/v1/edge-stt` (supabase/functions/edge-stt/index.ts)
+- **FETCH** `https://api.deepgram.com/v1/listen?model=nova-2&language=en-US&smart_format=true` (supabase/functions/edge-stt/index.ts)
+- **EDGE_FN** `/functions/v1/lt-proxy` (supabase/functions/lt-proxy/index.ts)
+- **EDGE_FN** `/functions/v1/teacher-action` (supabase/functions/teacher-action/index.ts)
 
 ## 7. Ubiquitous Language Glossary
 | Business Domain Term | Technical Module | Aggregate Root |

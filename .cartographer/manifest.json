@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-25T02:28:23.654Z",
+  "generatedAt": "2026-11-25T02:36:44.329Z",
   "files": {
     ".verify-state.json": {
       "hash": "85778135381722cd",
@@ -186,8 +186,8 @@
       "size": 4660
     },
     ".harness\\scripts\\extract-runtime.mjs": {
-      "hash": "3d78de14558e465b",
-      "size": 5435
+      "hash": "b3509b89a8e5cf22",
+      "size": 8056
     },
     ".harness\\scripts\\extract-skeleton.mjs": {
       "hash": "9c020bc38e3cd0fc",
