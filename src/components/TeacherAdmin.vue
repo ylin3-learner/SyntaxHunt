@@ -5,6 +5,8 @@ import { grammarChapters, getGrammarTopic } from '../rules/grammarTopics';
 import { useClassroomSync } from '../composables/useClassroomSync';
 import { autoChunk } from '../rules/autoChunk';
 import { useQuestionForm } from '../composables/useQuestionForm';
+import { parseMorphOptions } from '../utils/morphOptions';
+import { splitGrammarSentenceManually as splitGrammarSentenceManuallyUtil } from '../utils/morphSentence';
 import { compressImageToBase64 } from '../infrastructure/ImageService';
 import { CloudDatabase } from '../services/CloudDatabase';
 
@@ -184,13 +186,15 @@ const autoChunkGrammarSentence = () => {
   }));
 };
 const splitGrammarSentenceManually = () => {
-  const words = form.value.grammarSentence.trim().split(/\s+/).filter(Boolean);
+  const source = form.value.grammarSentence.trim();
+  if (!source) return;
+  const words = splitGrammarSentenceManuallyUtil(source);
   form.value.grammarChunks = words.map((text, i) => ({ id: `${form.value.editingId || 'new'}-manual-${i}`, text, draggable: true, can_morph: false }));
 };
 const updateMorphOptions = (id: string, value: string) => {
   const chunk = form.value.grammarChunks.find(c => c.id === id);
   if (!chunk) return;
-  const options = value.split(',').map(o => o.trim()).filter(Boolean);
+  const options = parseMorphOptions(value);
   chunk.options = options; chunk.morph_options = options; chunk.current_index = Math.max(0, options.indexOf(chunk.text));
 };
 const updateChunkText = (id: string, value: string) => {

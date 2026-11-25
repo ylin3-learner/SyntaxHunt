@@ -1,8 +1,8 @@
 # PROJECT_MAP.md
-> Auto-generated repository map (Tiered Top-N Summary, max 200 lines). Total indexed files: **127** | Aggregate Roots: **2**
+> Auto-generated repository map (Tiered Top-N Summary, max 200 lines). Total indexed files: **131** | Aggregate Roots: **2**
 
 ## 1. Repository Overview
-- **Total Indexed Files**: 127
+- **Total Indexed Files**: 131
 - **Detected Aggregate Roots**: 2
 - **Circular Dependencies**: 0
 - **God Modules**: 0
@@ -50,11 +50,12 @@ graph TD
 - `tests/rules/validators/*` (8 files folded — query via `inspect_impact`)
 - `(root)/*` (7 files folded — query via `inspect_impact`)
 - `src/rules/diagnostics/*` (7 files folded — query via `inspect_impact`)
-- `src/utils/*` (5 files folded — query via `inspect_impact`)
+- `src/utils/*` (7 files folded — query via `inspect_impact`)
 - `supabase/migrations/*` (4 files folded — query via `inspect_impact`)
 - `tests/rules/diagnostics/*` (4 files folded — query via `inspect_impact`)
 - `scripts/*` (3 files folded — query via `inspect_impact`)
 - `tests/rules/*` (3 files folded — query via `inspect_impact`)
+- `tests/utils/*` (3 files folded — query via `inspect_impact`)
 - `src/*` (2 files folded — query via `inspect_impact`)
 - `src/services/*` (2 files folded — query via `inspect_impact`)
 - `supabase/functions/deepgram-tts/*` (2 files folded — query via `inspect_impact`)
@@ -65,7 +66,6 @@ graph TD
 - `src/infrastructure/*` (1 files folded — query via `inspect_impact`)
 - `supabase/.temp/*` (1 files folded — query via `inspect_impact`)
 - `supabase/functions/lt-proxy/*` (1 files folded — query via `inspect_impact`)
-- `tests/utils/*` (1 files folded — query via `inspect_impact`)
 
 ## 4. Verification & Risk Gates
 - Run `node .harness/scripts/harness.mjs inspect_impact --files=<path> --json` before editing.

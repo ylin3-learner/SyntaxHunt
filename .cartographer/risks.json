@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-11-25T02:40:58.493Z",
+  "generatedAt": "2026-11-25T05:03:32.026Z",
   "summary": {
-    "totalFiles": 125,
+    "totalFiles": 127,
     "circularDependencies": 0,
-    "orphanFiles": 125,
+    "orphanFiles": 127,
     "godModules": 0
   },
   "circularDependencies": [],
@@ -46,10 +46,12 @@
     ".harness\\scripts\\extract-runtime.mjs",
     ".harness\\scripts\\extract-skeleton.mjs",
     ".harness\\scripts\\generate-map-md.mjs",
+    ".harness\\scripts\\git-sync.mjs",
     ".harness\\scripts\\handoff-pack.mjs",
     ".harness\\scripts\\harness.mjs",
     ".harness\\scripts\\inject-context.mjs",
     ".harness\\scripts\\mcp-server.mjs",
+    ".harness\\scripts\\release.mjs",
     ".harness\\scripts\\sync-map.mjs",
     ".harness\\scripts\\test-harness.mjs",
     ".harness\\scripts\\verify.mjs",

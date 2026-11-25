@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CanvasMode, Chunk } from '../rules/types';
+import { formatMorphOptions } from '../utils/morphOptions';
 
 defineProps<{
   canvasMode: CanvasMode;
@@ -161,7 +162,7 @@ const updateCheckbox = (id: string, event: Event) => {
             @input="emit('update-chunk-text', chunk.id, ($event.target as HTMLInputElement).value)" />
           <label><input :checked="chunk.can_morph" type="checkbox"
               @change="updateCheckbox(chunk.id, $event)" /> 可變形</label>
-          <input v-if="chunk.can_morph" :value="(chunk.options ?? chunk.morph_options)?.join(', ')" type="text"
+          <input v-if="chunk.can_morph" :value="formatMorphOptions(chunk.options ?? chunk.morph_options ?? [])" type="text"
             placeholder="go, goes, went" aria-label="變形選項"
             @input="emit('update-morph-options', chunk.id, ($event.target as HTMLInputElement).value)" />
         </div>

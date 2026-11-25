@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-25T03:38:54.491Z",
+  "generatedAt": "2026-11-25T05:03:32.923Z",
   "files": {
     ".verify-state.json": {
       "hash": "85778135381722cd",
@@ -309,6 +309,14 @@
       "hash": "26bb9a96578e010b",
       "size": 438
     },
+    "src\\utils\\morphOptions.ts": {
+      "hash": "50467e6a020dba04",
+      "size": 1975
+    },
+    "src\\utils\\morphSentence.ts": {
+      "hash": "8223a2c37377cb7f",
+      "size": 690
+    },
     "src\\utils\\shuffle.ts": {
       "hash": "abad92c6829ec90e",
       "size": 499
@@ -360,6 +368,14 @@
     "tests\\rules\\grammarRules.spec.ts": {
       "hash": "942f241d5f2899d1",
       "size": 7406
+    },
+    "tests\\utils\\morphOptions.spec.ts": {
+      "hash": "8d4ba9e14b6c8420",
+      "size": 2679
+    },
+    "tests\\utils\\morphSentence.spec.ts": {
+      "hash": "97bdeec83c036554",
+      "size": 1398
     },
     "tests\\utils\\textUtils.spec.ts": {
       "hash": "6505fd59bf3297eb",
