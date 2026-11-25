@@ -82,4 +82,6 @@ pipeline:
 
         ### Verification
         - <Passed gates, test counts, typecheck/lint status>
+    - push: run `npm run sync-push` to safely push (auto-rebases if remote CI backup commits exist).
+        - <Passed gates, test counts, typecheck/lint status>
 ```

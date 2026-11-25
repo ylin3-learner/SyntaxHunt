@@ -13,7 +13,8 @@
     "verify:e2e": "node .harness/scripts/verify.mjs --e2e",
     "sync-map": "node .harness/scripts/sync-map.mjs",
     "test:harness": "node .harness/scripts/test-harness.mjs",
-    "release": "node .harness/scripts/release.mjs"
+    "release": "node .harness/scripts/release.mjs",
+    "sync-push": "node .harness/scripts/git-sync.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

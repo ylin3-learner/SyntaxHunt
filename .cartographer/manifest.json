@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-25T03:11:54.721Z",
+  "generatedAt": "2026-11-25T03:17:50.460Z",
   "files": {
     ".verify-state.json": {
       "hash": "85778135381722cd",
@@ -18,8 +18,8 @@
       "size": 171937
     },
     "package.json": {
-      "hash": "696fb969760cd64e",
-      "size": 1379
+      "hash": "f797e13a0a7c4f5b",
+      "size": 1434
     },
     "playwright.config.ts": {
       "hash": "490106576047ee77",
@@ -152,6 +152,10 @@
     ".harness\\scripts\\generate-map-md.mjs": {
       "hash": "26bfb97dee02e4c8",
       "size": 9077
+    },
+    ".harness\\scripts\\git-sync.mjs": {
+      "hash": "ab891f4a86b4c7f6",
+      "size": 3194
     },
     ".harness\\scripts\\handoff-pack.mjs": {
       "hash": "13244b78f8803e8c",
