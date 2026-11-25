@@ -4,6 +4,52 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
+
+import { resolveTargetedContext } from "./inject-context.mjs";
+
+function detectChangedFiles(rootDir) {
+  const filesArg = process.argv.find(a => a.startsWith("--files="));
+  if (filesArg) {
+    return filesArg.slice("--files=".length).split(",").map(s => s.trim()).filter(Boolean);
+  }
+  try {
+    const statusOut = execFileSync("git", ["status", "--porcelain"], { cwd: rootDir, encoding: "utf8" });
+    const changed = statusOut
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map(line => line.slice(3).trim().replace(/^"|"$/g, ""))
+      .filter(f => !f.startsWith(".cartographer/") && f !== "PROJECT_MAP.md" && f !== "HANDOFF.md");
+    if (changed.length > 0) return changed;
+    const diffOut = execFileSync("git", ["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"], { cwd: rootDir, encoding: "utf8" });
+    return diffOut.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function runTargetedTests(rootDir) {
+  const changed = detectChangedFiles(rootDir);
+  const { impactedFiles, impactedTests } = resolveTargetedContext(rootDir, changed);
+  console.log(`[verify --targeted] Changed: ${changed.length} | Blast Radius: ${impactedFiles.length} | Impacted Tests: ${impactedTests.length}`);
+  if (impactedTests.length === 0) {
+    console.log("[verify --targeted] No impacted test files matched (0 tests executed).");
+    return null;
+  }
+  const pkgPath = path.join(rootDir, "package.json");
+  const pkg = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, "utf8")) : {};
+  const hasVitest = Boolean(pkg.devDependencies?.vitest || pkg.dependencies?.vitest);
+  try {
+    if (hasVitest) {
+      execFileSync(process.platform === "win32" ? "npx.cmd" : "npx", ["vitest", "run", ...impactedTests], { cwd: rootDir, stdio: "inherit" });
+    } else {
+      execFileSync(process.execPath, ["--test", ...impactedTests], { cwd: rootDir, stdio: "inherit" });
+    }
+    return null;
+  } catch (err) {
+    return `[Targeted Tests] Failed on: ${impactedTests.join(", ")}`;
+  }
+}
+
 function runHarnessHygieneGates(rootDir) {
   const errors = [];
   const scriptDirs = [
@@ -194,6 +240,10 @@ async function main() {
     ...runHarnessHygieneGates(ROOT),
     ...runMermaidSyntaxGate(ROOT),
   ];
+  if (process.argv.includes("--targeted")) {
+    const targetedErr = runTargetedTests(ROOT);
+    if (targetedErr) hygieneErrors.push(targetedErr);
+  }
   const covResult = runCoreCoverageGate(ROOT, 80);
   if (covResult.error) hygieneErrors.push(covResult.error);
 

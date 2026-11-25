@@ -27,6 +27,8 @@ function main() {
 
   // 1. Real Git State
   const branch = runCmd('git', ['rev-parse', '--abbrev-ref', 'HEAD'], ROOT) || 'unknown';
+  const latestTag = runCmd("git", ["describe", "--tags", "--abbrev=0"], ROOT) || "none";
+  const aheadCount = latestTag !== "none" ? runCmd("git", ["rev-list", `${latestTag}..HEAD`, "--count"], ROOT) : "all";
   const headCommit = runCmd('git', ['log', '-n', '1', '--oneline'], ROOT) || 'none';
   const recentCommits = runCmd('git', ['log', '-n', '5', '--oneline'], ROOT) || 'none';
   const dirtyFiles = runCmd('git', ['status', '-s'], ROOT);
@@ -165,7 +167,7 @@ function main() {
     '## 3. Git Repository State',
     `- **Branch**: \`\${branch}\``,
     `- **HEAD Commit**: \`${headCommit}\``,
-    `- **Working Tree**: ${gitClean ? '✅ Clean (0 uncommitted changes)' : `⚠️ Dirty (\${dirtyFiles.split('\n').length} modified/untracked files)`}`,
+    `- **Working Tree**: ${gitClean ? '✅ Clean (0 uncommitted changes)' : `⚠️ Dirty (${dirtyFiles.split('\n').length} modified/untracked files)`}`,
     '',
     '### Recent Commits',
     '```text',

@@ -22,6 +22,7 @@ pipeline:
         If `PROGRESS.md` does NOT exist in project root:
         1. Infer project stack, test runner, and verification scripts from manifest files (e.g., `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`).
         2. Generate an initial `PROGRESS.md` following the 4-section schema (Current Baseline, Active Target, Architectural Invariants & Learned Gotchas, Upcoming Backlog) based on `git log` and codebase state.
+    - blast_radius: run `node .harness/scripts/inject-context.mjs <target_files>` to lock upstream dependents and impacted tests before editing.
     - resolve_scope: |
         - If user provided explicit instructions with `/sprint <task>`: set as Active Target (preserve existing Backlog).
         - If bare `/sprint`: automatically adopt `PROGRESS.md -> 2. Active Target` (or pop item #1 from `4. Upcoming Backlog`).
@@ -51,6 +52,7 @@ pipeline:
     - green: write minimal, clean production code to satisfy tests -> run test suite (confirm pass)
     - refactor_and_hygiene:
         - Enforce project architecture rules (e.g., consolidate any misplaced tests into designated test directories, clean up dead code).
+    - targeted_verify: run `npm run verify -- --targeted` during fast inner-loop TDD iterations before full gate.
     - verify: run project verification gates (e.g., `npm run verify`, lint, typecheck, full test suite) -> must pass 100% with zero regressions.
     - circuit_breaker: rely on `verify.mjs` deterministic output; it maintains `.verify-state.json` and automatically emits `CIRCUIT_BREAKER_TRIPPED: Stop retrying and ask human for intervention.` after 3 consecutive failures on the same gate. STOP retrying and request human intervention when this output appears.
     - strict_type_and_mock_parity: when modifying Domain Models or Interfaces (adding, removing, or changing fields), you MUST synchronously update ALL test mock factories, fixtures, and type definitions in `src/tests/` and `e2e/fixtures/` to maintain 100% type parity. No `any` or `as unknown` type casts allowed.

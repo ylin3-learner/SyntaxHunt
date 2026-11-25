@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-25T02:51:29.034Z",
+  "generatedAt": "2026-11-25T03:11:54.721Z",
   "files": {
     ".verify-state.json": {
       "hash": "85778135381722cd",
@@ -18,8 +18,8 @@
       "size": 171937
     },
     "package.json": {
-      "hash": "f67ed1a352289c8c",
-      "size": 1327
+      "hash": "696fb969760cd64e",
+      "size": 1379
     },
     "playwright.config.ts": {
       "hash": "490106576047ee77",
@@ -154,20 +154,24 @@
       "size": 9077
     },
     ".harness\\scripts\\handoff-pack.mjs": {
-      "hash": "63b6851677dfdabb",
-      "size": 8096
+      "hash": "13244b78f8803e8c",
+      "size": 8304
     },
     ".harness\\scripts\\harness.mjs": {
       "hash": "304ee9082fa9188c",
       "size": 1248
     },
     ".harness\\scripts\\inject-context.mjs": {
-      "hash": "b6d80a229829cfb1",
-      "size": 3449
+      "hash": "e0e58750a7104469",
+      "size": 4559
     },
     ".harness\\scripts\\mcp-server.mjs": {
       "hash": "66ced831e7e70140",
       "size": 1680
+    },
+    ".harness\\scripts\\release.mjs": {
+      "hash": "0d1150eb5a87711d",
+      "size": 6570
     },
     ".harness\\scripts\\sync-map.mjs": {
       "hash": "5cf36aac88f0262f",
@@ -178,8 +182,8 @@
       "size": 3909
     },
     ".harness\\scripts\\verify.mjs": {
-      "hash": "efe9ab341ce555e3",
-      "size": 8117
+      "hash": "32ed3620efcd2f09",
+      "size": 10296
     },
     "core\\adapters\\web-ts.adapter.mjs": {
       "hash": "c941b208e847dd9b",
